@@ -1157,6 +1157,15 @@ window.addEventListener('pagehide', function () {
 window.initData = initData;
 window.saveData = saveData;
 window.flushSaveDataImmediately = flushSaveDataImmediately;
+window.resetWechatDataRuntime = function () {
+    initDataPromise = null;
+    saveDataTimerId = null;
+    saveDataWaiters = [];
+    saveDataFlushInFlight = null;
+    if (window.WechatStore && typeof window.WechatStore.resetRuntime === 'function') {
+        window.WechatStore.resetRuntime();
+    }
+};
 initData().catch(function (e) { console.error(e); });
 
 // --- 全局变量 ---

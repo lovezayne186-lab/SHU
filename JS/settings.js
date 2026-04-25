@@ -1954,8 +1954,36 @@ async function clearAllData() {
         
         if (doubleConfirm) {
             try {
+                async function clearKnownLocalForageStores() {
+                    if (!window.localforage) return;
+                    const stores = [
+                        { name: 'shubao-phone', storeName: 'wechat_v2' },
+                        { name: 'shubao-phone', storeName: 'wechat' },
+                        { name: 'shubao_redbook_store_v1', storeName: 'redbook' },
+                        { name: 'shubao_large_store_v1', storeName: 'couple_space' },
+                        { name: 'shubao_large_store_v1', storeName: 'activity_logs' },
+                        { name: 'localforage', storeName: 'keyvaluepairs' }
+                    ];
+                    for (let i = 0; i < stores.length; i++) {
+                        try {
+                            const cfg = stores[i];
+                            const instance = typeof localforage.createInstance === 'function'
+                                ? localforage.createInstance(cfg)
+                                : localforage;
+                            if (instance && typeof instance.clear === 'function') {
+                                await Promise.race([
+                                    instance.clear(),
+                                    new Promise(function (resolve) { setTimeout(resolve, 1200); })
+                                ]);
+                            }
+                        } catch (e0) { }
+                    }
+                }
+
                 // 1. 清除 localStorage
-                if (window.WechatStore && typeof window.WechatStore.resetRuntime === 'function') {
+                if (typeof window.resetWechatDataRuntime === 'function') {
+                    window.resetWechatDataRuntime();
+                } else if (window.WechatStore && typeof window.WechatStore.resetRuntime === 'function') {
                     window.WechatStore.resetRuntime();
                 }
                 localStorage.clear();
@@ -1967,26 +1995,11 @@ async function clearAllData() {
                 
                 // 3. 清除 IndexedDB (localForage)
                 if (window.localforage) {
-                    await localforage.clear();
+                    await clearKnownLocalForageStores();
                     console.log("✅ localForage 已清除");
                 }
                 
-                // 4. 清除所有 IndexedDB 数据库（彻底清除）
-                if (window.indexedDB && indexedDB.databases) {
-                    const databases = await indexedDB.databases();
-                    for (const db of databases) {
-                        await new Promise(function (resolve) {
-                            const req = indexedDB.deleteDatabase(db.name);
-                            req.onsuccess = function () { resolve(); };
-                            req.onerror = function () { resolve(); };
-                            req.onblocked = function () { resolve(); };
-                            setTimeout(resolve, 1200);
-                        });
-                        console.log("✅ 删除数据库:", db.name);
-                    }
-                }
-                
-                // 5. 注销 Service Worker（清除缓存控制）
+                // 4. 注销 Service Worker（清除缓存控制）
                 if ('serviceWorker' in navigator) {
                     const registrations = await navigator.serviceWorker.getRegistrations();
                     for (const registration of registrations) {
@@ -1995,7 +2008,7 @@ async function clearAllData() {
                     }
                 }
                 
-                // 6. 清除所有缓存
+                // 5. 清除所有缓存
                 if ('caches' in window) {
                     const cacheNames = await caches.keys();
                     for (const cacheName of cacheNames) {

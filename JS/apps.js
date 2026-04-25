@@ -727,18 +727,43 @@ window.CoupleJealousyDomination = CoupleJealousyDomination;
 
 let wechatDataReadyPromise = null;
 
+function withWechatReadyTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+        let done = false;
+        const timer = setTimeout(function () {
+            if (done) return;
+            done = true;
+            reject(new Error('wechat init timeout'));
+        }, ms || 3000);
+        Promise.resolve(promise).then(function (value) {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            resolve(value);
+        }).catch(function (err) {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            reject(err);
+        });
+    });
+}
+
 function ensureWechatDataReady(options) {
     if (typeof window.initData !== 'function') return Promise.resolve();
     if (wechatDataReadyPromise) return wechatDataReadyPromise;
     try {
         const ret = window.initData(options && options.forceReload ? { forceReload: true } : undefined);
-        wechatDataReadyPromise = (ret && typeof ret.then === 'function') ? ret : Promise.resolve(ret);
+        wechatDataReadyPromise = withWechatReadyTimeout((ret && typeof ret.then === 'function') ? ret : Promise.resolve(ret), 3500);
     } catch (e) {
         wechatDataReadyPromise = Promise.reject(e);
     }
     return wechatDataReadyPromise.catch(function (e) {
+        console.warn('[WechatStorage] 初始化超时或失败，使用空列表继续渲染', e);
+        if (!window.charProfiles || typeof window.charProfiles !== 'object') window.charProfiles = {};
+        if (!window.chatData || typeof window.chatData !== 'object') window.chatData = {};
+        if (!window.chatUnread || typeof window.chatUnread !== 'object') window.chatUnread = {};
         wechatDataReadyPromise = null;
-        throw e;
     });
 }
 
