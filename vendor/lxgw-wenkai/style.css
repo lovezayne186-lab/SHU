@@ -1,0 +1,9 @@
+/* Local fallback for LXGW WenKai webfont.
+   Keep the font-family names used by the app without loading remote font shards. */
+:root {
+    --local-cjk-font: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+}
+
+body {
+    font-family: var(--local-cjk-font);
+}
