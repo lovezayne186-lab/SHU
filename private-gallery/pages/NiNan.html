@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>呢喃 - NiNan</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #050505;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Songti SC", serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        /* 环境光晕背景 */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -20%; left: -20%; width: 140%; height: 140%;
+            background: radial-gradient(circle at 50% 30%, #1a2028 0%, #050505 60%);
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        .back-btn {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #111;
+            box-shadow: -2px -2px 5px #1a1a1a, 2px 2px 5px #000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: #555;
+            font-size: 20px;
+            transition: all 0.2s;
+            z-index: 100;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn:active { box-shadow: inset -2px -2px 5px #1a1a1a, inset 2px 2px 5px #000000; }
+
+        .regen-btn {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            height: 44px;
+            background: transparent;
+            border: none;
+            color: #6e7883;
+            font-size: 12px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            font-family: -apple-system, sans-serif;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s ease, color .25s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .regen-btn.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .regen-btn:active { color: #a0a8b0; }
+
+        /* ================= 捕获触发器 ================= */
+        .capture-trigger-wrapper {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 50;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .capture-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #8C8881;
+            padding: 14px 32px;
+            border-radius: 40px;
+            font-size: 13px;
+            letter-spacing: 3px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s;
+            position: relative;
+            outline: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 180px;
+            height: 48px;
+        }
+
+        .capture-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+        .capture-btn:active { transform: scale(0.96); }
+
+        .btn-loading-text { display: none; position: absolute; }
+
+        .sonar-circle {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border: 1px solid rgba(90, 107, 124, 0.5);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        /* 加载状态 */
+        .capture-trigger-wrapper.loading .capture-btn { pointer-events: none; border-color: rgba(90, 107, 124, 0.5); }
+        .capture-trigger-wrapper.loading .btn-text { opacity: 0; transition: opacity 0.2s; }
+        .capture-trigger-wrapper.loading .btn-loading-text { display: inline-block; animation: breathe 2s infinite; color: #5a6b7c; }
+        .capture-trigger-wrapper.loading .sonar-circle { animation: sonar 2s infinite cubic-bezier(0, 0, 0.2, 1); }
+
+        /* 捕获成功后的消失状态 */
+        .capture-trigger-wrapper.fade-out { opacity: 0; transform: translate(-50%, -80%) scale(0.9); pointer-events: none; }
+
+        @keyframes sonar {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+        }
+        @keyframes breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+        /* ================= 梦境展示区 ================= */
+        .swipe-hint {
+            position: absolute;
+            top: 90px;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: #555;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        .dreams-container {
+            flex: 1;
+            width: 100%;
+            padding-top: 120px;
+            display: none; /* 初始隐藏 */
+            align-items: center;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dreams-container::-webkit-scrollbar { display: none; }
+
+        .dream-card {
+            scroll-snap-align: center;
+            flex: 0 0 80%;
+            max-width: 320px;
+            height: 380px;
+            margin: 0 10%;
+            background: rgba(20, 22, 26, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 30px 24px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dream-date { font-size: 12px; color: #5a6b7c; letter-spacing: 2px; margin-bottom: 20px; font-family: -apple-system, sans-serif; text-transform: uppercase; }
+
+        .dream-content { font-size: 15px; line-height: 2; color: #a0a8b0; flex: 1; overflow-y: auto; -ms-overflow-style: none; scrollbar-width: none; }
+        .dream-content::-webkit-scrollbar { display: none; }
+        .dream-talk {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.12);
+            color: #6f8092;
+            font-size: 13px;
+            line-height: 1.7;
+            font-style: italic;
+            min-height: 44px;
+        }
+        .dream-talk-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #4f5d6b;
+            font-style: normal;
+        }
+
+        .no-dream { color: #4a545e; font-style: italic; text-align: center; margin-top: 50px; letter-spacing: 1px; }
+
+        /* ================= 底部互动区 ================= */
+        .interaction-area {
+            height: 35vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 20px;
+            position: relative;
+            opacity: 0; /* 初始隐藏，等捕获后显示 */
+            transform: translateY(20px);
+            transition: all 1s ease 0.5s; /* 延迟出现 */
+        }
+        .interaction-area.show { opacity: 1; transform: translateY(0); }
+
+        .waveform { display: flex; align-items: center; justify-content: center; gap: 6px; height: 60px; margin-bottom: 30px; }
+        .bar { width: 3px; background: #333; border-radius: 2px; transition: all 0.3s ease; animation: idlePulse 2s infinite ease-in-out; }
+        .bar:nth-child(1) { height: 15px; animation-delay: 0.1s; }
+        .bar:nth-child(2) { height: 30px; animation-delay: 0.3s; }
+        .bar:nth-child(3) { height: 45px; animation-delay: 0.0s; }
+        .bar:nth-child(4) { height: 25px; animation-delay: 0.2s; }
+        .bar:nth-child(5) { height: 35px; animation-delay: 0.4s; }
+        .bar:nth-child(6) { height: 20px; animation-delay: 0.15s; }
+        .bar:nth-child(7) { height: 30px; animation-delay: 0.35s; }
+
+        @keyframes idlePulse { 0%, 100% { transform: scaleY(1); opacity: 0.5; } 50% { transform: scaleY(0.6); opacity: 0.8; } }
+
+        .waveform.playing .bar { background: #5a6b7c; animation: activePulse 0.6s infinite ease-in-out alternate; }
+        .waveform.playing .bar:nth-child(1) { animation-delay: 0.0s; }
+        .waveform.playing .bar:nth-child(2) { animation-delay: 0.1s; }
+        .waveform.playing .bar:nth-child(3) { animation-delay: 0.2s; }
+        .waveform.playing .bar:nth-child(4) { animation-delay: 0.3s; }
+        .waveform.playing .bar:nth-child(5) { animation-delay: 0.4s; }
+        .waveform.playing .bar:nth-child(6) { animation-delay: 0.5s; }
+        .waveform.playing .bar:nth-child(7) { animation-delay: 0.6s; }
+
+        @keyframes activePulse { 0% { transform: scaleY(0.3); } 100% { transform: scaleY(1.5); box-shadow: 0 0 8px rgba(90, 107, 124, 0.8); } }
+
+        .play-btn { width: 56px; height: 56px; border-radius: 50%; background: #111; box-shadow: -4px -4px 10px #1a1a1a, 4px 4px 10px #000000; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; outline: none; transition: all 0.2s; -webkit-tap-highlight-color: transparent; z-index: 10; }
+        .play-btn:active { box-shadow: inset -4px -4px 10px #1a1a1a, inset 4px 4px 10px #000000; }
+        .play-icon { width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #555; margin-left: 6px; transition: all 0.3s; }
+        .play-btn.playing .play-icon { border: none; width: 14px; height: 14px; background: #5a6b7c; border-radius: 2px; margin-left: 0; }
+
+        .dialogue-box { position: absolute; bottom: 20px; width: 80%; text-align: center; pointer-events: none; }
+        .dialogue-text { color: #6a7c8e; font-size: 14px; letter-spacing: 2px; line-height: 1.8; text-shadow: 0 0 10px rgba(106, 124, 142, 0.3); opacity: 0; transform: translateY(10px); transition: all 2s ease-in-out; font-style: italic; }
+        .dialogue-text.show { opacity: 1; transform: translateY(0); }
+
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" id="backBtn">&lt;</a>
+    <button class="regen-btn" id="regenBtn" type="button">重生成</button>
+
+    <!-- 捕获触发器 -->
+    <div class="capture-trigger-wrapper" id="captureWrapper">
+        <div class="sonar-circle"></div>
+        <button class="capture-btn" id="captureBtn" onclick="triggerDreamCapture()">
+            <span class="btn-text">潜入意识深处</span>
+            <span class="btn-loading-text">信号捕获中...</span>
+        </button>
+    </div>
+
+    <!-- 顶部滑动指示 -->
+    <div class="swipe-hint" id="swipeHint">潜意识切片 · 左右滑动</div>
+
+    <!-- 梦境滑动区 -->
+    <div class="dreams-container" id="dreamsContainer">
+        <!-- 内容由 JS 动态生成 -->
+    </div>
+
+    <!-- 底部互动区 -->
+    <div class="interaction-area" id="interactionArea">
+        <div class="waveform" id="waveform">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        </div>
+
+        <button class="play-btn" id="playBtn">
+            <div class="play-icon"></div>
+        </button>
+
+        <div class="dialogue-box">
+            <div class="dialogue-text" id="dialogueText">
+                <!-- 梦话文字 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        const backBtn = document.getElementById('backBtn');
+        const regenBtn = document.getElementById('regenBtn');
+        const playBtn = document.getElementById('playBtn');
+        const waveform = document.getElementById('waveform');
+        const dialogueText = document.getElementById('dialogueText');
+        const dreamsContainer = document.getElementById('dreamsContainer');
+        const captureWrapper = document.getElementById('captureWrapper');
+        const swipeHint = document.getElementById('swipeHint');
+        const interactionArea = document.getElementById('interactionArea');
+
+        let isPlaying = false;
+        let generatedSleepTalk = "";
+        let currentDreams = [];
+        let currentDreamIndex = 0;
+        let scrollTicking = false;
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '梦境生成失败，请稍后重试。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '呢喃梦境');
+                return;
+            }
+            alert(reason);
+        }
+
+        function asTalkText(value) {
+            const text = asString(value);
+            if (!text) return '……';
+            if (/^[“"].+[”"]$/.test(text)) return text;
+            return '“' + text + '”';
+        }
+
+        function clampNumber(value, min, max) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) return min;
+            return Math.min(max, Math.max(min, num));
+        }
+
+        function getCurrentDreamTalk() {
+            const row = currentDreams[currentDreamIndex] || {};
+            return asTalkText(row.sleepTalk);
+        }
+
+        function syncDialogueText() {
+            generatedSleepTalk = getCurrentDreamTalk();
+            dialogueText.innerHTML = escapeHtml(generatedSleepTalk).replace(/\n/g, '<br>');
+        }
+
+        function revealDreamResult(immediate) {
+            captureWrapper.classList.remove('loading');
+            captureWrapper.classList.add('fade-out');
+            dreamsContainer.style.display = 'flex';
+            if (immediate) {
+                dreamsContainer.style.transition = 'none';
+                dreamsContainer.style.opacity = '1';
+                dreamsContainer.style.transform = 'translateY(0)';
+                dreamsContainer.offsetHeight;
+                dreamsContainer.style.transition = '';
+            } else {
+                dreamsContainer.offsetHeight;
+                dreamsContainer.style.opacity = '1';
+                dreamsContainer.style.transform = 'translateY(0)';
+            }
+            swipeHint.style.opacity = '0.5';
+            interactionArea.classList.add('show');
+            if (regenBtn) regenBtn.classList.add('show');
+        }
+
+        function bindScrollTalkSync() {
+            dreamsContainer.addEventListener('scroll', () => {
+                if (scrollTicking) return;
+                scrollTicking = true;
+                requestAnimationFrame(() => {
+                    const width = dreamsContainer.clientWidth || 1;
+                    const maxIndex = Math.max(0, currentDreams.length - 1);
+                    const nextIndex = clampNumber(Math.round(dreamsContainer.scrollLeft / width), 0, maxIndex);
+                    if (nextIndex !== currentDreamIndex) {
+                        currentDreamIndex = nextIndex;
+                        syncDialogueText();
+                        if (isPlaying) dialogueText.classList.add('show');
+                    }
+                    scrollTicking = false;
+                });
+            }, { passive: true });
+        }
+
+        function renderDreams(data) {
+            const dreams = Array.isArray(data && data.dreams) ? data.dreams : [];
+            currentDreams = dreams.slice();
+            currentDreamIndex = 0;
+            dreamsContainer.scrollLeft = 0;
+
+            dreamsContainer.innerHTML = currentDreams.map((dream, index) => `
+                <div class="dream-card">
+                    <div class="dream-date">${escapeHtml(dream.date || ('DAY ' + String(index + 1)))}</div>
+                    <div class="dream-content ${dream.hasDream ? '' : 'no-dream'}">
+                        ${escapeHtml(dream.content).replace(/\n/g, '<br>')}
+                    </div>
+                    <div class="dream-talk">
+                        <span class="dream-talk-label">Sleep Talk</span>
+                        ${escapeHtml(asTalkText(dream.sleepTalk))}
+                    </div>
+                </div>
+            `).join('');
+            syncDialogueText();
+        }
+
+        function restoreFromCacheIfAny() {
+            if (!window.SecretCenterCore) return false;
+            const roleId = window.SecretCenterCore.getSelectedRoleId && window.SecretCenterCore.getSelectedRoleId();
+            if (!roleId) return false;
+            if (typeof window.SecretCenterCore.readSceneCache !== 'function') return false;
+            const cached = window.SecretCenterCore.readSceneCache('ninan', roleId);
+            if (!cached || !cached.data || !Array.isArray(cached.data.dreams) || !cached.data.dreams.length) return false;
+            renderDreams(cached.data);
+            revealDreamResult(true);
+            return true;
+        }
+
+        async function triggerDreamCapture(force) {
+            if (captureWrapper.classList.contains('loading')) return;
+            captureWrapper.classList.add('loading');
+            if (regenBtn) {
+                regenBtn.disabled = true;
+                regenBtn.style.opacity = '0.55';
+            }
+
+            let data = null;
+            let errorMessage = '';
+            const startedAt = Date.now();
+
+            try {
+                if (!window.SecretCenterCore) throw new Error('核心模块未加载，暂时无法生成梦境。');
+                const roleId = window.SecretCenterCore.getSelectedRoleId && window.SecretCenterCore.getSelectedRoleId();
+                if (!roleId) throw new Error('请先选择角色，再生成梦境。');
+
+                let res = null;
+                if (typeof window.SecretCenterCore.generateNiNanContent === 'function') {
+                    res = await window.SecretCenterCore.generateNiNanContent({
+                        roleId: roleId,
+                        force: force === true,
+                        requestOptions: { temperature: 0.82, maxTokens: 2600 }
+                    });
+                } else if (typeof window.SecretCenterCore.generateSceneNow === 'function') {
+                    res = await window.SecretCenterCore.generateSceneNow('ninan', {
+                        roleId: roleId,
+                        force: force === true,
+                        requestOptions: { temperature: 0.82, maxTokens: 2600 }
+                    });
+                } else {
+                    throw new Error('当前版本不支持呢喃梦境生成。');
+                }
+
+                if (res && res.ok && res.data && Array.isArray(res.data.dreams) && res.data.dreams.length) {
+                    data = res.data;
+                } else {
+                    throw new Error((res && res.error) || '梦境内容为空，请重试。');
+                }
+            } catch (err) {
+                errorMessage = asString(err && err.message) || '梦境生成失败，请稍后重试。';
+            }
+
+            const waitMs = Math.max(0, 2500 - (Date.now() - startedAt));
+            setTimeout(() => {
+                if (!data) {
+                    captureWrapper.classList.remove('loading');
+                    if (regenBtn) {
+                        regenBtn.disabled = false;
+                        regenBtn.style.opacity = '';
+                    }
+                    showGenerationFailure(errorMessage);
+                    return;
+                }
+
+                renderDreams(data);
+                revealDreamResult(false);
+                if (regenBtn) {
+                    regenBtn.disabled = false;
+                    regenBtn.style.opacity = '';
+                }
+            }, waitMs);
+        }
+
+        // 播放按钮逻辑
+        playBtn.addEventListener('click', () => {
+            // 没捕获数据时不许放
+            if (!generatedSleepTalk) return;
+
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playBtn.classList.add('playing');
+                waveform.classList.add('playing');
+                // 延迟显示文字，模拟像是在仔细听他含糊不清的呢喃
+                setTimeout(() => {
+                    dialogueText.classList.add('show');
+                }, 800);
+            } else {
+                playBtn.classList.remove('playing');
+                waveform.classList.remove('playing');
+                dialogueText.classList.remove('show');
+            }
+        });
+
+        if (backBtn) {
+            backBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToFangCun === 'function') {
+                    window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });
+                } else if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.replace('FangCun.html');
+                }
+            });
+        }
+
+        if (regenBtn) {
+            regenBtn.addEventListener('click', function () {
+                triggerDreamCapture(true);
+            });
+        }
+
+        bindScrollTalkSync();
+        restoreFromCacheIfAny();
+    </script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+
+/* Leaderboard Styles */
+.work-page-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+/* Override existing title margin for better alignment */
+.work-page-header-row .work-page-title {
+    margin-bottom: 0;
+}
+
+.work-leaderboard-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: #ffffff;
+    border-radius: 999px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    font-size: 13px;
+    font-weight: 700;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.work-leaderboard-toggle:active {
+    transform: scale(0.96);
+}
+
+.work-leaderboard-toggle.active {
+    background: #000;
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.work-leaderboard-view {
+    width: 100%;
+    padding: 24px 20px 100px 20px;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Podium Styles */
+.leaderboard-podium {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 16px;
+    margin-top: 40px;
+    margin-bottom: 50px;
+    padding: 0 10px;
+}
+
+.leaderboard-bar-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    position: relative;
+    border-radius: 20px 20px 12px 12px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+    padding-bottom: 16px;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    opacity: 0; /* For animation */
+    animation: podiumUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.leaderboard-bar-card.rank-1 {
+    width: 110px;
+    height: 180px;
+    background: linear-gradient(to bottom, #fffbf0, #ffffff); /* Subtle emphasis */
+    z-index: 3;
+    animation-delay: 0.2s;
+}
+
+.leaderboard-bar-card.rank-2 {
+    width: 90px;
+    height: 140px;
+    z-index: 2;
+    animation-delay: 0.1s;
+}
+
+.leaderboard-bar-card.rank-3 {
+    width: 90px;
+    height: 110px;
+    z-index: 1;
+    animation-delay: 0.3s;
+}
+
+.leaderboard-avatar-wrap {
+    position: absolute;
+    top: -36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.leaderboard-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    border: 3px solid #fff;
+    background: #f0f0f0;
+}
+
+.rank-1 .leaderboard-avatar-wrap {
+    top: -54px;
+}
+
+.rank-1 .leaderboard-avatar {
+    width: 64px;
+    height: 64px;
+}
+
+.leaderboard-crown {
+    font-size: 20px;
+    margin-bottom: -6px;
+    z-index: 2;
+    animation: floatCrown 2s ease-in-out infinite;
+}
+
+.leaderboard-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #333;
+    margin-top: auto; /* Push to bottom if needed, but flex handles it */
+    margin-bottom: 4px;
+    text-align: center;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 8px;
+}
+
+.leaderboard-amount {
+    font-size: 15px;
+    font-weight: 800;
+    color: #000;
+    font-family: 'PingFang SC', sans-serif; /* Ensure clean numbers */
+}
+
+.rank-1 .leaderboard-amount {
+    font-size: 18px;
+    color: #d4a017; /* Gold-ish text for #1 */
+}
+
+/* List Styles */
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.02);
+    animation: fadeInList 0.4s ease-out forwards;
+    opacity: 0;
+}
+
+.leaderboard-item-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.leaderboard-rank {
+    font-size: 14px;
+    font-weight: 800;
+    color: #A0A0A0;
+    width: 24px;
+    text-align: center;
+}
+
+.leaderboard-item-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #f0f0f0;
+}
+
+.leaderboard-item-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #333;
+}
+
+.leaderboard-item-amount {
+    font-size: 15px;
+    font-weight: 700;
+    color: #333;
+}
+
+@keyframes podiumUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes floatCrown {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+@keyframes fadeInList {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}

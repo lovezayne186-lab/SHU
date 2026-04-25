@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阅读记录 - FangCun OS</title>
+    <style>
+        /* ================= 基础全局设置 ================= */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: #F7F6F2;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            height: 100vh;
+            display: flex; justify-content: center;
+            color: #33312E; overflow: hidden;
+        }
+
+        .back-btn {
+            position: fixed; top: max(20px, env(safe-area-inset-top)); left: 20px;
+            width: 44px; height: 44px; background: transparent;
+            display: flex; align-items: center; justify-content: center;
+            text-decoration: none; color: #8C8881;
+            font-size: 24px; font-weight: 300;
+            transition: all 0.3s ease; z-index: 9999; cursor: pointer;
+        }
+        .back-btn:active { transform: translateX(-4px); }
+
+        .phone-screen {
+            width: 100%; max-width: 420px; height: 100%;
+            padding: max(60px, env(safe-area-inset-top)) 24px 40px;
+            display: flex; flex-direction: column; position: relative;
+        }
+
+        /* ================= 顶部系统标识 ================= */
+        .app-header { margin-bottom: 32px; padding-left: 8px; }
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .sys-name {
+            font-family: "Georgia", "Noto Serif SC", serif;
+            font-size: 20px; font-weight: bold; letter-spacing: 1px;
+            color: #33312E; margin-bottom: 4px;
+        }
+        .sys-subtitle {
+            font-size: 10px; letter-spacing: 2px;
+            color: #A3A09A; text-transform: uppercase;
+        }
+        .generate-btn {
+            width: 44px; height: 44px; border: none; background: transparent;
+            color: #33312E; font-size: 18px; cursor: pointer; flex-shrink: 0;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        .generate-btn:disabled { opacity: 0.55; cursor: default; }
+        .generate-btn:active:not(:disabled) { transform: scale(0.98); }
+
+        /* 内容滚动区 */
+        .content-area {
+            flex: 1; overflow-y: auto;
+            scrollbar-width: none; -ms-overflow-style: none;
+            padding-bottom: 40px; padding-left: 8px; padding-right: 8px;
+        }
+        .content-area::-webkit-scrollbar { display: none; }
+
+        /* ================= 模块标题与优雅的翻页器 ================= */
+        .section-header {
+            display: flex; align-items: center; margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: 11px; letter-spacing: 2px;
+            color: #A3A09A; text-transform: uppercase;
+        }
+        .line-divider {
+            flex: 1; height: 1px; background: #D5D1C8; margin: 0 12px;
+        }
+
+        /* 翻页器 CSS */
+        .book-nav {
+            display: flex; align-items: center; gap: 8px;
+            font-family: "Georgia", serif; font-size: 11px; color: #8C8881;
+        }
+        .nav-btn {
+            cursor: pointer; padding: 2px 6px; font-size: 16px;
+            transition: color 0.2s; user-select: none;
+        }
+        .nav-btn:hover, .nav-btn:active { color: #33312E; }
+
+        /* ================= 动态内容容器 (用于动画) ================= */
+        #dynamic-content {
+            transition: opacity 0.3s ease-in-out; /* 优雅的呼吸感过渡 */
+        }
+
+        /* ================= 当前阅读 (纯CSS书籍封面) ================= */
+        .current-read {
+            display: flex; gap: 20px; margin-bottom: 40px; align-items: flex-start;
+        }
+
+        .css-book-cover {
+            width: 110px; height: 160px;
+            border-radius: 2px 6px 6px 2px;
+            box-shadow:
+                inset 4px 0 10px rgba(0,0,0,0.1),
+                inset -1px 0 2px rgba(255,255,255,0.3),
+                6px 8px 16px rgba(0,0,0,0.08);
+            position: relative; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 16px 12px; flex-shrink: 0;
+            transition: background-color 0.4s ease; /* 颜色渐变 */
+        }
+        .css-book-cover::before {
+            content: ''; position: absolute;
+            left: 4px; top: 0; bottom: 0; width: 2px;
+            background: rgba(255,255,255,0.15);
+        }
+        .cover-author {
+            font-size: 10px; color: rgba(255,255,255,0.6);
+            letter-spacing: 1px; writing-mode: vertical-rl;
+        }
+        .cover-title {
+            font-family: "Noto Serif SC", "Songti SC", serif;
+            font-size: 18px; color: #F7F6F2; line-height: 1.2;
+        }
+
+        .read-info { flex: 1; padding-top: 8px; }
+        .info-title {
+            font-family: "Noto Serif SC", "Songti SC", serif;
+            font-size: 18px; color: #33312E; margin-bottom: 6px;
+        }
+        .info-author { font-size: 13px; color: #8C8881; margin-bottom: 24px; }
+
+        .progress-label {
+            font-family: "Georgia", serif; font-size: 11px;
+            color: #A3A09A; margin-bottom: 8px;
+            display: flex; justify-content: space-between;
+        }
+        .progress-bar {
+            width: 100%; height: 2px; background: #D5D1C8;
+            border-radius: 2px; position: relative;
+        }
+        .progress-fill {
+            position: absolute; left: 0; top: 0; height: 100%;
+            background: #33312E; border-radius: 2px;
+            transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* ================= 批注与划线 ================= */
+        .highlight-list { display: flex; flex-direction: column; gap: 24px; }
+        .quote-card {
+            background: rgba(255, 255, 255, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 16px; padding: 20px; position: relative;
+        }
+        .quote-text {
+            font-family: "Noto Serif SC", "Songti SC", serif;
+            font-size: 15px; color: #33312E; line-height: 1.6;
+            margin-bottom: 12px; position: relative; z-index: 1;
+        }
+        .quote-text::before {
+            content: '“'; font-family: "Georgia", serif; font-size: 40px;
+            color: #D5D1C8; position: absolute; left: -12px; top: -16px;
+            z-index: -1; opacity: 0.5;
+        }
+        .note-text {
+            font-size: 13px; color: #5A5752; line-height: 1.5;
+            padding-left: 12px; border-left: 2px solid #33312E; margin-top: 16px;
+        }
+        .note-label {
+            font-size: 10px; color: #A3A09A; letter-spacing: 1px;
+            text-transform: uppercase; margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <a href="FangCun.html" class="back-btn" id="back-btn">‹</a>
+
+    <div class="phone-screen">
+        <div class="app-header">
+            <div class="header-top">
+                <div>
+                    <div class="sys-name">READING LOG</div>
+                    <div class="sys-subtitle">Thought Archives</div>
+                </div>
+                <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+            </div>
+        </div>
+
+        <div class="content-area">
+
+            <!-- 带有翻页器的标题栏 -->
+            <div class="section-header">
+                <span class="section-title">Library</span>
+                <div class="line-divider"></div>
+                <div class="book-nav">
+                    <span class="nav-btn" id="prev-btn">‹</span>
+                    <span id="page-indicator">-- / --</span>
+                    <span class="nav-btn" id="next-btn">›</span>
+                </div>
+            </div>
+
+            <!-- 需要动态刷新的内容区 -->
+            <div id="dynamic-content">
+                <!-- 由 JS 渲染注入 -->
+            </div>
+
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        const SCENE_KEY = 'shadow_reading';
+        let currentIndex = 0;
+        let readingData = [];
+        let currentRoleId = '';
+        const dynamicContent = document.getElementById('dynamic-content');
+        const pageIndicator = document.getElementById('page-indicator');
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatCoverTitle(title) {
+            return escapeHtml(title).replace(/&lt;br&gt;/g, '<br>');
+        }
+
+        function inferMode(context) {
+            const source = [
+                asString(context && context.roleName),
+                asString(context && context.personaText),
+                asString(context && context.worldBookText)
+            ].join('\n');
+            if (/(黑拳|拳手|格斗|擂台|赛事|地下拳|战损|陪练|盘口)/.test(source)) return 'fighter';
+            if (/(学生|校园|学院|论文|导师|选课|宿舍|辅导员|课题)/.test(source)) return 'student';
+            if (/(歌手|明星|艺人|偶像|演员|录音棚|巡演|彩排|通告|热搜)/.test(source)) return 'idol';
+            if (/(总裁|总监|集团|董事会|商务|投标|供应商|预算|并购|审批)/.test(source)) return 'executive';
+            return 'default';
+        }
+
+        function buildFallbackReading(context) {
+            const mode = inferMode(context);
+            if (mode === 'fighter') {
+                return [
+                    {
+                        title: '五轮书',
+                        fullTitle: '五轮书',
+                        author: '宫本武藏',
+                        color: '#40342C',
+                        progress: '61%',
+                        highlights: [
+                            { quote: '真正决定胜负的，常常不是爆发，而是你还能不能稳住第二回合。', note: '这句话很像我现在的日子。疼痛不是问题，节奏乱了才是。' },
+                            { quote: '习惯比意志更可靠，尤其在你已经很累的时候。', note: '我不喜欢承认自己会疲惫，但身体替我承认了。还好动作训练不会说谎。' }
+                        ]
+                    },
+                    {
+                        title: '太阳与<br>铁',
+                        fullTitle: '太阳与铁',
+                        author: '三岛由纪夫',
+                        color: '#8D725A',
+                        progress: '28%',
+                        highlights: [
+                            { quote: '语言有时是苍白的，肌肉却能直接说明一切。', note: '有些解释说得再多都没有用。上台、出拳、站到最后，别人自然会闭嘴。' },
+                            { quote: '身体的边界，常常也是人格的边界。', note: '我确实是靠这些边界活下来的。伤口、体重、出拳距离，没有一样可以放任。' }
+                        ]
+                    },
+                    {
+                        title: '夜航西<br>飞',
+                        fullTitle: '夜航西飞',
+                        author: '柏瑞尔·马卡姆',
+                        color: '#4A5665',
+                        progress: '84%',
+                        highlights: [
+                            { quote: '人并不是不害怕，只是学会带着恐惧继续往前。', note: '很多时候我根本不是不怕，我只是没有退路。' },
+                            { quote: '孤独有时像高空，冷，却让人看得更远。', note: '安静对我来说不是奖励，是必须。' }
+                        ]
+                    }
+                ];
+            }
+            if (mode === 'student') {
+                return [
+                    {
+                        title: '置身事<br>内',
+                        fullTitle: '置身事内',
+                        author: '兰小欢',
+                        color: '#44506A',
+                        progress: '46%',
+                        highlights: [
+                            { quote: '很多选择并不是最优解，只是约束条件下的可行解。', note: '课、论文、社团和休息，没有一个能完全顾到。先承认可行解，反而不那么慌。' },
+                            { quote: '理解结构，比单点抱怨更重要。', note: '把结构理顺，人也会冷静一点。' }
+                        ]
+                    },
+                    {
+                        title: '局外人',
+                        fullTitle: '局外人',
+                        author: '阿尔贝·加缪',
+                        color: '#C3C0B6',
+                        progress: '79%',
+                        highlights: [
+                            { quote: '人有时只是对世界缺少解释，并不是没有感受。', note: '不是麻木，只是不知道该怎么把心里那团东西说清楚。' },
+                            { quote: '沉默并不代表空白，它也可能是负荷过重。', note: '我现在的沉默多半就是这样。' }
+                        ]
+                    },
+                    {
+                        title: '如何阅<br>读一本书',
+                        fullTitle: '如何阅读一本书',
+                        author: '莫提默·J. 艾德勒',
+                        color: '#6B5B4B',
+                        progress: '33%',
+                        highlights: [
+                            { quote: '真正的阅读，是让一本书改变你的结构。', note: '很多东西得进到脑子里，留下痕迹，才能算真的学到。' },
+                            { quote: '提问能力，是阅读最重要的副产品。', note: '以前总急着找答案，倒忘了先把问题问对。' }
+                        ]
+                    }
+                ];
+            }
+            return [
+                {
+                    title: '时间的<br>秩序',
+                    fullTitle: '时间的秩序',
+                    author: 'Carlo Rovelli',
+                    color: '#3E4348',
+                    progress: '45%',
+                    highlights: [
+                        { quote: '世界不是由过去、现在和未来构成的，而是由事件交织的网络构成。', note: '今天那些糟糕的小事突然不那么沉了。它们只是节点，不是全部。' },
+                        { quote: '所谓现在，不过是我们感官临时搭建出来的桥。', note: '很多焦虑也许只是我把一瞬间误当成了永久。' }
+                    ]
+                },
+                {
+                    title: '小王子',
+                    fullTitle: '小王子',
+                    author: 'Antoine de Saint-Exupéry',
+                    color: '#D4E4F7',
+                    progress: '88%',
+                    highlights: [
+                        { quote: '真正重要的东西，用眼睛是看不见的。', note: '很多东西本来就不能只靠表面判断。' },
+                        { quote: '你要对你驯养过的一切负责。', note: '责任这个词和温柔，其实经常绑在一起。' }
+                    ]
+                },
+                {
+                    title: '月亮与<br>六便士',
+                    fullTitle: '月亮与六便士',
+                    author: 'W. Somerset Maugham',
+                    color: '#5A5D67',
+                    progress: '17%',
+                    highlights: [
+                        { quote: '夜里读书的人，通常不是为了答案，而是为了安静。', note: '更像是在给自己找一个不被打扰的角落。' },
+                        { quote: '书页翻过去的时候，情绪也会跟着松一点。', note: '不是每次都能被治好，至少能暂时喘口气。' }
+                    ]
+                }
+            ];
+        }
+
+        function clearReading() {
+            readingData = [];
+            currentIndex = 0;
+            pageIndicator.innerText = '-- / --';
+            dynamicContent.style.opacity = 1;
+            dynamicContent.innerHTML = '';
+        }
+
+        function setReadingBooks(books) {
+            readingData = Array.isArray(books) ? books : [];
+            if (!readingData.length) {
+                clearReading();
+                return;
+            }
+            currentIndex = Math.min(currentIndex, Math.max(0, readingData.length - 1));
+            renderBook(currentIndex);
+        }
+
+        function renderBook(index) {
+            const data = readingData[index];
+            if (!data) return;
+
+            pageIndicator.innerText = `${String(index + 1).padStart(2, '0')} / ${String(readingData.length).padStart(2, '0')}`;
+
+            const highlightsHtml = (Array.isArray(data.highlights) ? data.highlights : []).map(item => {
+                const noteHtml = item.note ? `
+                    <div class="note-text">
+                        <div class="note-label">Private Note</div>
+                        ${escapeHtml(item.note)}
+                    </div>` : '';
+
+                return `
+                    <div class="quote-card">
+                        <div class="quote-text">${escapeHtml(item.quote)}</div>
+                        ${noteHtml}
+                    </div>`;
+            }).join('');
+
+            const authorBadge = asString(data.author).split(' ').pop();
+            const html = `
+                <div class="current-read">
+                    <div class="css-book-cover" style="background-color: ${escapeHtml(data.color)};">
+                        <div class="cover-author">${escapeHtml(authorBadge)}</div>
+                        <div class="cover-title">${formatCoverTitle(data.title)}</div>
+                    </div>
+                    <div class="read-info">
+                        <div class="info-title">${escapeHtml(data.fullTitle)}</div>
+                        <div class="info-author">${escapeHtml(data.author)}</div>
+                        <div style="margin-top: 32px;">
+                            <div class="progress-label">
+                                <span>PROGRESS</span>
+                                <span>${escapeHtml(data.progress)}</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${escapeHtml(data.progress)};"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section-header" style="margin-top: 16px;">
+                    <span class="section-title">Highlights & Notes</span>
+                </div>
+                <div class="highlight-list">
+                    ${highlightsHtml}
+                </div>
+            `;
+
+            dynamicContent.style.opacity = 0;
+            setTimeout(() => {
+                dynamicContent.innerHTML = html;
+                dynamicContent.style.opacity = 1;
+            }, 300);
+        }
+
+        function resolveContext() {
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.resolveRoleContext === 'function') {
+                const resolved = window.SecretCenterCore.resolveRoleContext();
+                if (resolved && resolved.ok) return resolved;
+            }
+            return {
+                roleId: localStorage.getItem('SecretCenter_CurrentRoleId') || '',
+                roleName: localStorage.getItem('SecretCenter_CurrentRoleName') || localStorage.getItem('FangCun_CurrentRole') || '',
+                personaText: '',
+                worldBookText: ''
+            };
+        }
+
+        function readCachedBooks(roleId) {
+            if (!roleId || !window.SecretCenterCore || typeof window.SecretCenterCore.readSceneCache !== 'function') {
+                return [];
+            }
+            const cached = window.SecretCenterCore.readSceneCache(SCENE_KEY, roleId);
+            const books = cached && cached.data && Array.isArray(cached.data.books) ? cached.data.books : [];
+            return books.length ? books : [];
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的阅读记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '阅读记录');
+                return;
+            }
+            alert(reason);
+        }
+
+        async function generateBooks(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateSceneContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成。');
+                return;
+            }
+            if (!currentRoleId) {
+                showGenerationFailure('请先选择角色，再生成阅读记录。');
+                return;
+            }
+            if (btn) btn.disabled = true;
+            try {
+                const result = await window.SecretCenterCore.generateSceneContent(SCENE_KEY, {
+                    roleId: currentRoleId,
+                    force: force === true,
+                    requestOptions: {
+                        temperature: 0.72,
+                        maxTokens: 2600
+                    }
+                });
+                if (result && result.ok && result.data && Array.isArray(result.data.books) && result.data.books.length) {
+                    setReadingBooks(result.data.books);
+                    return;
+                }
+                showGenerationFailure(result && result.error);
+            } catch (error) {
+                console.error('ShadowReading generate failed:', error);
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (!readingData.length) return;
+            currentIndex = (currentIndex - 1 + readingData.length) % readingData.length;
+            renderBook(currentIndex);
+        });
+
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if (!readingData.length) return;
+            currentIndex = (currentIndex + 1) % readingData.length;
+            renderBook(currentIndex);
+        });
+
+        document.getElementById('generateBtn').addEventListener('click', () => {
+            generateBooks(true);
+        });
+
+        const backBtn = document.getElementById('back-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToFangCun === 'function') {
+                    window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });
+                } else {
+                    window.location.replace('FangCun.html');
+                }
+            });
+        }
+
+        (function init() {
+            const context = resolveContext();
+            currentRoleId = asString(context.roleId);
+            const cachedBooks = readCachedBooks(currentRoleId);
+            if (cachedBooks.length) {
+                setReadingBooks(cachedBooks);
+                return;
+            }
+            clearReading();
+        })();
+    </script>
+</body>
+</html>

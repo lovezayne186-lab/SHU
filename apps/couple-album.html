@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#e7e7e7">
+    <title>恋爱相册</title>
+    <script src="../vendor/localforage/localforage.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --accent-color: #ff8fb1;
+            --text-dark: #333;
+            --text-gray: #999;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background-color: var(--bg-color);
+            font-family: var(--font-family);
+            color: var(--text-dark);
+            min-height: 100vh;
+            overflow-x: hidden;
+            padding-top: calc(env(safe-area-inset-top, 40px) + 74px);
+            padding-bottom: 110px;
+        }
+        .top-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: calc(env(safe-area-inset-top, 40px) + 58px);
+            padding-top: env(safe-area-inset-top, 40px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-color);
+            z-index: 100;
+        }
+        .back-btn {
+            position: absolute;
+            left: 18px;
+            bottom: 14px;
+            font-size: 24px;
+            color: var(--text-dark);
+            text-decoration: none;
+            font-weight: 300;
+        }
+        .tabs {
+            display: flex;
+            gap: 30px;
+            position: relative;
+            bottom: -4px;
+        }
+        .tab {
+            font-size: 16px;
+            font-weight: 300;
+            color: var(--text-gray);
+            cursor: pointer;
+            position: relative;
+            padding-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+        .tab.active {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        .tab-indicator {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 4px;
+            height: 4px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateX(14px);
+        }
+        .content-area {
+            padding: 18px 14px 14px;
+            display: none;
+            animation: fadeIn 0.35s ease;
+        }
+        .content-area.active {
+            display: grid;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        #view-mine {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .polaroid-card {
+            border: none;
+            width: 100%;
+            background: #fff;
+            border-radius: 8px;
+            padding: 7px 7px 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            cursor: pointer;
+            text-align: left;
+            position: relative;
+        }
+        .polaroid-media {
+            position: relative;
+            overflow: hidden;
+            border-radius: 6px;
+            background: #f4f4f4;
+        }
+        .polaroid-media.ratio-square {
+            aspect-ratio: 1 / 1;
+        }
+        .polaroid-media.ratio-4-3 {
+            aspect-ratio: 4 / 3;
+        }
+        .polaroid-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .polaroid-date-badge {
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            border-radius: 10px;
+            padding: 2px 7px;
+            font-size: 10px;
+            line-height: 1.2;
+        }
+        .polaroid-caption {
+            margin-top: 7px;
+            font-size: 11px;
+            color: #8d8d8d;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #view-theirs {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .line-art-card {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            border: 1px solid #efefef;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px;
+        }
+        .select-badge {
+            position: absolute;
+            top: 7px;
+            right: 7px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.94);
+            border: 1px solid rgba(0,0,0,0.12);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            z-index: 3;
+        }
+        .is-selectable .select-badge {
+            display: inline-flex;
+        }
+        .is-selected {
+            box-shadow: 0 0 0 2px rgba(255, 143, 177, 0.92), 0 4px 20px rgba(0,0,0,0.03);
+        }
+        .is-selected .select-badge {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+        .line-art-icon {
+            width: 28px;
+            height: 28px;
+            stroke: #333;
+            stroke-width: 1.2;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .line-art-label {
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+            line-height: 1.25;
+            width: 100%;
+            white-space: normal;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            min-height: 2.75em;
+        }
+        .line-art-date {
+            position: absolute;
+            right: 8px;
+            bottom: 8px;
+            color: #111;
+            font-size: 10px;
+            font-weight: 500;
+        }
+        .fab {
+            position: fixed;
+            right: 16px;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+            width: 56px;
+            height: 56px;
+            border: none;
+            border-radius: 50%;
+            background: var(--accent-color);
+            color: #fff;
+            box-shadow: 0 10px 26px rgba(255, 143, 177, 0.46);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 120;
+            transition: all 0.24s ease;
+        }
+        .fab.theirs-mode {
+            width: 110px;
+            border-radius: 30px;
+            padding: 0 14px;
+        }
+        .fab:active {
+            transform: scale(0.94);
+        }
+        .fab.loading {
+            pointer-events: none;
+        }
+        .fab-icon {
+            font-size: 28px;
+            font-weight: 300;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+            transition: opacity 0.22s ease;
+        }
+        .fab.theirs-mode .fab-icon {
+            font-size: 17px;
+            font-weight: 600;
+        }
+        .fab .loader {
+            display: none;
+            width: 22px;
+            height: 22px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            position: absolute;
+        }
+        .fab.loading .fab-icon {
+            opacity: 0;
+        }
+        .fab.loading .loader {
+            display: block;
+        }
+        .fab.hidden-fab {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .selection-bar {
+            position: fixed;
+            left: 14px;
+            right: 14px;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+            z-index: 140;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .selection-count {
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .selection-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .selection-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #f3f4f6;
+            color: #333;
+        }
+        .selection-btn.danger {
+            background: rgba(255, 106, 136, 0.12);
+            color: #d44c6b;
+        }
+        .modal-overlay, .detail-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 220;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease;
+        }
+        .modal-overlay.show, .detail-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            max-width: 86vw;
+            text-align: center;
+            padding: 24px;
+        }
+        .typewriter-text {
+            font-size: 16px;
+            color: var(--text-dark);
+            line-height: 1.7;
+            border-right: 2px solid transparent;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow: visible;
+            display: block;
+            width: min(86vw, 320px);
+            max-width: 100%;
+            min-height: 1.7em;
+            text-align: left;
+            margin: 0 auto;
+        }
+        .typewriter-text.typing {
+            border-right-color: var(--text-dark);
+            animation: blink .75s step-end infinite;
+        }
+        @keyframes blink {
+            from, to { border-color: transparent; }
+            50% { border-color: var(--text-dark); }
+        }
+        .detail-sheet {
+            width: min(92vw, 430px);
+            max-height: 88vh;
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 12px 34px rgba(0,0,0,0.08);
+            padding: 14px;
+            overflow: auto;
+        }
+        .detail-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .detail-title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .detail-close {
+            border: none;
+            background: #f5f5f5;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-size: 16px;
+        }
+        .detail-image {
+            width: 100%;
+            border-radius: 8px;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .detail-date {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .detail-comment {
+            font-size: 14px;
+            color: #333;
+            line-height: 1.65;
+            background: #fafafa;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .detail-mood {
+            font-size: 14px;
+            color: #555;
+            line-height: 1.65;
+            margin-bottom: 12px;
+            font-style: italic;
+        }
+        .detail-ai-btn {
+            width: 100%;
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #efefef;
+            border-radius: 8px;
+            background: #fff;
+            color: #333;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .detail-ai-btn:active {
+            background: #f8f8f8;
+            transform: scale(0.98);
+        }
+        .detail-ai-btn.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        .empty-tip {
+            font-size: 12px;
+            color: #a0a0a0;
+            grid-column: 1 / -1;
+            padding: 24px 2px 12px;
+        }
+        .hidden {
+            display: none !important;
+        }
+
+        /* 增加心情输入弹窗样式 */
+        .mood-input-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 250;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease;
+        }
+        .mood-input-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .mood-input-card {
+            width: min(86vw, 360px);
+            background: #fff;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .mood-input-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        .mood-input-textarea {
+            width: 100%;
+            height: 80px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+            background: #fafafa;
+            font-family: inherit;
+        }
+        .mood-input-textarea:focus {
+            border-color: var(--accent-color);
+            background: #fff;
+        }
+        .mood-input-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 16px;
+        }
+        .mood-input-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+        }
+        .mood-input-btn.cancel {
+            background: #f0f0f0;
+            color: #666;
+        }
+        .mood-input-btn.confirm {
+            background: var(--accent-color);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <a href="couple-space.html?tab=record" class="back-btn" id="back-btn">＜</a>
+        <div class="tabs">
+            <div class="tab active" data-target="view-mine">我的</div>
+            <div class="tab" data-target="view-theirs">对方的</div>
+            <div class="tab-indicator" id="tab-indicator"></div>
+        </div>
+    </nav>
+    <main>
+        <div id="view-mine" class="content-area active"></div>
+        <div id="view-theirs" class="content-area"></div>
+    </main>
+    <button class="fab" id="fab-btn" type="button">
+        <span class="fab-icon" id="fab-icon">+</span>
+        <span class="loader"></span>
+    </button>
+    <div class="selection-bar hidden" id="selection-bar">
+        <div class="selection-count" id="selection-count">已选 0 项</div>
+        <div class="selection-actions">
+            <button class="selection-btn" id="selection-select-all-btn" type="button">全选</button>
+            <button class="selection-btn danger" id="selection-delete-btn" type="button">删除</button>
+            <button class="selection-btn" id="selection-cancel-btn" type="button">取消</button>
+        </div>
+    </div>
+    <input id="mine-upload-input" class="hidden" type="file" accept="image/*" multiple>
+    <div class="modal-overlay" id="modal">
+        <div class="modal-content">
+            <div class="typewriter-text" id="modal-text"></div>
+        </div>
+    </div>
+    <div class="detail-overlay" id="detail-overlay">
+        <div class="detail-sheet">
+            <div class="detail-top">
+                <div class="detail-title">照片详情</div>
+                <button class="detail-close" id="detail-close" type="button">×</button>
+            </div>
+            <img id="detail-image" class="detail-image" alt="detail">
+            <div id="detail-date" class="detail-date"></div>
+            <div id="detail-mood" class="detail-mood" style="display: none;"></div>
+            <div id="detail-comment" class="detail-comment"></div>
+            <button id="detail-ai-btn" class="detail-ai-btn" type="button">✨ 让AI评价这张照片</button>
+        </div>
+    </div>
+    <div class="mood-input-overlay" id="mood-input-overlay">
+        <div class="mood-input-card">
+            <div class="mood-input-title">记录当下的心情</div>
+            <textarea id="mood-input-text" class="mood-input-textarea" placeholder="写下这一刻的想法或心情..."></textarea>
+            <div class="mood-input-actions">
+                <button id="mood-input-cancel" class="mood-input-btn cancel" type="button">跳过</button>
+                <button id="mood-input-confirm" class="mood-input-btn confirm" type="button">保存</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const STORAGE_KEY = 'couple_album_state_v6';
+        const LEGACY_STORAGE_KEYS = ['couple_album_state_v5'];
+        const tabs = document.querySelectorAll('.tab');
+        const backBtn = document.getElementById('back-btn');
+        const indicator = document.getElementById('tab-indicator');
+        const mineView = document.getElementById('view-mine');
+        const theirsView = document.getElementById('view-theirs');
+        const fabBtn = document.getElementById('fab-btn');
+        const fabIcon = document.getElementById('fab-icon');
+        const uploadInput = document.getElementById('mine-upload-input');
+        const modal = document.getElementById('modal');
+        const modalText = document.getElementById('modal-text');
+        const detailOverlay = document.getElementById('detail-overlay');
+        const detailCloseBtn = document.getElementById('detail-close');
+        const detailImageEl = document.getElementById('detail-image');
+        const detailDateEl = document.getElementById('detail-date');
+        const detailMoodEl = document.getElementById('detail-mood');
+        const detailCommentEl = document.getElementById('detail-comment');
+        const detailAiBtn = document.getElementById('detail-ai-btn');
+        const selectionBar = document.getElementById('selection-bar');
+        const selectionCountEl = document.getElementById('selection-count');
+        const selectionSelectAllBtn = document.getElementById('selection-select-all-btn');
+        const selectionDeleteBtn = document.getElementById('selection-delete-btn');
+        const selectionCancelBtn = document.getElementById('selection-cancel-btn');
+        const moodInputOverlay = document.getElementById('mood-input-overlay');
+        const moodInputText = document.getElementById('mood-input-text');
+        const moodInputCancel = document.getElementById('mood-input-cancel');
+        const moodInputConfirm = document.getElementById('mood-input-confirm');
+        const state = { minePhotos: [], theirCards: [] };
+        let currentTab = 'view-mine';
+        let currentDetailId = null;
+        let pendingUploadPhotos = [];
+        let selectionMode = false;
+        let selectionTab = '';
+        let selectionIds = new Set();
+        let longPressTimer = null;
+        let longPressTriggered = false;
+        let pressStartX = 0;
+        let pressStartY = 0;
+        let modalTypingTimer = null;
+
+        function resolveCoupleRecordBackTarget() {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const fromQuery = String(params.get('back') || '').trim();
+                if (fromQuery) return fromQuery;
+            } catch (e) { }
+            try {
+                const fromSession = String(sessionStorage.getItem('couple_space_record_return_target') || '').trim();
+                if (fromSession) return fromSession;
+            } catch (e2) { }
+            return 'couple-space.html?tab=record';
+        }
+
+        function goBackToCoupleRecord() {
+            const target = resolveCoupleRecordBackTarget();
+            window.location.replace(target);
+        }
+
+        function getPointFromEvent(event) {
+            const touch = event && event.touches && event.touches[0]
+                ? event.touches[0]
+                : event && event.changedTouches && event.changedTouches[0]
+                    ? event.changedTouches[0]
+                    : event;
+            return {
+                x: Number(touch && touch.clientX || 0),
+                y: Number(touch && touch.clientY || 0)
+            };
+        }
+
+        if (backBtn) {
+            backBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                if (window.parent && window.parent.closeCoupleSubpage) {
+                    window.parent.closeCoupleSubpage();
+                } else {
+                    goBackToCoupleRecord();
+                }
+            });
+        }
+
+        function getStorageEngine() {
+            try {
+                if (window.localforage && typeof window.localforage.getItem === 'function' && typeof window.localforage.setItem === 'function') {
+                    return window.localforage;
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        function buildAlbumStorageKey(roleId) {
+            const rid = String(roleId || '').trim();
+            return rid ? `${STORAGE_KEY}__role__${rid}` : STORAGE_KEY;
+        }
+
+        function getAlbumStorageKeyCandidates() {
+            const roleId = getCurrentRoleId();
+            const primary = buildAlbumStorageKey(roleId);
+            return [primary].concat(LEGACY_STORAGE_KEYS).filter(function (key, index, arr) {
+                return key && arr.indexOf(key) === index;
+            });
+        }
+
+        function parseAlbumStatePayload(raw) {
+            if (!raw) return null;
+            if (typeof raw === 'string') {
+                try {
+                    return JSON.parse(raw);
+                } catch (e) {
+                    return null;
+                }
+            }
+            if (typeof raw === 'object') return raw;
+            return null;
+        }
+
+        function isLegacyFallbackTheirText(text) {
+            const clean = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!clean) return false;
+            return [
+                '我偷偷拍下你趴在桌边发呆的侧脸，窗边的光刚好落进睫毛里',
+                '你低头看手机时我按下快门，外套袖口和散开的头发一起入镜'
+            ].indexOf(clean) !== -1 || /^聊天截图停在“.*”那句，时间显示在深夜$/.test(clean) || /^我把你的照片设成锁屏，壁纸角落还留着“.*”的通知$/.test(clean);
+        }
+
+        function normalizeAlbumStatePayload(parsed) {
+            const minePhotos = Array.isArray(parsed && parsed.minePhotos) ? parsed.minePhotos : [];
+            const theirCardsRaw = Array.isArray(parsed && parsed.theirCards) ? parsed.theirCards : [];
+            const theirCards = theirCardsRaw.filter(function (item) {
+                const text = String(item && item.text || '').trim();
+                if (!text) return false;
+                if (isLegacyFallbackTheirText(text)) return false;
+                return true;
+            });
+            return {
+                minePhotos: minePhotos,
+                theirCards: theirCards,
+                removedLegacyFallbacks: theirCardsRaw.length - theirCards.length
+            };
+        }
+
+        async function readState() {
+            const lf = getStorageEngine();
+            const keys = getAlbumStorageKeyCandidates();
+            if (lf) {
+                for (let i = 0; i < keys.length; i++) {
+                    try {
+                        const parsed = parseAlbumStatePayload(await lf.getItem(keys[i]));
+                        if (!parsed) continue;
+                        return Object.assign({ loadedFromKey: keys[i] }, normalizeAlbumStatePayload(parsed));
+                    } catch (e) {}
+                }
+            }
+            for (let i = 0; i < keys.length; i++) {
+                try {
+                    const raw = localStorage.getItem(keys[i]) || '';
+                    const parsed = parseAlbumStatePayload(raw);
+                    if (!parsed) continue;
+                    return Object.assign({ loadedFromKey: keys[i] }, normalizeAlbumStatePayload(parsed));
+                } catch (e2) {}
+            }
+            return { minePhotos: [], theirCards: [], removedLegacyFallbacks: 0, loadedFromKey: '' };
+        }
+
+        async function saveState() {
+            const payload = {
+                minePhotos: Array.isArray(state.minePhotos) ? state.minePhotos : [],
+                theirCards: Array.isArray(state.theirCards) ? state.theirCards : [],
+            };
+            const storageKey = buildAlbumStorageKey(getCurrentRoleId());
+            const lf = getStorageEngine();
+            if (lf) {
+                try {
+                    await lf.setItem(storageKey, payload);
+                    return true;
+                } catch (e) {}
+            }
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(payload));
+                return true;
+            } catch (e2) {
+                return false;
+            }
+        }
+
+        function formatDate(ts) {
+            const d = ts ? new Date(ts) : new Date();
+            return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function safeText(text) {
+            return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function getCurrentTabItems() {
+            return currentTab === 'view-theirs' ? state.theirCards : state.minePhotos;
+        }
+
+        function updateSelectionUi() {
+            if (selectionBar) {
+                selectionBar.classList.toggle('hidden', !selectionMode);
+            }
+            if (fabBtn) {
+                fabBtn.classList.toggle('hidden-fab', selectionMode);
+            }
+            if (selectionCountEl) {
+                selectionCountEl.textContent = `已选 ${selectionIds.size} 项`;
+            }
+            if (selectionSelectAllBtn) {
+                const total = getCurrentTabItems().length;
+                selectionSelectAllBtn.textContent = total > 0 && selectionIds.size >= total ? '取消全选' : '全选';
+            }
+        }
+
+        function exitSelectionMode() {
+            selectionMode = false;
+            selectionTab = '';
+            selectionIds = new Set();
+            updateSelectionUi();
+            renderMine();
+            renderTheirs();
+        }
+
+        function enterSelectionMode(tabName, id) {
+            selectionMode = true;
+            selectionTab = String(tabName || currentTab);
+            selectionIds = new Set();
+            if (id) selectionIds.add(String(id));
+            closeDetail();
+            closeModal();
+            updateSelectionUi();
+            renderMine();
+            renderTheirs();
+        }
+
+        function toggleSelection(id) {
+            const safeId = String(id || '').trim();
+            if (!safeId) return;
+            if (selectionIds.has(safeId)) selectionIds.delete(safeId);
+            else selectionIds.add(safeId);
+            if (!selectionIds.size) {
+                exitSelectionMode();
+                return;
+            }
+            updateSelectionUi();
+            renderMine();
+            renderTheirs();
+        }
+
+        function selectAllCurrentTab() {
+            const list = getCurrentTabItems();
+            if (!Array.isArray(list) || !list.length) return;
+            if (selectionIds.size >= list.length) {
+                selectionIds = new Set();
+            } else {
+                selectionIds = new Set(list.map((item) => String(item && item.id || '').trim()).filter(Boolean));
+            }
+            if (!selectionIds.size) {
+                exitSelectionMode();
+                return;
+            }
+            updateSelectionUi();
+            renderMine();
+            renderTheirs();
+        }
+
+        async function deleteSelectedItems() {
+            if (!selectionMode || !selectionIds.size) return;
+            const confirmed = window.confirm(`要删除选中的 ${selectionIds.size} 项吗？`);
+            if (!confirmed) return;
+            if (selectionTab === 'view-theirs') {
+                state.theirCards = state.theirCards.filter((item) => !selectionIds.has(String(item && item.id || '').trim()));
+            } else {
+                if (currentDetailId && selectionIds.has(String(currentDetailId))) {
+                    closeDetail();
+                }
+                state.minePhotos = state.minePhotos.filter((item) => !selectionIds.has(String(item && item.id || '').trim()));
+            }
+            await saveState();
+            exitSelectionMode();
+        }
+
+        function clearLongPressTimer() {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        }
+
+        function bindLongPress(container, attrName) {
+            if (!container) return;
+            const findCard = function (target) {
+                return target && target.closest ? target.closest('[' + attrName + ']') : null;
+            };
+            const start = function (event) {
+                const card = findCard(event.target);
+                if (!card) return;
+                const id = String(card.getAttribute(attrName) || '').trim();
+                if (!id) return;
+                clearLongPressTimer();
+                longPressTriggered = false;
+                const point = getPointFromEvent(event);
+                pressStartX = point.x;
+                pressStartY = point.y;
+                longPressTimer = setTimeout(function () {
+                    longPressTriggered = true;
+                    enterSelectionMode(currentTab, id);
+                }, 520);
+            };
+            const cancel = function () {
+                clearLongPressTimer();
+            };
+            const move = function (event) {
+                if (!longPressTimer) return;
+                const point = getPointFromEvent(event);
+                const dx = Math.abs(point.x - pressStartX);
+                const dy = Math.abs(point.y - pressStartY);
+                if (dx > 12 || dy > 12) {
+                    clearLongPressTimer();
+                }
+            };
+            container.addEventListener('touchstart', start, { passive: true });
+            container.addEventListener('mousedown', start);
+            container.addEventListener('touchmove', move, { passive: true });
+            container.addEventListener('mousemove', move);
+            container.addEventListener('touchend', cancel);
+            container.addEventListener('touchcancel', cancel);
+            container.addEventListener('mouseup', cancel);
+            container.addEventListener('mouseleave', cancel);
+            container.addEventListener('contextmenu', function (event) {
+                const card = findCard(event.target);
+                if (!card) return;
+                const id = String(card.getAttribute(attrName) || '').trim();
+                if (!id) return;
+                event.preventDefault();
+                longPressTriggered = true;
+                enterSelectionMode(currentTab, id);
+            });
+            container.addEventListener('click', function (event) {
+                const card = findCard(event.target);
+                if (!card) return;
+                const id = String(card.getAttribute(attrName) || '').trim();
+                if (!id) return;
+                if (longPressTriggered) {
+                    longPressTriggered = false;
+                    event.preventDefault();
+                    return;
+                }
+                if (selectionMode) {
+                    event.preventDefault();
+                    if (selectionTab && selectionTab !== currentTab) return;
+                    toggleSelection(id);
+                }
+            });
+        }
+
+        function updateIndicator(activeTab) {
+            const tabRect = activeTab.getBoundingClientRect();
+            const tabsRect = activeTab.parentElement.getBoundingClientRect();
+            const offset = tabRect.left - tabsRect.left + (tabRect.width / 2) - 2;
+            indicator.style.transform = `translateX(${offset}px)`;
+        }
+
+        function getMineCaption(item) {
+            const comment = String(item.comment || '').trim();
+            if (comment) return `AI：${comment}`;
+            return '点击查看详情';
+        }
+
+        function renderMine() {
+            const list = state.minePhotos.slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+            if (!list.length) {
+                mineView.innerHTML = '<div class="empty-tip">点击右下角 + 上传你的真实照片</div>';
+                updateSelectionUi();
+                return;
+            }
+            mineView.innerHTML = list.map((item) => {
+                const ratioCls = item.ratio === '4:3' ? 'ratio-4-3' : 'ratio-square';
+                const selected = selectionMode && selectionTab === 'view-mine' && selectionIds.has(String(item.id));
+                const selectableCls = selectionMode && selectionTab === 'view-mine' ? ' is-selectable' : '';
+                const selectedCls = selected ? ' is-selected' : '';
+                return `
+                    <button class="polaroid-card${selectableCls}${selectedCls}" type="button" data-photo-id="${safeText(item.id)}">
+                        <span class="select-badge">${selected ? '✓' : ''}</span>
+                        <div class="polaroid-media ${ratioCls}">
+                            <img class="polaroid-img" src="${safeText(item.src)}" alt="my-photo">
+                            <span class="polaroid-date-badge">${safeText(item.date)}</span>
+                        </div>
+                        <div class="polaroid-caption">${safeText(getMineCaption(item))}</div>
+                    </button>
+                `;
+            }).join('');
+            updateSelectionUi();
+        }
+
+        function renderTheirs() {
+            const list = state.theirCards.slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+            if (!list.length) {
+                theirsView.innerHTML = '<div class="empty-tip">点击右下角 ✨ 生成对方的视角</div>';
+                updateSelectionUi();
+                return;
+            }
+            theirsView.innerHTML = list.map((item) => {
+                const selected = selectionMode && selectionTab === 'view-theirs' && selectionIds.has(String(item.id));
+                const selectableCls = selectionMode && selectionTab === 'view-theirs' ? ' is-selectable' : '';
+                const selectedCls = selected ? ' is-selected' : '';
+                return `
+                <button class="line-art-card${selectableCls}${selectedCls}" type="button" data-theirs-id="${safeText(item.id)}">
+                    <span class="select-badge">${selected ? '✓' : ''}</span>
+                    <svg class="line-art-icon" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.6"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    <div class="line-art-label">${safeText(getTheirCardLabel(item))}</div>
+                    <div class="line-art-date">${safeText(item.date)}</div>
+                </button>
+            `;
+            }).join('');
+            updateSelectionUi();
+        }
+
+        function setFabByTab() {
+            if (selectionMode && selectionTab && selectionTab !== currentTab) {
+                exitSelectionMode();
+            }
+            if (currentTab === 'view-mine') {
+                fabBtn.classList.remove('theirs-mode');
+                fabIcon.textContent = '+';
+            } else {
+                fabBtn.classList.add('theirs-mode');
+                fabIcon.textContent = '✨ 生成';
+            }
+        }
+
+        async function fileToDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleMineUpload(files) {
+            const list = Array.from(files || []).filter((f) => f && f.type && f.type.startsWith('image/'));
+            if (!list.length) return;
+            
+            pendingUploadPhotos = [];
+            for (let i = 0; i < list.length; i++) {
+                const src = await fileToDataUrl(list[i]);
+                const now = Date.now();
+                pendingUploadPhotos.push({
+                    id: `mine_${now}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+                    src,
+                    date: formatDate(now),
+                    createdAt: now + i,
+                    ratio: '1:1',
+                    comment: '',
+                    mood: '',
+                });
+            }
+            
+            if (pendingUploadPhotos.length > 0) {
+                moodInputText.value = '';
+                moodInputOverlay.classList.add('show');
+                moodInputText.focus();
+            }
+        }
+        
+        async function finalizeUpload(moodText) {
+            for (const photo of pendingUploadPhotos) {
+                photo.mood = moodText;
+                state.minePhotos.push(photo);
+            }
+            pendingUploadPhotos = [];
+            moodInputOverlay.classList.remove('show');
+            renderMine();
+            await saveState();
+        }
+
+        moodInputCancel.addEventListener('click', () => {
+            finalizeUpload('');
+        });
+
+        moodInputConfirm.addEventListener('click', () => {
+            finalizeUpload(moodInputText.value.trim());
+        });
+
+        function resolveCallAI() {
+            if (typeof window.callAI === 'function') return window.callAI;
+            try {
+                if (window.parent && window.parent !== window && typeof window.parent.callAI === 'function') return window.parent.callAI;
+            } catch (e) {}
+            return null;
+        }
+
+        function getCurrentRoleId() {
+            let roleId = String(window.currentChatRole || '').trim();
+            if (roleId) return roleId;
+            try {
+                if (window.parent && window.parent !== window) {
+                    roleId = String(window.parent.currentChatRole || '').trim();
+                    if (roleId) return roleId;
+                }
+            } catch (e) {}
+            roleId = String(localStorage.getItem('currentChatId') || '').trim();
+            if (roleId) return roleId;
+            return String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
+        }
+
+        function readChatHistory(roleId) {
+            const rid = String(roleId || '').trim();
+            if (!rid) return [];
+            try {
+                if (window.parent && window.parent !== window && window.parent.chatData && Array.isArray(window.parent.chatData[rid])) {
+                    return window.parent.chatData[rid].slice();
+                }
+            } catch (e) {}
+            try {
+                const raw = localStorage.getItem('wechat_chatData') || '{}';
+                const parsed = JSON.parse(raw);
+                return parsed && Array.isArray(parsed[rid]) ? parsed[rid].slice() : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function readAlbumPromptMeta(roleId) {
+            const rid = String(roleId || '').trim();
+            let profiles = {};
+            let personas = {};
+            try {
+                if (window.parent && window.parent !== window) {
+                    profiles = window.parent.charProfiles && typeof window.parent.charProfiles === 'object' ? window.parent.charProfiles : {};
+                    personas = window.parent.userPersonas && typeof window.parent.userPersonas === 'object' ? window.parent.userPersonas : {};
+                }
+            } catch (e) {}
+            if (!profiles[rid]) {
+                try {
+                    const raw = localStorage.getItem('wechat_charProfiles') || '{}';
+                    const parsed = JSON.parse(raw);
+                    profiles = parsed && typeof parsed === 'object' ? parsed : {};
+                } catch (e2) {}
+            }
+            if (!personas[rid]) {
+                try {
+                    const raw = localStorage.getItem('wechat_userPersonas') || '{}';
+                    const parsed = JSON.parse(raw);
+                    personas = parsed && typeof parsed === 'object' ? parsed : {};
+                } catch (e3) {}
+            }
+            const p = profiles[rid] || {};
+            const u = personas[rid] || {};
+            return {
+                roleName: String(p.remark || p.nickName || p.name || rid || 'TA').trim() || 'TA',
+                userName: String(u.name || localStorage.getItem('user_name') || '你').trim() || '你',
+                rolePrompt: String(p.desc || p.persona || p.style || '').trim()
+            };
+        }
+
+        function buildShortTermMemory() {
+            const roleId = getCurrentRoleId();
+            const meta = readAlbumPromptMeta(roleId);
+            const history = readChatHistory(roleId);
+            const lines = [];
+            for (let i = 0; i < history.length; i++) {
+                const msg = history[i];
+                if (!msg || typeof msg !== 'object') continue;
+                const role = String(msg.role || '').trim();
+                if (role !== 'me' && role !== 'ai') continue;
+                const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+                if (!content) continue;
+                lines.push(`${role === 'me' ? meta.userName : meta.roleName}：${content}`);
+            }
+            if (!lines.length) return `${meta.roleName}和${meta.userName}最近聊天较少，整体氛围偏日常、温柔、亲密。`;
+            return lines.slice(-24).join('\n');
+        }
+
+        function buildAlbumGalleryPrompts(shortMemory) {
+            const meta = readAlbumPromptMeta(getCurrentRoleId());
+            const systemPrompt = [
+                '【相册定位】',
+                '这不是个人相册，而是“情侣相册”。',
+                `画面核心必须是${meta.roleName}和${meta.userName}之间的关系感、互动感、同框感，或者明显属于情侣之间才会拍下来的瞬间。`,
+                meta.rolePrompt ? `其中${meta.roleName}的人物气质与情绪底色：${meta.rolePrompt}` : '',
+                '',
+                '【浏览者】',
+                `正在翻看相册的人是${meta.userName}。`,
+                '',
+                '【当前页面场景】',
+                '当前页面是情侣空间里的“恋爱相册-对方相册”。',
+                `用户正在翻看一组“关于${meta.roleName}和${meta.userName}这段关系”的照片或视频内容。`,
+                '',
+                '【当前任务】',
+                '请生成 4 条“相册画面描述”。',
+                '每一条都要像相册里真实存在的一张照片或一段视频的画面说明，而不是聊天摘要或短标题。',
+                '必须写清楚主体、动作、取景细节或光线氛围，让人能直接脑补画面。',
+                '',
+                '【内容要求】',
+                `4 条里至少 3 条必须明确出现两个人的互动、同框、肢体接触、彼此视角，或者一看就是情侣之间才会特意拍下来的画面。`,
+                `不要生成单纯的${meta.roleName}个人照片，也不要生成单纯的${meta.userName}个人照片。`,
+                '只允许生成现实场景照片或短视频画面，不要聊天截图、锁屏、通知界面、壁纸、社交媒体界面或任何 UI 截图。',
+                '请使用客观画面描述，不要写成“我偷拍”“我拍下”“你低头”这种第一/第二人称叙述。',
+                '4 条题材尽量不同，可以从牵手背影、肩并肩看海、地铁玻璃倒影里的合照、夜路下并肩、互拍时被抓到的笑、一起吃东西时的桌面对拍、十指相扣特写、拥抱、靠肩睡着、共同拿着票根或礼物等角度发散。',
+                '不要写情话，不要写分析，不要写对白，不要照抄聊天原文，不要出现“我：”“TA：”这类格式。',
+                '',
+                '【输出格式】',
+                '你必须只输出 JSON 字符串数组',
+                '格式必须是：["描述1","描述2","描述3","描述4"]'
+            ].filter(Boolean).join('\n');
+
+            const userPrompt = [
+                '【关系上下文】',
+                `${meta.roleName}和${meta.userName}最近的聊天与相处氛围如下，请把这些线索转化成“关于你们两个人”的情侣相册画面：`,
+                shortMemory,
+                '',
+                '【补充要求】',
+                '优先生成“像真的会被拍下来”的瞬间，并确保有明显的情侣关系痕迹。',
+                `如果近期聊天提到具体物品、场景或情绪，可以自然吸收进画面细节，但不要直接复述原句，也不要写成任何一方的单人写真。`
+            ].join('\n');
+
+            const retryPrompt = [
+                '【任务重试】',
+                `请为“关于${meta.roleName}和${meta.userName}两个人”的恋爱相册补齐 4 条画面描述。`,
+                '请严格输出 JSON 字符串数组：["描述1","描述2","描述3","描述4"]',
+                `每条都必须是完整的照片/视频画面描述，18 到 38 字，不要标题，不要短句，不要数组外文字。`,
+                `禁止任何一方的独照，禁止截图类内容，禁止第一/第二人称叙述，必须体现情侣互动或情侣痕迹。`
+            ].join('\n');
+
+            return { systemPrompt, userPrompt, retryPrompt };
+        }
+
+        function buildAlbumCommentPrompts(target) {
+            const meta = readAlbumPromptMeta(getCurrentRoleId());
+            const systemPrompt = [
+                '【角色身份】',
+                `你现在不是助手，你是${meta.roleName}。`,
+                meta.rolePrompt ? `你的人设与恋爱表达方式：${meta.rolePrompt}` : '',
+                '',
+                '【用户身份】',
+                `照片的上传者是${meta.userName}。`,
+                '',
+                '【当前页面场景】',
+                '当前页面是情侣空间里的“恋爱相册-照片详情”。',
+                `你正在看${meta.userName}刚上传的一张真实照片，需要像恋人一样自然评论。`,
+                '',
+                '【当前任务】',
+                '请只说一句恋人视角评论。',
+                '语气要自然、亲近、带一点心动感，像看到照片后下意识说出来的话，而不是文案说明。',
+                '',
+                '【输出格式】',
+                '只输出一句中文评论，不要引号，不要解释，不要思维链，不要状态说明，不要出现“分析”“思考”“状态”“输出”等字样。',
+                '长度控制在 15 到 30 字。'
+            ].filter(Boolean).join('\n');
+
+            let userPrompt = [
+                '【照片上下文】',
+                `这张照片上传日期是：${target.date}。`
+            ];
+            if (target && target.mood) {
+                userPrompt.push(`上传时记录的心情是：${target.mood}。`);
+            }
+            userPrompt.push('请结合真实画面与上述信息，给出一句最像角色本人会说的话。');
+
+            const retryPrompt = [
+                '【任务重试】',
+                `你现在是${meta.roleName}，正在评论${meta.userName}上传的一张照片。`,
+                '请严格输出 JSON 对象，格式必须是：{"comment":"一句中文评论"}',
+                'comment 必须是 15 到 30 字的恋人视角自然评论，不要额外字段，不要数组，不要 markdown。'
+            ].join('\n');
+
+            return {
+                systemPrompt,
+                userPrompt: userPrompt.join('\n'),
+                retryPrompt
+            };
+        }
+
+        function extractJsonArray(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return null;
+            const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+            const candidate = fenced && fenced[1] ? fenced[1].trim() : raw;
+            const start = candidate.indexOf('[');
+            const end = candidate.lastIndexOf(']');
+            if (start === -1 || end === -1 || end <= start) return null;
+            const slice = candidate.slice(start, end + 1);
+            try {
+                const parsed = JSON.parse(slice);
+                return Array.isArray(parsed) ? parsed : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function extractJsonObject(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return null;
+            const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+            const candidate = fenced && fenced[1] ? fenced[1].trim() : raw;
+            const start = candidate.indexOf('{');
+            const end = candidate.lastIndexOf('}');
+            if (start === -1 || end === -1 || end <= start) return null;
+            try {
+                const parsed = JSON.parse(candidate.slice(start, end + 1));
+                return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function pickAiTextFromObject(obj) {
+            if (!obj || typeof obj !== 'object') return '';
+            const keys = ['comment', 'reply', 'content', 'text', 'message', 'caption', 'description'];
+            for (let i = 0; i < keys.length; i++) {
+                const value = obj[keys[i]];
+                if (typeof value === 'string' && value.trim()) return value.trim();
+            }
+            return '';
+        }
+
+        function parseAiText(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return '';
+            const obj = extractJsonObject(raw);
+            const objectText = pickAiTextFromObject(obj);
+            if (objectText) return objectText;
+            let candidate = raw;
+            candidate = candidate.replace(/<think[\s\S]*?<\/think>/gi, ' ');
+            candidate = candidate.replace(/<thinking[\s\S]*?<\/thinking>/gi, ' ');
+            candidate = candidate.replace(/\[\[[\s\S]*?\]\]/g, ' ');
+            const fenced = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
+            if (fenced && fenced[1]) {
+                candidate = fenced[1].trim();
+            }
+            if (candidate.indexOf('|||') !== -1) {
+                const parts = candidate.split('|||').map(function (part) { return String(part || '').trim(); }).filter(Boolean);
+                if (parts.length) candidate = parts[parts.length - 1];
+            }
+            const lines = candidate
+                .split(/\r?\n+/)
+                .map(function (line) { return String(line || '').trim(); })
+                .filter(Boolean)
+                .filter(function (line) {
+                    return !/^(思考|分析|推理|状态|备注|说明|系统|thought|thinking|reasoning)\s*[:：]/i.test(line);
+                });
+            candidate = lines.join(' ').trim();
+            candidate = candidate.replace(/^["']|["']$/g, '').trim();
+            candidate = candidate.replace(/^(最终回答|回答|输出|评论)\s*[:：]\s*/i, '').trim();
+            candidate = candidate.replace(/\s+/g, ' ').trim();
+            return candidate || '';
+        }
+
+        function sanitizeAlbumComment(text) {
+            let clean = parseAiText(text);
+            if (!clean) return '';
+            clean = clean.replace(/^(我先|让我先|我需要|我来|我会)(想|看看|分析|描述|评价)[^，。；]*[，。；]\s*/g, '').trim();
+            clean = clean.replace(/(当前)?状态\s*[:：][^，。；]*[，。；]?/gi, '').trim();
+            clean = clean.replace(/(思路|分析|推理)\s*[:：][^，。；]*[，。；]?/gi, '').trim();
+            const sentence = clean.split(/[。！？]/).map(function (part) { return String(part || '').trim(); }).filter(Boolean)[0] || clean;
+            clean = sentence.replace(/^["']|["']$/g, '').trim();
+            clean = clean.replace(/^(评论|回复|comment|reply)\s*[:：]\s*/i, '').trim();
+            clean = clean.replace(/[，,；;、]+$/g, '').trim();
+            if (clean.length > 34) clean = clean.slice(0, 34).replace(/[，,；;、]+$/g, '').trim();
+            if (/^(思考|分析|状态|我需要|让我|先看)/.test(clean)) return '';
+            if (clean.length < 8) return '';
+            return clean;
+        }
+
+        function collectMemoryHighlights() {
+            const roleId = getCurrentRoleId();
+            const history = readChatHistory(roleId);
+            const hints = [];
+            for (let i = Math.max(0, history.length - 24); i < history.length; i++) {
+                const msg = history[i];
+                if (!msg || typeof msg !== 'object') continue;
+                const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+                if (!content) continue;
+                const normalized = content
+                    .replace(/^(我|TA|你|他|她)\s*[:：]\s*/g, '')
+                    .replace(/[“”"'`]/g, '')
+                    .trim();
+                if (!normalized) continue;
+                if (normalized.length >= 4 && normalized.length <= 18 && !/[\[\]{}<>]/.test(normalized)) {
+                    hints.push(normalized);
+                }
+            }
+            return hints.slice(-6);
+        }
+
+        function isBadPhotoDescription(text) {
+            const clean = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!clean) return true;
+            if (clean.length < 10) return true;
+            if (/^(我|TA)\s*[:：]/.test(clean)) return true;
+            if (/^(思考|分析|状态|输出|照片\d|第\d张)/.test(clean)) return true;
+            if (/^(早安|晚安|宝宝|哈哈|好的|收到)$/.test(clean)) return true;
+            if (/[：:]/.test(clean) && /(我|TA|你|他说|她说)/.test(clean)) return true;
+            if (/聊天记录|原文|对话如下|短期记忆/.test(clean)) return true;
+            if (/^(我偷拍|我拍下|我把|你低头|你趴|你坐|你站|你在|你靠|你拿|你穿|你抱|你睡|你看|你笑|你正在)/.test(clean)) return true;
+            if (/截图|锁屏|通知界面|聊天界面|壁纸|桌面|社交媒体界面|APP界面/.test(clean)) return true;
+            return false;
+        }
+
+        function isCoupleSceneDescription(text) {
+            const clean = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!clean) return false;
+            const pairTokens = [
+                '一起', '两人', '两个人', '同框', '并肩', '牵手', '十指相扣', '拥抱', '靠在一起', '靠肩', '对视',
+                '合照', '情侣', '肩并肩', '互拍', '双人', '依偎', '挽着', '靠着', '背影', '票根', '礼物', '桌面对拍'
+            ];
+            for (let i = 0; i < pairTokens.length; i++) {
+                if (clean.indexOf(pairTokens[i]) !== -1) return true;
+            }
+            if (/两只手|两杯|两份|两双|一左一右/.test(clean)) return true;
+            if (/(男生|女生|女孩|男孩).*(身边|旁边|对面|怀里|肩上|手里)/.test(clean)) return true;
+            return false;
+        }
+
+        function normalizePhotoDescription(text) {
+            let clean = parseAiText(text);
+            clean = clean.replace(/^[-*•\d\.\)\s]+/, '').trim();
+            clean = clean.replace(/^(照片|图|画面)\s*\d*\s*[:：]\s*/i, '').trim();
+            clean = clean.replace(/^["']|["']$/g, '').trim();
+            clean = clean.replace(/\s+/g, ' ').trim();
+            if (isBadPhotoDescription(clean)) return '';
+            return clean;
+        }
+
+        function extractPhotoDescriptions(text) {
+            const arr = extractJsonArray(text);
+            if (arr && arr.length) return arr;
+            const raw = String(text || '').trim();
+            if (!raw) return [];
+            const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+            const candidate = fenced && fenced[1] ? String(fenced[1]).trim() : raw;
+            return candidate
+                .replace(/<think[\s\S]*?<\/think>/gi, ' ')
+                .replace(/<thinking[\s\S]*?<\/thinking>/gi, ' ')
+                .split(/\r?\n+/)
+                .map(function (line) { return String(line || '').trim(); })
+                .map(function (line) { return line.replace(/^[-*•\d\.\)\s]+/, '').trim(); })
+                .filter(function (line) {
+                    return line && !/^(说明|备注|分析|思考|输出|json|数组)\s*[:：]?/i.test(line);
+                });
+        }
+
+        function getTheirCardLabel(item) {
+            const text = String((item && item.text) || '').replace(/\s+/g, ' ').trim();
+            if (!text) return '甜蜜片段';
+            return text.length > 22 ? text.slice(0, 22) + '…' : text;
+        }
+
+        async function askAi(systemPrompt, text, imageBase64) {
+            const callAI = resolveCallAI();
+            if (!callAI) return '';
+            return new Promise((resolve) => {
+                try {
+                    const payload = imageBase64
+                        ? { type: 'image', base64: imageBase64, text }
+                        : { text };
+                    callAI(systemPrompt, [], payload, (reply) => resolve(String(reply || '')), () => resolve(''));
+                } catch (e) {
+                    resolve('');
+                }
+            });
+        }
+
+        async function generateTheirsCardsByApi() {
+            const shortMemory = buildShortTermMemory();
+            const prompts = buildAlbumGalleryPrompts(shortMemory);
+            let reply = await askAi(prompts.systemPrompt, prompts.userPrompt, '');
+            let normalized = extractPhotoDescriptions(reply).slice(0, 4).map(normalizePhotoDescription).filter(function (item) {
+                return item && isCoupleSceneDescription(item);
+            });
+            if (normalized.length < 4) {
+                reply = await askAi(prompts.retryPrompt, prompts.userPrompt, '');
+                normalized = extractPhotoDescriptions(reply).slice(0, 4).map(normalizePhotoDescription).filter(function (item) {
+                    return item && isCoupleSceneDescription(item);
+                });
+            }
+            const descriptions = normalized.filter(function (item, index, arr) {
+                return item && arr.indexOf(item) === index;
+            }).slice(0, 4);
+            if (!descriptions.length) {
+                return { ok: false, created: 0 };
+            }
+            const now = Date.now();
+            for (let i = 0; i < descriptions.length; i++) {
+                const text = descriptions[i];
+                state.theirCards.unshift({
+                    id: `theirs_${now}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+                    text,
+                    brief: getTheirCardLabel({ text }),
+                    date: formatDate(now),
+                    createdAt: now + i,
+                    roleId: getCurrentRoleId()
+                });
+            }
+            renderTheirs();
+            await saveState();
+            return { ok: true, created: descriptions.length };
+        }
+
+        function stopModalTyping() {
+            if (modalTypingTimer) {
+                clearInterval(modalTypingTimer);
+                modalTypingTimer = null;
+            }
+            modalText.classList.remove('typing');
+        }
+
+        function showTypewriterModal(text) {
+            const content = String(text || '').trim();
+            if (!content) return;
+            stopModalTyping();
+            modalText.textContent = '';
+            modal.classList.add('show');
+            modalText.classList.add('typing');
+            let index = 0;
+            const delay = content.length > 40 ? 22 : 30;
+            modalTypingTimer = setInterval(() => {
+                index += 1;
+                modalText.textContent = content.slice(0, index);
+                if (index >= content.length) {
+                    stopModalTyping();
+                    modalText.textContent = content;
+                }
+            }, delay);
+        }
+
+        function closeModal() {
+            stopModalTyping();
+            modal.classList.remove('show');
+            setTimeout(() => {
+                if (modal.classList.contains('show')) return;
+                modalText.textContent = '';
+            }, 220);
+        }
+
+        function openDetailById(id) {
+            const target = state.minePhotos.find((item) => String(item.id) === String(id));
+            if (!target) return;
+            currentDetailId = id;
+            detailImageEl.src = target.src;
+            detailDateEl.textContent = target.date;
+            
+            if (target.mood) {
+                detailMoodEl.textContent = `“${target.mood}”`;
+                detailMoodEl.style.display = 'block';
+            } else {
+                detailMoodEl.style.display = 'none';
+            }
+            
+            detailCommentEl.textContent = String(target.comment || '').trim() || 'AI 还在准备这张照片的评论，点击下方按钮可以立即生成。';
+            detailOverlay.classList.add('show');
+        }
+
+        function closeDetail() {
+            detailOverlay.classList.remove('show');
+            currentDetailId = null;
+        }
+
+        async function handleGenerateFlow() {
+            if (fabBtn.classList.contains('loading')) return;
+            fabBtn.classList.add('loading');
+            try {
+                const result = await generateTheirsCardsByApi();
+                if (!result || !result.ok) {
+                    showTypewriterModal('这次没有生成出有效内容，没有再塞默认占位文案，你可以直接再点一次重试。');
+                }
+            } finally {
+                fabBtn.classList.remove('loading');
+            }
+        }
+
+        tabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                tabs.forEach((t) => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentTab = tab.getAttribute('data-target');
+                if (currentTab === 'view-mine') {
+                    mineView.classList.add('active');
+                    theirsView.classList.remove('active');
+                } else {
+                    theirsView.classList.add('active');
+                    mineView.classList.remove('active');
+                }
+                updateIndicator(tab);
+                setFabByTab();
+            });
+        });
+
+        fabBtn.addEventListener('click', () => {
+            if (currentTab === 'view-mine') {
+                uploadInput.click();
+            } else {
+                handleGenerateFlow();
+            }
+        });
+
+        uploadInput.addEventListener('change', async (e) => {
+            await handleMineUpload(e.target.files);
+            uploadInput.value = '';
+        });
+
+        bindLongPress(mineView, 'data-photo-id');
+        bindLongPress(theirsView, 'data-theirs-id');
+
+        mineView.addEventListener('click', (e) => {
+            if (selectionMode) return;
+            const card = e.target.closest('[data-photo-id]');
+            if (!card) return;
+            openDetailById(card.getAttribute('data-photo-id'));
+        });
+
+        theirsView.addEventListener('click', (e) => {
+            if (selectionMode) return;
+            const card = e.target.closest('[data-theirs-id]');
+            if (!card) return;
+            const id = card.getAttribute('data-theirs-id');
+            const target = state.theirCards.find((item) => String(item.id) === String(id));
+            if (!target) return;
+            showTypewriterModal(target.text);
+        });
+
+        selectionSelectAllBtn.addEventListener('click', selectAllCurrentTab);
+        selectionDeleteBtn.addEventListener('click', () => {
+            deleteSelectedItems();
+        });
+        selectionCancelBtn.addEventListener('click', exitSelectionMode);
+
+        modal.addEventListener('click', closeModal);
+        detailCloseBtn.addEventListener('click', closeDetail);
+        detailOverlay.addEventListener('click', (e) => {
+            if (e.target === detailOverlay) closeDetail();
+        });
+
+        detailAiBtn.addEventListener('click', async () => {
+            if (!currentDetailId) return;
+            const target = state.minePhotos.find((item) => String(item.id) === String(currentDetailId));
+            if (!target) return;
+            
+            if (detailAiBtn.classList.contains('loading')) return;
+            
+            const originalText = detailAiBtn.textContent;
+            detailAiBtn.textContent = '✨ AI 正在思考...';
+            detailAiBtn.classList.add('loading');
+            
+            try {
+                const prompts = buildAlbumCommentPrompts(target);
+                let reply = await askAi(prompts.systemPrompt, prompts.userPrompt, target.src);
+                let newComment = sanitizeAlbumComment(reply);
+                if (!newComment) {
+                    reply = await askAi(prompts.retryPrompt, prompts.userPrompt, target.src);
+                    newComment = sanitizeAlbumComment(reply);
+                }
+                if (!newComment) {
+                    detailCommentEl.textContent = '这次没生成出来，重新点一下再试。';
+                    return;
+                }
+                
+                target.comment = newComment;
+                detailCommentEl.textContent = newComment;
+                
+                renderMine();
+                await saveState();
+            } finally {
+                detailAiBtn.textContent = originalText;
+                detailAiBtn.classList.remove('loading');
+            }
+        });
+
+        async function initPage() {
+            const loaded = await readState();
+            state.minePhotos = Array.isArray(loaded.minePhotos) ? loaded.minePhotos : [];
+            state.theirCards = Array.isArray(loaded.theirCards) ? loaded.theirCards : [];
+            mineView.classList.add('active');
+            updateIndicator(document.querySelector('.tab.active'));
+            setFabByTab();
+            renderMine();
+            renderTheirs();
+            updateSelectionUi();
+            if (loaded && loaded.removedLegacyFallbacks > 0) {
+                await saveState();
+            }
+        }
+
+        initPage();
+    </script>
+</body>
+</html>

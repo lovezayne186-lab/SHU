@@ -1,0 +1,2869 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#e7e7e7">
+    <title>AI Chat Phone UI</title>
+    <!-- 本地化基础运行资源，避免首屏依赖外部 CDN -->
+    <link rel="preload" href="vendor/fontawesome/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="vendor/fontawesome/webfonts/fa-brands-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="vendor/boxicons/fonts/boxicons.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+    <link href="vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/lxgw-wenkai/style.css">
+    <link rel="stylesheet" href="CSS/widgets.css?v=2">
+    <link rel="stylesheet" href="CSS/pages.css?v=2">
+    <link rel="stylesheet" href="CSS/weixin.css">
+    <link rel="stylesheet" href="CSS/global.css?v=2">
+    <link rel="stylesheet" href="CSS/mine.css">
+    <script src="vendor/tailwind/tailwindcss.js"></script>
+    <script src="vendor/vue/vue.global.js"></script>
+    <script type="module" src="JS/我的/articleData.js"></script>
+    <script type="module" src="JS/我的/userCycleData.js"></script>
+    <script src="JS/我的/period.js"></script>
+    <!-- 新增：引入 manifest 身份证 -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="assets/icons/shubao.png">
+
+    <!-- 新增：针对苹果手机的特殊优待（苹果不读 manifest，它看这个） -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="书包机">
+    <link rel="apple-touch-icon" href="assets/icons/shubao.png">
+    <script>
+        (function () {
+            var stableViewportHeight = 0;
+
+            function isEditableActive() {
+                try {
+                    var active = document.activeElement;
+                    if (!active) return false;
+                    var tag = String(active.tagName || '').toUpperCase();
+                    if (tag === 'TEXTAREA') return true;
+                    if (tag === 'INPUT') {
+                        var type = String(active.type || '').toLowerCase();
+                        return type !== 'button' && type !== 'submit' && type !== 'checkbox' && type !== 'radio' && type !== 'range' && type !== 'file';
+                    }
+                    return active.isContentEditable === true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function getVisualHeight() {
+                var vv = window.visualViewport;
+                if (!vv) return 0;
+                return Math.round((vv.height || 0) + (vv.offsetTop || 0));
+            }
+
+            function setAppViewportHeight(force) {
+                var inner = Math.round(window.innerHeight || 0);
+                var client = Math.round((document.documentElement && document.documentElement.clientHeight) || 0);
+                var visual = getVisualHeight();
+                
+                var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                
+                var current = Math.max(visual || 0, inner || 0, client || 0);
+                if (!current) return;
+
+                var keyboardLikelyOpen = false;
+                if (!force && stableViewportHeight > 0 && visual > 0 && isEditableActive()) {
+                    keyboardLikelyOpen = (stableViewportHeight - visual) > 80 && visual < stableViewportHeight;
+                }
+
+                if (force || !stableViewportHeight || !keyboardLikelyOpen) {
+                    stableViewportHeight = current;
+                }
+
+                if (isIOS) {
+                    // iOS 使用 innerHeight，防止出现底部留白和页面上移
+                    // 参照项目记忆，使用 window.innerHeight 作为基础高度，防止键盘弹出时触发全局页面上移和底部留白
+                    var iosHeight = inner > 0 ? inner : current;
+                    document.documentElement.style.setProperty('--app-vh', iosHeight + 'px');
+                } else {
+                    // Android 使用计算的高度，防止键盘弹出时 UI 挤压
+                    var heightToApply = keyboardLikelyOpen ? stableViewportHeight : current;
+                    document.documentElement.style.setProperty('--app-vh', heightToApply + 'px');
+                }
+            }
+
+            setAppViewportHeight(true);
+            window.addEventListener('resize', function () {
+                setAppViewportHeight(false);
+            }, { passive: true });
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', function () {
+                    setAppViewportHeight(false);
+                }, { passive: true });
+                window.visualViewport.addEventListener('scroll', function () {
+                    setAppViewportHeight(false);
+                }, { passive: true });
+            }
+            window.addEventListener('orientationchange', function () {
+                stableViewportHeight = 0;
+                setTimeout(function () {
+                    setAppViewportHeight(true);
+                }, 120);
+            }, { passive: true });
+            window.addEventListener('pageshow', function () {
+                stableViewportHeight = 0;
+                setTimeout(function () {
+                    setAppViewportHeight(true);
+                }, 60);
+            }, { passive: true });
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState !== 'visible') return;
+                setTimeout(function () {
+                    setAppViewportHeight(false);
+                }, 60);
+            }, { passive: true });
+            window.addEventListener('focusout', function () {
+                setTimeout(function () {
+                    setAppViewportHeight(false);
+                }, 120);
+            }, { passive: true });
+        })();
+    </script>
+    <script>
+        (function () {
+            function isMobileDevice() {
+                try {
+                    return /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function shouldEnableEruda() {
+                try {
+                    if (localStorage.getItem('eruda_debug') === '1') return true;
+                } catch (e) { }
+                try {
+                    return /(?:\?|&)eruda=1(?:&|$)/i.test(location.search || '');
+                } catch (e2) {
+                    return false;
+                }
+            }
+
+            if (!isMobileDevice() || !shouldEnableEruda()) return;
+            if (window.__erudaLoading || window.eruda) return;
+            window.__erudaLoading = true;
+
+            var script = document.createElement('script');
+            script.src = 'vendor/eruda/eruda.js';
+            script.async = true;
+            script.onload = function () {
+                try {
+                    if (window.eruda) {
+                        window.eruda.init({
+                            tool: ['console', 'elements', 'network', 'resources', 'info']
+                        });
+                        console.log('[Eruda] mobile debugger ready');
+                    }
+                } catch (e) {
+                    console.warn('[Eruda] init failed', e);
+                }
+            };
+            script.onerror = function () {
+                console.warn('[Eruda] load failed');
+            };
+            document.head.appendChild(script);
+
+            window.enableErudaDebug = function () {
+                try {
+                    localStorage.setItem('eruda_debug', '1');
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            };
+
+            window.disableErudaDebug = function () {
+                try {
+                    localStorage.removeItem('eruda_debug');
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            };
+        })();
+    </script>
+    <!-- 3. 聊天室专用样式 (新增这个) -->
+    <link rel="stylesheet" href="CSS/chat-page.css">
+    <link rel="stylesheet" href="CSS/wallet.css">
+    <link rel="stylesheet" href="CSS/wallet-leaderboard.css">
+    <link rel="stylesheet" href="CSS/sports.css">
+    
+    <style>
+        /* 强制给弹窗加滚动条，防止内容太长看不见按钮 */
+        .creator-body {
+            max-height: 60vh !important;
+            /* 限制高度 */
+            overflow-y: auto !important;
+            /* 允许上下滚动 */
+            padding-bottom: 50px !important;
+            /* 底部留出空隙 */
+        }
+
+        /* === 强制层级修复补丁 === */
+        /* 1. 让聊天大盒子铺满屏幕，但没有任何边框 */
+        #chat-view {
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 50;
+            /* 比桌面高 */
+            background: #fff;
+            overflow: hidden;
+            /* 防止溢出 */
+        }
+
+        /* 2. 让弹窗永远在最最最顶层 */
+        .modal-layer {
+            z-index: 9999 !important;
+            /* 必须比 chat-view 高 */
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* === 修复弹窗层级打架的问题 === */
+        /* 1. 让设置菜单稍微低一点 */
+        #settings-menu-modal {
+            z-index: 9000 !important;
+        }
+
+        /* 2. 让功能弹窗（编辑、身份、背景）永远压在菜单上面 */
+        #creator-modal,
+        #user-persona-modal,
+        #bg-setting-modal {
+            z-index: 10000 !important;
+        }
+
+        .modal-header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            height: 50px;
+            padding-top: max(12px, env(safe-area-inset-top, 0px));
+            padding-left: 15px;
+            padding-right: 15px;
+            background: #fff;
+            border-bottom: 1px solid #e5e5e5;
+            box-sizing: content-box;
+        }
+
+        /* 左侧返回按钮 */
+        .modal-close-icon {
+            width: 40px;
+            text-align: left;
+            font-size: 28px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        /* 中间标题 */
+        .modal-title {
+            flex: 1;
+            text-align: center;
+            font-weight: bold;
+            font-size: 17px;
+        }
+
+        /* 右侧占位符 (为了让标题绝对居中) */
+        .modal-placeholder {
+            width: 40px;
+        }
+
+        /* === iOS 翻页重构样式 === */
+        #desktop-view {
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .desktop-pages-container {
+            display: flex;
+            width: 100%; /* 修改为100% 修复滑动 */
+            height: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
+            overscroll-behavior-x: contain;
+            overscroll-behavior-y: none;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+        }
+
+        .desktop-pages-container::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+
+        .desktop-page {
+            width: 100%; /* 修改为100% 修复滑动 */
+            height: 100%;
+            flex-shrink: 0;
+            scroll-snap-align: start;
+            padding: calc(15px + 44px + 5px) 10px calc(76px + var(--safe-bottom-compact, 0px)) 10px;
+            box-sizing: border-box;
+            overflow-y: hidden;
+            overscroll-behavior-y: none;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+        }
+
+        /* Page 1 首页布局 */
+        .page1-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* 4x4 大组件 (Large Widget) */
+        .large-widget {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            border-radius: 28px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            cursor: pointer;
+        }
+
+        .large-widget-bg-image {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            pointer-events: none;
+        }
+
+        .large-widget-overlay {
+            position: absolute;
+            top: 40%;
+            left: 0;
+            width: 100%;
+            height: 60%;
+            border-top-left-radius: 35px;
+            border-top-right-radius: 35px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 35px;
+            box-sizing: border-box;
+            overflow: visible; /* 允许内容略微溢出 */
+        }
+
+        .large-widget-overlay::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0; 
+    border-top-left-radius: 35px;
+    border-top-right-radius: 35px;
+    
+    /* 1. 调整背景白色的结尾，不要降到 0，保留一点点白色（0.15） */
+    background: linear-gradient(
+        to bottom, 
+        rgba(255, 255, 255, 0.98) 0%, 
+        rgba(255, 255, 255, 0.85) 45%, 
+        rgba(255, 255, 255, 0.5) 70%, 
+        rgba(255, 255, 255, 0.15) 100% /* 底部保留15%的白 */
+    );
+    
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    
+    /* 2. 调整遮罩的结尾，不要用 transparent，保留一点模糊度（0.25） */
+    -webkit-mask-image: linear-gradient(
+        to bottom, 
+        rgba(0, 0, 0, 1) 0%,
+        rgba(0, 0, 0, 1) 40%,
+        rgba(0, 0, 0, 0.85) 55%,
+        rgba(0, 0, 0, 0.6) 70%,
+        rgba(0, 0, 0, 0.4) 85%,
+        rgba(0, 0, 0, 0.25) 100%  /* 底部保留25%的毛玻璃和背景显示 */
+    );
+    mask-image: linear-gradient(
+        to bottom, 
+        rgba(0, 0, 0, 1) 0%,
+        rgba(0, 0, 0, 1) 40%,
+        rgba(0, 0, 0, 0.85) 55%,
+        rgba(0, 0, 0, 0.6) 70%,
+        rgba(0, 0, 0, 0.4) 85%,
+        rgba(0, 0, 0, 0.25) 100%
+    );
+    
+    pointer-events: none;
+    z-index: 0;
+}
+
+
+/* 保持你的子元素层级不变 */
+.large-widget-overlay > * {
+    position: relative;
+    z-index: 1;
+}
+
+
+        .large-widget-avatar-container {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .large-widget-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            object-fit: cover;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+
+        .large-widget-info {
+            text-align: center;
+            color: #333;
+        }
+
+        .large-widget-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .large-widget-subtitle {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .large-widget-sig {
+            font-size: 11px;
+            color: #888;
+            font-style: italic;
+            margin-bottom: 2px;
+        }
+
+        .large-widget-location {
+            font-size: 10px;
+            color: #666;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .calendar-mini {
+            width: 100%;
+            padding: 0 15px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 5px;
+        }
+
+        .cal-row {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            width: 100% !important;
+            white-space: nowrap;
+        }
+
+        .cal-divider {
+            width: 100%;
+            height: 1px;
+            background-color: rgba(0, 0, 0, 0.1);
+            margin: 6px 0;
+        }
+
+        .cal-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 500;
+            width: 22px;
+            text-align: center;
+            display: inline-block;
+            flex: 0 0 22px;
+        }
+
+        .cal-num {
+            font-size: 12px;
+            font-weight: 500;
+            color: #333;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 22px;
+        }
+
+        .cal-num.today {
+            background: #333;
+            color: #fff;
+            border-radius: 50%;
+        }
+
+        /* 2x2 区域布局 */
+        .middle-row-widgets {
+            display: flex;
+            gap: 15px;
+            height: 160px;
+        }
+
+        .countdown-widget {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: transparent;
+            color: #fff;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+
+        .countdown-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .countdown-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: none;
+            object-fit: cover;
+            cursor: pointer;
+        }
+
+        .heart-icon {
+            color: #FBCFE8;
+            font-size: 18px;
+        }
+
+        .countdown-bottom {
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .countdown-event-name {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 1px;
+            line-height: 1.15;
+        }
+
+        .countdown-event-datetime {
+            font-size: 10px;
+            opacity: 0.92;
+            margin-bottom: 4px;
+            line-height: 1.2;
+        }
+
+        .countdown-status-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .countdown-status-label {
+            font-size: 10px;
+            opacity: 0.85;
+            letter-spacing: 0.2px;
+        }
+
+        .countdown-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 2px;
+        }
+
+        .countdown-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #FBCFE8;
+        }
+
+        .countdown-days-unit {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-left: 2px;
+        }
+
+        .countdown-bottom .countdown-event-datetime {
+            display: none;
+        }
+
+        /* 分页指示器 */
+        .page-indicators {
+            position: absolute;
+            bottom: calc(84px + var(--safe-bottom-compact, env(safe-area-inset-bottom, 0px))); /* Dock上方 */
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            z-index: 40;
+            pointer-events: none;
+        }
+
+        .page-indicators .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.4);
+            transition: background-color 0.3s;
+        }
+
+        .page-indicators .dot.active {
+            background-color: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .text-edit-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 40000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .text-edit-card {
+            width: 86%;
+            max-width: 360px;
+            background: rgba(255,255,255,0.98);
+            border-radius: 16px;
+            box-shadow: 0 18px 60px rgba(0,0,0,0.22);
+            overflow: hidden;
+        }
+
+        .text-edit-title {
+            padding: 14px 16px 10px 16px;
+            font-weight: 700;
+            color: #111;
+            text-align: center;
+        }
+
+        .text-edit-body {
+            padding: 0 16px 14px 16px;
+        }
+
+        .text-edit-input {
+            width: 100%;
+            height: 44px;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 12px;
+            padding: 0 12px;
+            font-size: 14px;
+            outline: none;
+            background: #fff;
+            color: #111;
+            box-sizing: border-box;
+        }
+
+        .text-edit-actions {
+            padding: 12px 16px 16px 16px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .text-edit-btn {
+            flex: 1;
+            height: 42px;
+            border-radius: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .text-edit-btn.cancel {
+            background: rgba(0,0,0,0.06);
+            color: #111;
+        }
+
+        .text-edit-btn.save {
+            background: #111;
+            color: #fff;
+        }
+
+        .countdown-settings-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 40000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .countdown-settings-card {
+            width: 86%;
+            max-width: 380px;
+            background: rgba(255,255,255,0.98);
+            border-radius: 18px;
+            box-shadow: 0 18px 60px rgba(0,0,0,0.22);
+            overflow: hidden;
+        }
+
+        .countdown-settings-title {
+            padding: 14px 16px 10px 16px;
+            font-weight: 700;
+            color: #111;
+            text-align: center;
+        }
+
+        .countdown-settings-body {
+            padding: 0 16px 14px 16px;
+        }
+
+        .countdown-settings-field {
+            margin-top: 12px;
+        }
+
+        .countdown-settings-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #555;
+        }
+
+        .countdown-settings-input {
+            width: 100%;
+            height: 44px;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 12px;
+            padding: 0 12px;
+            font-size: 14px;
+            outline: none;
+            background: #fff;
+            color: #111;
+            box-sizing: border-box;
+        }
+
+        .countdown-settings-color-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .countdown-settings-color-input {
+            width: 58px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            height: 44px;
+        }
+
+        .countdown-settings-tip {
+            margin-top: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #888;
+        }
+
+        .call-ai-loading-wave {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            height: 20px;
+        }
+        .call-ai-loading-wave .wave-line {
+            width: 3px;
+            height: 100%;
+            background-color: #fff;
+            border-radius: 2px;
+            animation: wave-bounce 1s infinite ease-in-out;
+            opacity: 0.8;
+        }
+        .call-ai-loading-wave .wave-line:nth-child(1) { animation-delay: -0.4s; }
+        .call-ai-loading-wave .wave-line:nth-child(2) { animation-delay: -0.2s; }
+        .call-ai-loading-wave .wave-line:nth-child(3) { animation-delay: -0.1s; }
+        .call-ai-loading-wave .wave-line:nth-child(4) { animation-delay: 0s; }
+
+        @keyframes wave-bounce {
+            0%, 100% {
+                transform: scaleY(0.4);
+            }
+            50% {
+                transform: scaleY(1.0);
+            }
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div id="character-reply-toast" class="character-reply-toast">
+        <span id="character-reply-toast-text"></span>
+    </div>
+
+    <div id="loading-mask" class="is-hidden">
+        <div id="loading-mask-text" class="loading-mask-text">正在同步数据中...</div>
+    </div>
+
+    <div class="phone-frame">
+        <div class="screen">
+            <div class="notch"></div>
+
+            <!-- --- 浮动层：状态栏 (保持不动) --- -->
+            <div class="status-bar">
+                <div class="status-time" id="status-time-text">--:--</div>
+                <div class="battery-icon">
+                    <span class="battery-level" id="battery-num">--</span>
+                </div>
+            </div>
+            <!-- ========== 【桌面大盒子开始】 ========== -->
+            <div id="desktop-view">
+
+                <div class="desktop-pages-container" id="desktop-pages-container">
+                    <!-- 第一页：新增首页 -->
+                    <div class="desktop-page page1-layout">
+                        <!-- 4x4 大组件 -->
+                        <div class="large-widget" id="large-widget-bg" onclick="triggerWidgetUpload('large-bg')" style="background-color: #7d7d7d;">
+                            <img id="img-large-bg" class="large-widget-bg-image" src="" style="display:none;" onload="this.style.display='block';" alt="">
+                            <div class="large-widget-avatar-container">
+                                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=" class="large-widget-avatar" id="img-large-avatar" onclick="event.stopPropagation(); triggerWidgetUpload('large-avatar')">
+                            </div>
+                            <div class="large-widget-overlay">
+                                <div class="large-widget-info">
+                                    <div class="large-widget-title" id="large-widget-title" onclick="event.stopPropagation(); editLargeWidgetText('title')">冬日</div>
+                                    <div class="large-widget-subtitle" id="large-widget-subtitle" onclick="event.stopPropagation(); editLargeWidgetText('subtitle')">@1208 ❄️</div>
+                                    <div class="large-widget-sig" id="large-widget-sig" onclick="event.stopPropagation(); editLargeWidgetText('sig')">✨ Thoughts in Winter ✨</div>
+                                    <div class="large-widget-location">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        <span id="large-widget-location-text" onclick="event.stopPropagation(); editLargeWidgetText('location')">冰岛</span>
+                                    </div>
+                                </div>
+                                <div class="calendar-mini">
+                                    <div class="cal-row">
+                                        <span class="cal-label">S</span>
+                                        <span class="cal-label">M</span>
+                                        <span class="cal-label">T</span>
+                                        <span class="cal-label">W</span>
+                                        <span class="cal-label">T</span>
+                                        <span class="cal-label">F</span>
+                                        <span class="cal-label">S</span>
+                                    </div>
+                                    <div class="cal-divider"></div>
+                                    <div class="cal-row" id="mini-calendar-dates">
+                                        <span class="cal-num">29</span>
+                                        <span class="cal-num today">30</span>
+                                        <span class="cal-num">31</span>
+                                        <span class="cal-num">1</span>
+                                        <span class="cal-num">2</span>
+                                        <span class="cal-num">3</span>
+                                        <span class="cal-num">4</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 中间行：左侧倒数日 + 右侧 4 个 App -->
+                        <div class="middle-row-widgets">
+                            <!-- 2x2 倒数日组件 -->
+                        <div class="countdown-widget">
+                            <div class="countdown-top">
+                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=" class="countdown-avatar" id="img-countdown-left-avatar" onclick="event.stopPropagation(); triggerWidgetUpload('countdown-left-avatar')" title="点击更换头像">
+                                    <i class="fas fa-heart heart-icon"></i>
+                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=" class="countdown-avatar" id="img-countdown-right-avatar" onclick="event.stopPropagation(); triggerWidgetUpload('countdown-right-avatar')" title="点击更换头像">
+                                </div>
+                                <div class="countdown-bottom" onclick="event.stopPropagation(); openCountdownWidgetSettings()" title="点击设置倒数日">
+                                    <div class="countdown-event-name" id="countdown-event-name">和宝宝一起</div>
+                                    <div class="countdown-event-datetime" id="countdown-event-datetime">点击设置时间</div>
+                                    <div class="countdown-status-row">
+                                        <span class="countdown-status-label" id="countdown-status-label">还有</span>
+                                        <div class="countdown-number" id="countdown-days">2762</div>
+                                        <span class="countdown-days-unit">天</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2x2 App 图标区 -->
+                            <div class="app-grid-2x2" style="flex: 1;">
+                                <div class="app-item-small" onclick="openChatApp()">
+                                    <i class="fas fa-comment"></i>
+                                    <span class="app-icon-text">微信</span>
+                                </div>
+                                <div class="app-item-small" onclick="openApp('music')">
+                                    <i class="fas fa-music"></i>
+                                    <span class="app-icon-text">音乐</span>
+                                </div>
+                                <div class="app-item-small" onclick="openWorldBookApp()">
+                                    <i class="fas fa-book"></i>
+                                    <span class="app-icon-text">世界书</span>
+                                </div>
+                                <div class="app-item-small" onclick="openApp('couple-space')">
+                                    <i class="fas fa-heart"></i>
+                                    <span class="app-icon-text">情侣空间</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第二页：原有内容 -->
+                    <div class="desktop-page">
+                        <div class="desktop-layout" style="padding: 0; gap: 20px;">
+                            <!-- 第一排：统一的大灰盒子 -->
+                            <section class="desktop-section desktop-top" style="padding: 0; background: transparent;">
+
+                                <!-- 这是一个大的灰色容器，用来包裹里面的贴纸和聊天框 -->
+                                <div class="top-unified-container">
+
+                                    <!-- 左侧：重叠照片区 -->
+                                    <div class="top-left-stickers">
+                                        <!-- 照片 1 (后层) -->
+                                        <div class="sticker-card sticker-back" onclick="triggerWidgetUpload('sticker-1')">
+                                            <img id="img-sticker-1" src="assets/icons/icon-placeholder.png" style="opacity:0;">
+                                            <!-- 默认透明，上传后显示 -->
+                                            <div class="upload-hint-text">照片1</div>
+                                        </div>
+
+                                        <!-- 照片 2 (前层，压住上面那个) -->
+                                        <div class="sticker-card sticker-front" onclick="triggerWidgetUpload('sticker-2')">
+                                            <img id="img-sticker-2" src="assets/icons/icon-placeholder.png" style="opacity:0;">
+                                            <div class="upload-hint-text">照片2</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 右侧：聊天/大图区 -->
+                                    <div class="top-right-chat-card" onclick="triggerWidgetUpload('top-right-banner')">
+                                        <img id="img-top-right-banner" src="assets/icons/icon-placeholder.png"
+                                            style="opacity:0;">
+                                        <div class="upload-hint-text">点击上传<br>聊天截图</div>
+                                    </div>
+
+                                </div>
+                            </section>
+
+
+                            <!-- =========================================================
+                 第二行：左侧(4个APP) + 右侧(INS风卡片 - 已修复结构)
+                 ========================================================= -->
+                            <section class="desktop-section desktop-middle">
+                                <div class="desktop-middle-left">
+                                    <div class="app-grid-2x2">
+                                        <div class="app-item-small" id="app-item-0" onclick="openAppByIndex(0)">
+                                            <i id="app-icon-0" class="fas fa-user-secret"></i>
+                                            <span id="app-name-0" class="app-icon-text">侧影</span>
+                                        </div>
+                                        <div class="app-item-small" id="app-item-4" onclick="openAppByIndex(4)">
+                                            <i id="app-icon-4" class="fas fa-gamepad"></i>
+                                            <span id="app-name-4" class="app-icon-text">游戏</span>
+                                        </div>
+                                        <div class="app-item-small" id="app-item-6" onclick="openAppByIndex(6)">
+                                            <i id="app-icon-6" class="fas fa-shopping-cart"></i>
+                                            <span id="app-name-6" class="app-icon-text">购物</span>
+                                        </div>
+                                        <div class="app-item-small" id="app-item-3" onclick="openAppByIndex(3)">
+                                            <i id="app-icon-3" class="fas fa-hashtag"></i>
+                                            <span id="app-name-3" class="app-icon-text">小红书</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="desktop-middle-right" style="display: flex; justify-content: center; align-items: center;">
+                                    <!-- 2x2 圆形带气泡组件 -->
+                                    <div class="circular-bubble-widget" style="width: 140px; height: 140px; position: relative;">
+                                        <!-- 气泡文字 (可编辑) -->
+                                        <div id="circular-bubble-text" class="bubble-text" contenteditable="true" onclick="event.stopPropagation();" onblur="saveCircularBubbleText()" 
+                                            style="position: absolute; top: -5px; left: -15px; background: white; padding: 4px 12px; border-radius: 12px; 
+                                            box-shadow: 0 4px 10px rgba(0,0,0,0.08); z-index: 10; font-size: 14px; font-weight: bold; color: #666; 
+                                            white-space: nowrap; border: 1px solid #f0f0f0; outline: none; font-family: 'LXGW WenKai Lite', sans-serif;">
+                                            hello
+                                        </div>
+                                        
+                                        <!-- 气泡的小尾巴 -->
+                                        <div style="position: absolute; top: 22px; left: 10px; width: 10px; height: 10px; background: white; 
+                                            transform: rotate(45deg); z-index: 9; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0;">
+                                        </div>
+                                        
+                                        <!-- 圆形主图区域 -->
+                                        <div class="circle-container" onclick="triggerWidgetUpload('circular-badge')" 
+                                            style="width: 100%; height: 100%; border-radius: 50%; border: 3px solid #e5e7eb; box-sizing: border-box; 
+                                            position: relative; background-color: #fff; overflow: hidden; display: flex; justify-content: center; 
+                                            align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); cursor: pointer;">
+                                            <img id="img-circular-badge" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;" 
+                                                onload="this.style.display='block'; this.nextElementSibling.style.display='none';">
+                                            <div class="upload-hint" style="color: #a1a1aa; display: flex; flex-direction: column; align-items: center;">
+                                                <i class='bx bx-image-add' style="font-size: 32px;"></i>
+                                            </div>
+                                        </div>
+
+                                        <!-- 右下角加号图标 -->
+                                        <div class="plus-icon" onclick="triggerWidgetUpload('circular-badge')" 
+                                            style="position: absolute; bottom: 2px; right: 2px; width: 34px; height: 34px; background: #f3f4f6; 
+                                            border-radius: 50%; display: flex; justify-content: center; align-items: center; 
+                                            box-shadow: 0 2px 6px rgba(0,0,0,0.15); border: 3px solid #fff; z-index: 10; color: #a1a1aa; cursor: pointer;">
+                                            <i class='bx bx-plus' style="font-size: 22px; font-weight: bold;"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <!-- =========================================================
+                 第三行：左侧(大方块照片墙) + 右侧(4个APP)
+                 ========================================================= -->
+                            <section class="desktop-section desktop-main">
+                                <div class="desktop-main-left">
+                                    <!-- 左下角大方块：点击上传照片 -->
+                                    <div class="main-widget-card" onclick="triggerWidgetUpload('main-widget')">
+                                        <!-- 没图时的占位符 -->
+                                        <div class="main-widget-placeholder">
+                                            <i class='bx bx-plus'></i>
+                                        </div>
+                                        <!-- 图片本体 -->
+                                        <img id="img-main-widget" src="" style="display:none;"
+                                            onload="this.style.display='block'; this.previousElementSibling.style.display='none'">
+                                    </div>
+                                </div>
+
+                                <div class="desktop-main-right">
+                                    <!-- INS风 氛围感卡片 (结构修复版) -->
+                                    <div class="aesthetic-card">
+
+                                        <!-- 0. 背景图层 -->
+                                        <img id="img-aesthetic-bg" class="aes-bg-img" src="assets/icons/icon-placeholder.png"
+                                            onclick="triggerWidgetUpload('aesthetic-bg')" style="opacity: 0;">
+
+                                        <!-- 1. 顶部时间 -->
+                                        <div class="aes-time" id="aes-live-time">--:-- PM</div>
+
+                                        <!-- 2. 可编辑的气泡文案 -->
+                                        <div class="aes-bubble-row">
+                                            <div class="aes-bubble" contenteditable="true" id="aes-editable-text"
+                                                onblur="saveAesText()">
+                                                love yourself. 💕
+                                            </div>
+                                        </div>
+
+                                        <!-- 3. 中间区域：左侧装饰 + 右侧照片 (这里之前贴乱了，现在是修复好的) -->
+                                        <div class="aes-middle-section">
+                                            <!-- 左侧装饰：箭头指向右边 -->
+                                            <div class="aes-decor-left">
+                                                <div class="aes-icon-smiley">
+                                                    <i class='bx bx-happy-beaming'></i>
+                                                </div>
+                                                <div class="aes-icon-arrow">
+                                                    <i class='bx bxs-navigation'></i>
+                                                </div>
+                                            </div>
+
+                                            <!-- 右侧照片容器 -->
+                                            <div class="aes-photo-frame" onclick="triggerWidgetUpload('aesthetic-photo')">
+                                                <img id="img-aesthetic-photo" src="assets/icons/icon-placeholder.png"
+                                                    style="opacity:0;">
+                                                <div class="upload-hint-text" style="color:#666; font-size:10px;">Change</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 4. 底部伪装输入框 -->
+                                        <div class="aes-input-bar">
+                                            <span class="aes-input-placeholder">Message...</span>
+                                            <div class="aes-input-icons">
+                                                <i class='bx bx-microphone'></i>
+                                                <i class='bx bx-image'></i>
+                                                <div class="aes-plus-circle"><i class='bx bx-plus'></i></div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 桌面分页指示器 -->
+                <div class="page-indicators" id="page-indicators">
+                    <div class="dot active"></div>
+                    <div class="dot"></div>
+                </div>
+
+                <!-- --- 浮动层：Dock (保持不动) --- -->
+                <div class="dock">
+                    <!-- 1. 设置按钮 -->
+                    <div class="dock-item" onclick="openApp('settings')">
+                        <div class="dock-icon-img">⚙️</div>
+                        <span>设置</span>
+                    </div>
+
+                    <!-- 2. 储存应用 -->
+                    <div class="dock-item" onclick="openApp('todo')">
+                        <div class="dock-icon-img">💾</div>
+                        <span>储存</span>
+                    </div>
+
+                    <!-- 3. 外观按钮 -->
+                    <div class="dock-item" onclick="openApp('appearance')">
+                        <div class="dock-icon-img">🎨</div>
+                        <span>外观</span>
+                    </div>
+                </div>
+
+                <!-- 通用的 App 全屏容器 -->
+                <div id="app-window" class="app-window">
+                    <!-- 顶部导航栏 -->
+                    <div class="app-header">
+                        <!-- 1. 返回按钮（增加了一个隐藏加号的动作） -->
+                        <div class="back-btn"
+                            onclick="closeApp(); document.getElementById('top-plus-btn').style.display='none'">
+                            <span style="font-size:22px; font-weight:900; margin-right:6px;">＜</span>
+                            <span>返回</span>
+                        </div>
+
+                        <div class="app-title" id="app-title-text">应用名称</div>
+
+                        <!-- 2. 这里就是你要的加号！默认隐藏 -->
+                        <div id="top-plus-btn"
+                            style="width: 40px; text-align: right; cursor: pointer; display: none; color: #000;"
+                            onclick="openCreator()">
+                            <i class="fas fa-plus" style="font-size: 18px;"></i>
+                        </div>
+                    </div>
+
+                    <!-- App 内容区域 (动态变化) -->
+                    <div class="app-content" id="app-content-area">
+                        <!-- 点击不同的图标，这里的内容会变 -->
+                    </div>
+                </div>
+                <!-- 2. 通用角色弹窗 (韩系黑白简约风) -->
+                <div id="creator-modal" class="modal-layer bg-gray-50 flex flex-col h-full" style="display: none; z-index: 10000; background-color: rgb(249 250 251);">
+                    <!-- Top Header -->
+                    <div class="flex justify-between items-center px-6 pt-12 pb-4 bg-white/0">
+                        <div class="modal-close-icon text-3xl font-light cursor-pointer" onclick="closeCreator()">
+                            <i class='bx bx-chevron-left text-4xl text-black'></i>
+                        </div>
+                        <div class="text-lg font-bold text-black tracking-wide" id="modal-title">创建角色</div>
+                        <div class="w-8"></div>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="flex-1 overflow-y-auto px-6 pb-32">
+                        <!-- Avatar -->
+                        <div class="flex flex-col items-center mt-4 mb-8">
+                            <div class="relative group cursor-pointer" onclick="document.getElementById('ai-avatar-file').click()">
+                                <div class="w-24 h-24 rounded-full border-2 border-black overflow-hidden bg-white">
+                                    <img id="avatar-preview" src="assets/chushitouxiang.jpg" class="w-full h-full object-cover">
+                                </div>
+                                <div class="absolute bottom-0 right-0 bg-black text-white rounded-full p-1 border-2 border-white flex items-center justify-center w-8 h-8">
+                                    <i class='bx bx-camera text-sm'></i>
+                                </div>
+                                <input type="file" id="ai-avatar-file" accept="image/*" class="hidden" onchange="previewAvatar(this)">
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500 font-medium">点击更换头像</p>
+                        </div>
+
+                        <!-- Card 1: Basic Info -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] overflow-hidden mb-6">
+                            <!-- Name -->
+                            <div class="flex justify-between items-center p-4 border-b border-black modal-fixed-row">
+                                <label class="font-bold text-black text-sm w-20">角色名称</label>
+                                <input type="text" id="ai-name" placeholder="名字" style="background-color: transparent !important;" class="flex-1 text-right outline-none border-none bg-transparent text-gray-800 placeholder-gray-400 appearance-none focus:ring-0 modal-fixed-input">
+                            </div>
+                            <!-- Worldbook -->
+                            <div class="flex justify-between items-center p-4 border-b border-black">
+                                <div class="font-bold text-black text-sm w-24 flex items-center gap-2">
+                                    <span>关联世界书</span>
+                                    <button type="button" data-wb-target="ai-worldbook-container" aria-expanded="false" onclick="toggleWorldBookAssociatePanel(this)" style="border:none; background:transparent; padding:2px 6px; border-radius:8px; color:#666; font-size:14px; cursor:pointer;">▸</button>
+                                </div>
+                                <div class="flex items-center gap-2 flex-1 justify-end">
+                                    <div id="ai-worldbook-container" class="text-left outline-none border-none bg-transparent text-gray-800 w-full" style="max-height:150px; overflow-y:auto; padding:10px 12px; border:1px solid rgba(0,0,0,0.12); border-radius:14px; background:rgba(0,0,0,0.02);">
+                                        <div style="color:#999; font-size:13px;">加载中...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Personality -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col h-40 mb-6 relative modal-fixed-text-card">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="font-bold text-black text-sm">性格设定 / Prompt</label>
+                            </div>
+                            <textarea id="ai-personality" style="background-color: transparent !important;" class="flex-1 w-full outline-none resize-none bg-transparent text-sm leading-relaxed text-gray-800 placeholder-gray-400 border-none focus:ring-0 modal-fixed-textarea modal-fixed-textarea-short" placeholder="例如：傲娇、毒舌..."></textarea>
+                        </div>
+
+                        <!-- Card 3: Chat Style -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col h-40 mb-6 relative modal-fixed-text-card">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="font-bold text-black text-sm">聊天风格</label>
+                            </div>
+                            <textarea id="ai-style" style="background-color: transparent !important;" class="flex-1 w-full outline-none resize-none bg-transparent text-sm leading-relaxed text-gray-800 placeholder-gray-400 border-none focus:ring-0 modal-fixed-textarea modal-fixed-textarea-short" placeholder="例如：喜欢发颜文字..."></textarea>
+                        </div>
+
+                        <!-- Card 4: Schedule -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col min-h-[420px] mb-6 relative modal-fixed-text-card modal-fixed-text-card-tall">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="font-bold text-black text-sm">作息表</label>
+                            </div>
+                            <div class="schedule-parse-note">用于角色忙时不回消息或自动回复</div>
+                            <textarea id="ai-schedule" style="background-color: transparent !important;" class="w-full h-24 mt-3 outline-none resize-none bg-transparent text-sm leading-relaxed text-gray-800 placeholder-gray-400 border-none focus:ring-0 modal-fixed-textarea modal-fixed-textarea-schedule" placeholder="例如：7:00 起床..."></textarea>
+                            <div id="creator-schedule-parse-panel" class="schedule-parse-panel" hidden></div>
+                        </div>
+
+                        <!-- Card 5: Video Album -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col mb-6 relative">
+                            <div class="flex justify-between items-center mb-4">
+                                <label class="font-bold text-black text-sm">视频通话相册</label>
+                                <button onclick="document.getElementById('creator-video-album-file').click()" class="bg-black text-white text-xs px-3 py-1.5 rounded-full font-bold">
+                                    <i class='bx bx-plus mr-1'></i>添加
+                                </button>
+                                <input type="file" id="creator-video-album-file" accept="image/*" class="hidden" onchange="handleCreatorVideoAlbumFile(this)">
+                            </div>
+                            <div id="creator-video-album-list" class="flex flex-wrap gap-2">
+                                <!-- JS will populate this -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Buttons -->
+                    <div class="creator-sticky-footer absolute bottom-0 left-0 w-full px-6 pb-8 pt-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent">
+                        <div class="flex gap-4">
+                            <button class="flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity" onclick="closeCreator()">
+                                取消
+                            </button>
+                            <button class="flex-1 h-12 bg-black text-white rounded-full font-bold text-sm hover:opacity-80 transition-opacity shadow-lg" onclick="saveCharacterData()">
+                                保存
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <!-- ========== 【桌面大盒子结束】 ========== -->
+
+
+            <!-- ========== 【聊天大盒子（最终无壳修正版）】 ========== -->
+            <div id="chat-view" style="display: none;">
+                <!-- === 1. 顶部状态栏 (伪装成手机状态栏) === -->
+                <div class="status-bar"
+                    style="position: absolute; top: 0; width: 100%; z-index: 60; background: transparent;">
+                    <div class="status-time" id="status-time-text-chat" style="color: #000;">--:--</div>
+                    <div class="battery-icon">
+                        <span class="battery-level" id="battery-num-chat" style="color: #000;">--</span>
+                    </div>
+                </div>
+
+                <!-- === 2. 聊天室主体内容 === -->
+                <div id="chat-room-layer" class="chat-room-layer custom-chat-background"
+                    style="display: flex; flex-direction: column; width: 100%; height: 100%; background: #f5f5f5;">
+
+                    <div class="chat-room-header custom-top-bar"
+                        style="padding-top: 15px; height: 50px; align-items: center; padding-bottom: 0px;">
+                        <button class="back-btn chat-back-btn" type="button" onclick="backToList()" aria-label="返回聊天列表">
+                            <i class='bx bx-chevron-left'></i>
+                        </button>
+                        <div class="chat-room-title-wrap">
+                            <div class="chat-room-title" id="current-chat-name" style="margin-bottom: 5px;">加载中...</div>
+                            <div class="status-heart-btn" id="status-heart-btn" onclick="openStatusMonitorPanel()">
+                                <i class='bx bxs-heart'></i>
+                            </div>
+                        </div>
+                        <div class="chat-room-menu" onclick="openChatSettings()" style="margin-bottom: 5px;">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </div>
+                    </div>
+
+                    <div id="status-monitor-modal" class="status-monitor-modal" style="display: none;"
+                        onclick="handleStatusMonitorMaskClick(event)">
+                        <div class="status-monitor-card">
+                            <div class="status-history-toggle-btn" onclick="event.stopPropagation(); toggleStatusHistoryView();">
+                                <i class='bx bx-history'></i>
+                            </div>
+                            <div class="status-monitor-header">
+                                <div class="status-monitor-avatar">
+                                    <img id="status-monitor-avatar-img" src="assets/chushitouxiang.jpg">
+                                </div>
+                                <div class="status-monitor-header-right">
+                                    <div id="status-monitor-time" class="status-monitor-time">--月--日 --:--</div>
+                                    <div class="status-monitor-divider"></div>
+                                    <div id="status-monitor-location" class="status-monitor-location">正在同步生命体征...</div>
+                                </div>
+                            </div>
+
+                            <div class="status-monitor-section status-monitor-stats">
+                                <div class="status-monitor-text-row">
+                                    <div class="status-monitor-text-label">心情</div>
+                                    <div class="status-monitor-text-value" id="status-mood-text">正在同步生命体征...</div>
+                                </div>
+                                <div class="status-monitor-text-row">
+                                    <div class="status-monitor-text-label">性幻想</div>
+                                    <div class="status-monitor-text-value status-monitor-fantasy"
+                                        id="status-fantasy-text">正在同步生命体征...</div>
+                                </div>
+
+                                <div class="status-progress-item">
+                                    <div class="status-progress-label">好感度</div>
+                                    <div class="status-progress-bar">
+                                        <div class="status-progress-fill" id="status-favorability-bar"></div>
+                                    </div>
+                                    <div class="status-progress-value" id="status-favorability-text">--</div>
+                                </div>
+
+                                <div class="status-progress-item">
+                                    <div class="status-progress-label">吃醋值</div>
+                                    <div class="status-progress-bar">
+                                        <div class="status-progress-fill" id="status-jealousy-bar"></div>
+                                    </div>
+                                    <div class="status-progress-value" id="status-jealousy-text">--</div>
+                                </div>
+
+                                <div class="status-progress-item">
+                                    <div class="status-progress-label">占有欲</div>
+                                    <div class="status-progress-bar">
+                                        <div class="status-progress-fill" id="status-possessiveness-bar"></div>
+                                    </div>
+                                    <div class="status-progress-value" id="status-possessiveness-text">--</div>
+                                </div>
+
+                                <div class="status-progress-item">
+                                    <div class="status-progress-label">性欲值</div>
+                                    <div class="status-progress-bar">
+                                        <div class="status-progress-fill" id="status-lust-bar"></div>
+                                    </div>
+                                    <div class="status-progress-value" id="status-lust-text">--</div>
+                                </div>
+
+                                <div class="status-progress-item">
+                                    <div class="status-progress-label">心率</div>
+                                    <div class="status-progress-bar status-heart-bar">
+                                        <div class="status-progress-fill" id="status-heart-bar"></div>
+                                    </div>
+                                    <div class="status-progress-value" id="status-heart-text">-- BPM</div>
+                                </div>
+                            </div>
+
+                            <div class="status-monitor-section status-monitor-inner">
+                                <div class="status-inner-title" id="status-inner-title">此刻心声</div>
+                                <div class="status-inner-content" id="status-thought-text">
+                                    正在同步生命体征...
+                                </div>
+                            </div>
+                            <div id="status-history-view" class="status-history-view" onclick="event.stopPropagation();">
+                                <div class="status-history-header">
+                                    <div class="status-history-back" onclick="toggleStatusHistoryView();">
+                                        <i class='bx bx-chevron-left'></i>
+                                        <span>返回</span>
+                                    </div>
+                                    <div class="status-history-title">状态日志</div>
+                                    <div class="status-history-header-spacer"></div>
+                                </div>
+                                <div id="status-history-list" class="status-history-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 中间消息区 -->
+                    <div class="chat-room-body custom-chat-area" id="chat-history">
+                        <!-- 消息会插在这里 -->
+                    </div>
+
+                    <!-- 底部输入栏 (修改后：包含引用条) -->
+                    <div class="chat-footer-shell">
+                        <!-- 新增：引用显示条 (默认隐藏) -->
+                        <div id="quote-bar" style="display:none;">
+                            <div class="quote-text" id="quote-content"
+                                style="flex:1;">
+                                引用内容...
+                            </div>
+                            <div class="quote-close" onclick="cancelQuote()"
+                                style="padding:0 10px; font-size:18px; color:#999; cursor:pointer;">×</div>
+                        </div>
+
+                        <!-- 原来的底部操作栏 (去掉上边框，因为父级加了) -->
+                        <div class="chat-room-footer custom-bottom-bar new-layout">
+                            <div class="footer-icon-btn" id="more-btn">
+                                <i class="fas fa-chevron-circle-up" style="transform: rotate(90deg);"></i>
+                            </div>
+                            <div class="input-wrapper">
+                                <input type="text" id="msg-input" class="new-input-field" placeholder="发消息...">
+                                <div id="quick-emoji-btn" class="embedded-emoji-btn">
+                                    <i class="far fa-smile"></i>
+                                </div>
+                            </div>
+                            <div class="footer-icon-btn circle-btn ai-btn" onclick="triggerAI()">
+                                <i class="bx bx-heart"></i>
+                            </div>
+                            <div class="footer-icon-btn send-arrow-btn" onclick="sendMessage()">
+                                <i class="fas fa-arrow-up"></i>
+                            </div>
+                        </div>
+
+                        <div id="chat-more-panel" class="chat-more-panel">
+                            <div class="chat-more-pages" id="chat-more-pages"></div>
+                            <div class="chat-more-dots" id="chat-more-dots"></div>
+                            <div id="chat-sticker-panel" class="chat-sticker-panel">
+                                <div class="sticker-tabs">
+                                    <div class="sticker-tab active" data-type="mine">我的</div>
+                                    <div class="sticker-tab" data-type="his">他的</div>
+                                    <div class="sticker-tab" data-type="general">通用</div>
+                                    <button type="button" class="sticker-tab-add" id="sticker-add-btn" onclick="openStickerImportModal()">+</button>
+                                </div>
+                                <div class="sticker-grid" id="sticker-grid"></div>
+                                <div class="sticker-manage-bar" id="sticker-manage-bar">
+                                    <button type="button" class="sticker-manage-btn" id="sticker-manage-assign-btn">分类</button>
+                                    <button type="button" class="sticker-manage-btn" id="sticker-manage-select-all-btn">全选</button>
+                                    <button type="button" class="sticker-manage-btn danger" id="sticker-manage-delete-btn">删除</button>
+                                    <button type="button" class="sticker-manage-btn" id="sticker-manage-done-btn">完成</button>
+                                </div>
+                                <div class="sticker-category-bar" id="sticker-category-bar"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- === 新增：多选底部工具栏 === -->
+                    <div id="multi-select-bar">
+                        <div class="multi-btn" onclick="toggleSelectAllMessages()">
+                            <i class="fas fa-check-double"></i>
+                            <span>全选</span>
+                        </div>
+                        <div class="multi-btn" onclick="performMultiAction('forward')">
+                            <i class="fas fa-share"></i>
+                            <span>转发</span>
+                        </div>
+                        <div class="multi-btn" onclick="performMultiAction('fav')">
+                            <i class="fas fa-cube"></i> <!-- 微信收藏是个立方体，这里用cube或者star -->
+                            <span>收藏</span>
+                        </div>
+                        <div class="multi-btn delete-btn" onclick="performMultiAction('delete')">
+                            <i class="fas fa-trash"></i>
+                            <span>删除</span>
+                        </div>
+                    </div>
+                    <input type="file" id="chat-image-uploader" accept="image/*" multiple style="display:none;">
+
+                </div>
+
+                <!-- 韩系沉浸式通话页面 -->
+                <section class="call-overlay" id="callOverlay" aria-hidden="true">
+                    <!-- 动态模糊背景 -->
+                    <div class="call-bg-blur" id="callBgBlur"></div>
+
+                    <div class="call-content">
+                        <!-- 顶部状态 -->
+                        <header class="call-header">
+                            <button class="call-minimize" id="callMinimize"><i class='bx bx-chevron-down'></i></button>
+                            <div class="call-status">
+                                <span class="status-dot"></span>
+                                <span id="callStatusText">正在呼叫...</span>
+                            </div>
+                            <div class="call-timer" id="callTimer">00:00</div>
+                        </header>
+
+                        <!-- 中间头像与声波 -->
+                        <main class="call-main">
+                            <div class="avatar-ripple-wrapper">
+                                <div class="ripple"></div>
+                                <div class="ripple"></div>
+                                <div class="call-avatar">
+                                    <img id="callUserAvatar" src="../assets/images/touxiang.jpg" alt="avatar" />
+                                </div>
+                            </div>
+                            <h2 class="call-user-name" id="callUserName">夏烬泽</h2>
+                            <p class="call-hint">点左上角 ∨ 箭头返回聊天发消息</p>
+                            
+                            <!-- 嵌入旧版通话流聊天区域 -->
+                            <div class="voice-call-chat-wrapper" style="flex:1; width:100%; max-width:420px; overflow-y:auto; padding:8px 4px; min-height:0; margin-top:20px;">
+                                <div id="call-chat-container" class="call-chat-container" style="width:100%; min-height:40px;"></div>
+                            </div>
+                        </main>
+
+                        <!-- 嵌入旧版打字输入框 (默认隐藏，通话接通后显示) -->
+                        <div id="call-input-row" class="voice-call-input-row" style="display:none; padding:10px 16px; width:100%; box-sizing:border-box; flex-shrink:0;">
+                            <input type="text" id="voice-call-input" class="voice-call-input" placeholder="输入你想说的话..." style="flex:1; height:40px; border-radius:20px; border:none; padding:0 15px; font-size:14px; outline:none; background:rgba(255,255,255,0.2); color:#fff;" />
+                            <button id="voice-call-send-btn" class="voice-call-send-btn" title="一键重Roll" aria-label="一键重Roll" style="width:40px; height:40px; border-radius:20px; border:none; margin-left:10px; background:#4CAF50; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                                <i class='bx bx-refresh' style="font-size:20px;"></i>
+                            </button>
+                        </div>
+
+                        <!-- API回复中的波形反馈动画 -->
+                        <div id="call-ai-loading-wave" class="call-ai-loading-wave" style="display:none; justify-content:center; align-items:center; gap:4px; margin-bottom:10px; height:20px;">
+                            <div class="wave-line"></div>
+                            <div class="wave-line"></div>
+                            <div class="wave-line"></div>
+                            <div class="wave-line"></div>
+                        </div>
+
+                        <!-- 底部控制栏 -->
+                        <footer class="call-footer">
+                            <div class="call-actions">
+                                <button class="call-btn btn-mute" id="callMute">
+                                    <i class='bx bx-microphone-off'></i>
+                                    <span>静音</span>
+                                </button>
+                                <button class="call-btn btn-hangup" id="callHangup">
+                                    <i class='bx bxs-phone-off'></i>
+                                </button>
+                                <button class="call-btn btn-speaker" id="callSpeaker">
+                                    <i class='bx bx-volume-full'></i>
+                                    <span>免提</span>
+                                </button>
+                            </div>
+                        </footer>
+                    </div>
+                </section>
+
+                <div id="call-float-window" class="call-float-window k-float-call" style="display:none;" aria-label="返回语音通话">
+                    <div class="k-status-dot"></div>
+                    <svg class="k-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l1.98-1.98c.3-.3.74-.4 1.13-.27 1.24.41 2.57.63 3.93.63.62 0 1.12.5 1.12 1.12V20c0 .62-.5 1.12-1.12 1.12C10.62 21.12 2.88 13.38 2.88 3.75c0-.62.5-1.12 1.12-1.12h3.12c.62 0 1.12.5 1.12 1.12 0 1.36.22 2.69.63 3.93.12.39.03.82-.28 1.13l-1.97 1.98Z" stroke="#555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="k-timer">00:00</span>
+                </div>
+
+                <div id="location-share-float-window" class="location-share-float-window" style="display:none;">
+                    <span id="location-share-float-text">位置共享中...</span>
+                </div>
+
+                <!-- =======================================================
+                     === 3. 弹窗区 (放在这里，保证在聊天室之上) ===
+                     ======================================================= -->
+
+                <div id="sticker-import-modal" class="modal-layer" style="display:none; background: rgba(0,0,0,0.4);">
+                    <div
+                        style="margin:auto; width:90%; max-width:320px; background:#fff; border-radius:12px; padding:15px; box-sizing:border-box;">
+                        <div style="font-size:16px; font-weight:600; margin-bottom:8px;">导入表情包</div>
+                        <div style="margin-bottom:8px; font-size:14px;">
+                            <label for="sticker-import-category">导入到分组：</label>
+                            <select id="sticker-import-category"
+                                style="width:100%; margin-top:4px; padding:6px 8px; font-size:14px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                                <option value="mine">我的表情</option>
+                                <option value="his">他的表情</option>
+                                <option value="general">当前聊天通用</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <textarea id="sticker-import-text" placeholder="每行一条：名称: URL，或直接粘贴 GIF/图片 URL"
+                                style="width:100%; height:120px; box-sizing:border-box; border:1px solid #ddd; border-radius:6px; padding:8px; font-size:13px; resize:vertical;"></textarea>
+                        </div>
+                        <div style="text-align:right;">
+                            <button
+                                type="button"
+                                id="sticker-import-cancel-btn"
+                                style="padding:6px 10px; margin-right:8px; border:none; background:#f0f0f0; border-radius:4px; font-size:13px;"
+                                onclick="closeStickerImportModal()">取消</button>
+                            <button
+                                type="button"
+                                id="sticker-import-confirm-btn"
+                                style="padding:6px 12px; border:none; background:#07c160; color:#fff; border-radius:4px; font-size:13px;"
+                                onclick="confirmStickerImport()">导入</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- A. 聊天设置菜单 (右上角三个点) -->
+                <div id="settings-menu-modal" class="modal-layer" style="display: none; background: #f2f2f7;">
+                    <div class="absolute inset-0 bg-[#f2f2f7] flex flex-col">
+                        <div class="flex justify-between items-center px-4 bg-white border-b border-gray-200"
+                             style="padding-top: calc(env(safe-area-inset-top, 0px) + 6px); height: 50px; box-sizing: content-box;">
+                            <button id="chat-settings-back-btn" type="button" class="w-10 text-left text-[26px] leading-none text-gray-800" onclick="if(typeof window.chatSettingsHandleBack==='function'){window.chatSettingsHandleBack();}else{closeSettingsMenu();}">‹</button>
+                            <div id="chat-settings-title" class="flex-1 text-center font-semibold text-[17px] text-gray-900">聊天信息</div>
+                            <div class="w-10"></div>
+                        </div>
+                        <div id="chat-settings-body" class="flex-1 overflow-y-auto p-4"
+                                style="-webkit-overflow-scrolling: touch; padding-bottom: calc(16px + var(--safe-bottom-compact, env(safe-area-inset-bottom, 0px)));"></div>
+                    </div>
+                </div>
+
+                <div id="role-api-preset-modal" class="modal-layer" style="display:none;">
+                    <div class="modal-header-bar">
+                        <div class="modal-close-icon" onclick="closeRoleApiPresetModal()">×</div>
+                        <div class="modal-title">单独API</div>
+                        <div class="modal-placeholder"></div>
+                    </div>
+                    <div class="modal-content">
+                        <div class="settings-group" id="role-api-preset-list"></div>
+                        <div class="settings-group" style="margin-bottom: 30px;">
+                            <div class="settings-item text-danger" onclick="clearRoleApiPresetBinding()">
+                                <div class="item-label" style="color:#ff3b30;">恢复为全局设置</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- =======================================================
+     ⬇️⬇️⬇️ 请用这段代码 替换掉原来的 B 部分 (editor-modal-deleted) ⬇️⬇️⬇️
+     ======================================================= -->
+
+                <!-- B. 角色编辑弹窗 (韩系黑白简约风) -->
+                <div id="editor-modal" class="modal-layer bg-gray-50 flex flex-col h-full" style="display: none; background-color: rgb(249 250 251);">
+                    <!-- Header -->
+                    <div class="flex justify-between items-center px-6 pt-12 pb-4 bg-white/0">
+                        <div class="modal-close-icon text-3xl font-light cursor-pointer" onclick="closeEditor()">
+                            <i class='bx bx-chevron-left text-4xl text-black'></i>
+                        </div>
+                        <div class="text-lg font-bold text-black tracking-wide">编辑角色</div>
+                        <div class="w-8"></div>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="flex-1 overflow-y-auto px-6 pb-32">
+                        <!-- Avatar -->
+                        <div class="flex flex-col items-center mt-4 mb-8">
+                            <div class="relative group cursor-pointer" onclick="document.getElementById('edit-ai-avatar-file').click()">
+                                <div class="w-24 h-24 rounded-full border-2 border-black overflow-hidden bg-white">
+                                    <img id="edit-avatar-preview" src="assets/chushitouxiang.jpg" class="w-full h-full object-cover">
+                                </div>
+                                <div class="absolute bottom-0 right-0 bg-black text-white rounded-full p-1 border-2 border-white flex items-center justify-center w-8 h-8">
+                                    <i class='bx bx-camera text-sm'></i>
+                                </div>
+                                <input type="file" id="edit-ai-avatar-file" accept="image/*" class="hidden" onchange="previewEditAvatar(this)">
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500 font-medium">点击更换头像</p>
+                        </div>
+
+                        <!-- Card 1: Basic Info -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] overflow-hidden mb-6">
+                            <!-- Name -->
+                            <div class="flex justify-between items-center p-4 border-b border-black modal-fixed-row">
+                                <label class="font-bold text-black text-sm w-20">角色名称</label>
+                                <input type="text" id="edit-ai-name" style="background-color: transparent !important;" class="flex-1 text-right outline-none border-none bg-transparent text-gray-800 placeholder-gray-400 appearance-none focus:ring-0 modal-fixed-input">
+                            </div>
+                            <!-- Remark -->
+                            <div class="flex justify-between items-center p-4 border-b border-black modal-fixed-row">
+                                <label class="font-bold text-black text-sm w-20">角色备注</label>
+                                <input type="text" id="edit-ai-remark" placeholder="显示在聊天里的备注" style="background-color: transparent !important;" class="flex-1 text-right outline-none border-none bg-transparent text-gray-800 placeholder-gray-400 appearance-none focus:ring-0 modal-fixed-input">
+                            </div>
+                            <!-- Worldbook -->
+                            <div class="flex flex-col p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="font-bold text-black text-sm">关联世界书 (可多选)</label>
+                                    <button type="button" data-wb-target="edit-ai-worldbook-container" aria-expanded="false" onclick="toggleWorldBookAssociatePanel(this)" style="border:none; background:transparent; padding:2px 6px; border-radius:8px; color:#666; font-size:14px; cursor:pointer;">▸</button>
+                                </div>
+                                <div id="edit-ai-worldbook-container" class="max-h-48 overflow-y-auto border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+                                    <!-- JS will inject checkbox list here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Personality -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col h-40 mb-6 relative modal-fixed-text-card">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="font-bold text-black text-sm">性格设定 / Prompt</label>
+                            </div>
+                            <textarea id="edit-ai-personality" style="background-color: transparent !important;" class="flex-1 w-full outline-none resize-none bg-transparent text-sm leading-relaxed text-gray-800 placeholder-gray-400 border-none focus:ring-0 modal-fixed-textarea modal-fixed-textarea-short"></textarea>
+                        </div>
+
+                        <!-- Card 3: Chat Style (Moved & Changed to Textarea) -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col h-40 mb-6 relative modal-fixed-text-card">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="font-bold text-black text-sm">聊天风格</label>
+                            </div>
+                            <textarea id="edit-ai-style" style="background-color: transparent !important;" class="flex-1 w-full outline-none resize-none bg-transparent text-sm leading-relaxed text-gray-800 placeholder-gray-400 border-none focus:ring-0 modal-fixed-textarea modal-fixed-textarea-short"></textarea>
+                        </div>
+
+                        <!-- Card 4: Schedule -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col min-h-[420px] mb-6 relative modal-fixed-text-card modal-fixed-text-card-tall">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="font-bold text-black text-sm">作息表</label>
+                            </div>
+                            <div class="schedule-parse-note">用于角色忙时不回消息或自动回复</div>
+                            <textarea id="edit-ai-schedule" style="background-color: transparent !important;" class="w-full h-24 mt-3 outline-none resize-none bg-transparent text-sm leading-relaxed text-gray-800 placeholder-gray-400 border-none focus:ring-0 modal-fixed-textarea modal-fixed-textarea-schedule"></textarea>
+                            <div id="edit-schedule-parse-panel" class="schedule-parse-panel" hidden></div>
+                        </div>
+
+                        <!-- Card 4: Video Album -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col mb-6 relative">
+                            <div class="flex justify-between items-center mb-4">
+                                <label class="font-bold text-black text-sm">视频通话相册</label>
+                                <button onclick="document.getElementById('edit-video-album-file').click()" class="bg-black text-white text-xs px-3 py-1.5 rounded-full font-bold">
+                                    <i class='bx bx-plus mr-1'></i>添加
+                                </button>
+                                <input type="file" id="edit-video-album-file" accept="image/*" class="hidden" onchange="handleEditVideoAlbumFile(this)">
+                            </div>
+                            <div id="edit-video-album-list" class="flex flex-wrap gap-2">
+                                <!-- JS will populate this -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Buttons -->
+                    <div class="creator-sticky-footer absolute bottom-0 left-0 w-full px-6 pb-8 pt-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent">
+                        <div class="flex gap-4">
+                            <button class="flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity" onclick="closeEditor()">
+                                取消
+                            </button>
+                            <button class="flex-1 h-12 bg-black text-white rounded-full font-bold text-sm hover:opacity-80 transition-opacity shadow-lg" onclick="saveEditResult()">
+                                保存修改
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- =======================================================
+     ⬇️⬇️⬇️ 请把这部分完整复制，替换掉原来简陋的 C 和 D ⬇️⬇️⬇️
+     ======================================================= -->
+
+                <!-- C. 我的身份弹窗 (韩系黑白简约风) -->
+                <div id="user-persona-modal" class="modal-layer bg-gray-50 flex flex-col h-full" style="display: none; z-index: 10000; background-color: rgb(249 250 251);">
+                    <!-- Top Header -->
+                    <div class="flex justify-between items-center px-6 pt-12 pb-4 bg-white/0">
+                        <div class="modal-close-icon text-3xl font-light cursor-pointer" onclick="closeSubModal('user-persona-modal')">
+                            <i class='bx bx-chevron-left text-4xl text-black'></i>
+                        </div>
+                        <div class="text-lg font-bold text-black tracking-wide">我的身份</div>
+                        <div class="w-8"></div> <!-- Placeholder for center alignment -->
+                    </div>
+
+                    <!-- Scrollable Content Area -->
+                    <div class="flex-1 overflow-y-auto px-6 pb-32">
+                        
+                        <!-- 1. Avatar Section -->
+                        <div class="flex flex-col items-center mt-4 mb-8">
+                            <div class="relative group cursor-pointer" onclick="document.getElementById('user-avatar-input').click()">
+                                <div class="w-24 h-24 rounded-full border-2 border-black overflow-hidden bg-white">
+                                    <img id="user-settings-avatar" src="assets/chushitouxiang.jpg" class="w-full h-full object-cover">
+                                </div>
+                                <div class="absolute bottom-0 right-0 bg-black text-white rounded-full p-1 border-2 border-white flex items-center justify-center w-8 h-8">
+                                     <i class='bx bx-camera text-sm'></i>
+                                </div>
+                                <input type="file" id="user-avatar-input" hidden onchange="previewUserAvatar(this)">
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500 font-medium">点击更换头像</p>
+                        </div>
+
+                        <!-- 2. Basic Info Card -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] overflow-hidden mb-6">
+                            <!-- Row 1: Name -->
+                            <div class="flex justify-between items-center p-4 border-b border-black modal-fixed-row">
+                                <label class="font-bold text-black text-sm w-20">姓名</label>
+                                <input type="text" id="user-settings-name" placeholder="你的名字" style="background-color: transparent !important;" 
+                                       class="flex-1 text-right outline-none border-none bg-transparent text-gray-800 placeholder-gray-400 appearance-none focus:ring-0 modal-fixed-input">
+                            </div>
+
+                            <!-- Row 2: Gender -->
+                            <div class="flex justify-between items-center p-4 border-b border-black modal-fixed-row">
+                                <label class="font-bold text-black text-sm w-20">性别</label>
+                                <div class="flex items-center gap-2 flex-1 justify-end">
+                                     <select id="user-settings-gender" class="text-right outline-none border-none bg-transparent text-gray-800 appearance-none pr-6 relative z-10 w-full focus:ring-0 modal-fixed-input modal-fixed-select" style="direction: rtl;">
+                                        <option value="">保密</option>
+                                        <option value="女">女</option>
+                                        <option value="男">男</option>
+                                     </select>
+                                </div>
+                            </div>
+
+                            <!-- Row 3: Birthday -->
+                            <div class="flex justify-between items-center p-4 modal-fixed-row modal-fixed-row-birthday">
+                                <label class="font-bold text-black text-sm w-12">生日</label>
+                                <div class="flex items-center gap-2 flex-1 justify-end">
+                                    <!-- Solar Input (Date Picker) -->
+                                    <input type="date" id="user-settings-birthday-solar" style="background-color: transparent !important;" class="text-right outline-none border-none bg-transparent text-gray-800 text-sm w-32 focus:ring-0 appearance-none modal-fixed-input modal-fixed-date-input">
+                                    
+                                    <!-- Lunar Input (Text) - Initially Hidden -->
+                                    <input type="text" id="user-settings-birthday-lunar" style="background-color: transparent !important;" placeholder="例如: 农历八月十五" class="text-right outline-none border-none bg-transparent text-gray-800 text-sm w-40 focus:ring-0 appearance-none hidden modal-fixed-input modal-fixed-date-input">
+
+                                    <!-- Toggle Switch for Solar/Lunar -->
+                                    <div class="relative inline-flex items-center cursor-pointer ml-2 select-none" onclick="toggleCalendarType()">
+                                        <input type="hidden" id="user-birthday-type" value="solar"> <!-- Hidden input to store value -->
+                                        <div class="w-14 h-7 bg-black rounded-full flex items-center px-1 transition-all duration-300 relative" id="calendar-toggle-bg">
+                                            <!-- Moving dot -->
+                                            <div class="w-5 h-5 bg-white rounded-full shadow-sm transform transition-transform duration-300 translate-x-0 absolute left-1" id="calendar-toggle-dot"></div>
+                                            <!-- Text Labels (Overlay) -->
+                                            <span class="absolute left-7 text-[10px] text-white font-bold pointer-events-none transition-opacity duration-300" id="calendar-label-solar" style="opacity: 0;">农历</span>
+                                            <span class="absolute left-2 text-[10px] text-white font-bold pointer-events-none transition-opacity duration-300" id="calendar-label-lunar" style="opacity: 1;">阳历</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Persona Textarea -->
+                        <div class="bg-white border border-black rounded-3xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] p-5 flex flex-col h-48 mb-6 relative modal-fixed-text-card">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="font-bold text-black text-sm">我的设定</label>
+                                <!-- <span class="text-xs text-gray-400">AI将根据此设定与你对话</span> -->
+                            </div>
+                            <textarea id="user-persona-setting" style="background-color: transparent !important;" 
+                                      class="flex-1 w-full outline-none resize-none bg-transparent text-sm leading-relaxed text-gray-800 placeholder-gray-400 modal-fixed-textarea modal-fixed-textarea-medium"
+                                      placeholder="在这里输入你的详细人设..."></textarea>
+                        </div>
+
+                    </div>
+
+                    <!-- 4. Bottom Actions (Fixed at bottom) -->
+                    <div id="user-persona-preset-sheet" class="absolute inset-0 z-20" style="display:none;">
+                        <div class="absolute inset-0 bg-black/35" onclick="closeUserPersonaPresetSheet()"></div>
+                        <div class="absolute left-0 right-0 bottom-0 bg-white rounded-t-[28px] px-6 pt-5 pb-7 shadow-2xl">
+                            <div class="w-12 h-1.5 rounded-full bg-black/10 mx-auto mb-4"></div>
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <div class="text-base font-bold text-black">选择预设</div>
+                                    <div class="text-xs text-gray-500 mt-1">点击后会直接读取并保存应用</div>
+                                </div>
+                                <button type="button" class="w-9 h-9 rounded-full border border-black text-black text-lg leading-none" onclick="closeUserPersonaPresetSheet()">×</button>
+                            </div>
+                            <div id="user-persona-preset-list" class="max-h-72 overflow-y-auto flex flex-col gap-3"></div>
+                        </div>
+                    </div>
+
+                    <div class="absolute bottom-0 left-0 w-full px-6 pb-8 pt-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent">
+                        <div class="flex gap-3 mb-3">
+                            <button class="flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity"
+                                    type="button"
+                                    onclick="openUserPersonaPresetSheet()">
+                                预设
+                            </button>
+                            <button class="flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity"
+                                     type="button"
+                                     id="btn-save-user-preset"
+                                     onclick="saveUserPersonaPreset()">
+                                保存为预设
+                            </button>
+                        </div>
+                        <button class="w-full h-12 bg-black text-white rounded-full font-bold text-sm hover:opacity-80 transition-opacity shadow-lg"
+                                type="button"
+                                onclick="saveUserPersona()">
+                            保存
+                        </button>
+                    </div>
+                </div>
+
+                <!-- D. 背景设置弹窗 (样式修复版：带居中文字、Flex布局) -->
+                <div id="bg-setting-modal" class="modal-layer" style="display: none; background: #fff;">
+                    <div class="modal-header-bar">
+                        <div class="modal-close-icon" onclick="closeSubModal('bg-setting-modal')">＜</div>
+                        <div class="modal-title">聊天背景</div>
+                        <div class="modal-placeholder"></div>
+                    </div>
+                    <div class="creator-body" style="text-align: center;">
+
+                        <!-- 漂亮的预览框 -->
+                        <div class="bg-preview-box" id="bg-preview-box"
+                            style="height: 300px; background-color: #eee; margin: 20px; border-radius: 10px; background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; color: #999;">
+                            当前背景预览
+                        </div>
+
+                        <input type="file" id="bg-file-input" hidden onchange="previewChatBg(this)">
+
+                        <div class="creator-footer-btns">
+                            <button class="cancel-btn-large"
+                                onclick="document.getElementById('bg-file-input').click()">上传图片</button>
+                            <button class="save-btn-large" onclick="saveChatBg()">保存背景</button>
+                        </div>
+
+                        <button class="text-btn" onclick="resetChatBg()"
+                            style="margin-top:15px; color: red; background:none; border:none;">恢复默认背景</button>
+                    </div>
+                </div>
+
+                <!-- E. 记忆档案 (全屏档案查阅面板：Social Profile 风格) -->
+                <div id="memory-archive-modal" class="modal-layer" style="display: none; background: #fff;">
+                    <!-- 关闭按钮 -->
+                    <div class="modal-close-icon" onclick="closeMemoryArchiveModal()" style="position: absolute; top: 20px; right: 20px; z-index: 10; color: #000; font-size: 28px; cursor: pointer;">×</div>
+
+                    <div class="memory-archive-container" style="width: 100%; height: 100%; overflow-y: auto; background: #fff; display: flex; flex-direction: column;">
+                        
+                        <!-- 1. Top Section: Identity -->
+                        <div class="flex flex-col items-center pt-8 pb-4" style="display: flex; flex-direction: column; align-items: center; padding-top: 2rem; padding-bottom: 1rem;">
+                            <img id="memory-archive-avatar" class="w-24 h-24 rounded-full object-cover bg-gray-200" src="" alt="Avatar" style="width: 6rem; height: 6rem; border-radius: 9999px; object-fit: cover; background-color: #e5e7eb;">
+                            <div id="memory-archive-name" class="mt-4 font-bold text-xl text-black" style="margin-top: 1rem; font-weight: 700; font-size: 1.25rem; color: #000;">Name</div>
+                        </div>
+
+                        <!-- 2. Stats Section -->
+                        <div class="flex justify-center gap-12 my-6" style="display: flex; justify-content: center; gap: 3rem; margin-top: 1.5rem; margin-bottom: 1.5rem;">
+                            <div class="flex flex-col items-center" style="display: flex; flex-direction: column; align-items: center;">
+                                <span class="text-xl font-bold text-black" id="stat-days" style="font-size: 1.25rem; font-weight: 700; color: #000;">0</span>
+                                <span class="text-xs text-gray-500" style="font-size: 0.75rem; color: #6b7280;">days</span>
+                            </div>
+                            <div class="flex flex-col items-center" style="display: flex; flex-direction: column; align-items: center;">
+                                <span class="text-xl font-bold text-black" id="stat-messages" style="font-size: 1.25rem; font-weight: 700; color: #000;">0</span>
+                                <span class="text-xs text-gray-500" style="font-size: 0.75rem; color: #6b7280;">条</span>
+                            </div>
+                            <div class="flex flex-col items-center" style="display: flex; flex-direction: column; align-items: center;">
+                                <span class="text-xl font-bold text-black" id="stat-tokens" style="font-size: 1.25rem; font-weight: 700; color: #000;">0</span>
+                                <span class="text-xs text-gray-500" style="font-size: 0.75rem; color: #6b7280;">字</span>
+                            </div>
+                        </div>
+
+                        <!-- 3. Divider & Title -->
+                        <div class="mx-auto px-6 py-1 rounded-full bg-black text-white w-max text-sm font-bold tracking-wide mb-6" style="margin-left: auto; margin-right: auto; padding: 0.25rem 1.5rem; border-radius: 9999px; background-color: #000; color: #fff; width: max-content; font-size: 0.875rem; font-weight: 700; letter-spacing: 0.025em; margin-bottom: 1.5rem;">
+                            MEMORY
+                        </div>
+
+                        <!-- 4. Tab Navigation -->
+                        <div class="w-full border-b border-gray-200 mt-6 sticky top-0 bg-white z-10" style="width: 100%; border-bottom: 1px solid #e5e7eb; margin-top: 1.5rem; position: sticky; top: 0; background-color: #fff; z-index: 10;">
+                            <div class="grid grid-cols-3 text-center" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center;">
+                                <div class="memory-tab-item py-3 cursor-pointer text-gray-400" data-key="likes" onclick="switchMemoryArchiveTab('likes')" style="padding-top: 0.75rem; padding-bottom: 0.75rem; cursor: pointer; color: #9ca3af;">喜好</div>
+                                <div class="memory-tab-item py-3 cursor-pointer text-gray-400" data-key="habits" onclick="switchMemoryArchiveTab('habits')" style="padding-top: 0.75rem; padding-bottom: 0.75rem; cursor: pointer; color: #9ca3af;">习惯</div>
+                                <div class="memory-tab-item py-3 cursor-pointer text-gray-400" data-key="events" onclick="switchMemoryArchiveTab('events')" style="padding-top: 0.75rem; padding-bottom: 0.75rem; cursor: pointer; color: #9ca3af;">我们</div>
+                            </div>
+                        </div>
+
+                        <!-- 5. Main Content Area -->
+                        <div class="memory-content-area p-4 pb-20" style="padding: 1rem; padding-bottom: 5rem; flex: 1;">
+                            <!-- Input area for adding new memories -->
+                            <div class="memory-archive-editor mb-4" style="border: 1px dashed #ccc; padding: 10px; border-radius: 8px; margin-bottom: 1rem;">
+                                <textarea id="memory-archive-input" placeholder="添加新记忆..." style="width: 100%; border: none; outline: none; resize: none; background: transparent; font-size: 14px; min-height: 40px; font-family: inherit;"></textarea>
+                                <div class="flex justify-end mt-2" style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                                    <button onclick="addMemoryArchiveItem()" style="background: #000; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 12px; border: none; cursor: pointer;">Add</button>
+                                </div>
+                                <div style="display:flex; gap:10px; margin-top:10px;">
+                                    <button onclick="refineMemoryArchiveEvents()" style="flex:1; background:#111827; color:#fff; padding:8px 10px; border-radius:12px; font-size:12px; border:none; cursor:pointer;">提炼“我们”记忆</button>
+                                    <button onclick="clearRoleApiMemory()" style="flex:1; background:#ff3b30; color:#fff; padding:8px 10px; border-radius:12px; font-size:12px; border:none; cursor:pointer;">清除角色记忆</button>
+                                </div>
+                            </div>
+
+                            <div id="memory-archive-text" class="space-y-3" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <!-- List items will be injected here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 长按菜单体系 -->
+                <!-- 1. 全屏遮罩 (点击空白处关闭) -->
+                <div id="context-menu-mask" onclick="closeContextMenu()"></div>
+
+                <!-- 2. 菜单本体 -->
+                <div id="msg-context-menu">
+                    <div class="menu-grid">
+                        <!-- 第一行 -->
+                        <div class="menu-item" onclick="menuAction('edit')">
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <div>编辑</div>
+                        </div>
+                        <div class="menu-item" onclick="menuAction('copy')"> <!-- 补充一个复制，很常用 -->
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <div>复制</div>
+                        </div>
+                        <div class="menu-item" onclick="menuAction('quote')">
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M7 11a4 4 0 0 1 4-4h1v6H9a2 2 0 0 1-2-2v0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                                    <path d="M15 11a4 4 0 0 1 4-4h1v6h-3a2 2 0 0 1-2-2v0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <div>引用</div>
+                        </div>
+                        <div class="menu-item" onclick="menuAction('recall')">
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 10H4V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M4 10a8 8 0 1 1 2.35 5.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <div>撤回</div>
+                        </div>
+
+                        <!-- 第二行 -->
+                        <div class="menu-item" onclick="menuAction('delete')">
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M6 7l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                                    <path d="M9 7V4h6v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <div>删除</div>
+                        </div>
+                        <div class="menu-item" onclick="menuAction('forward')">
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M14 9l7 3-7 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M21 12H10a6 6 0 0 0-6 6v1" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <div>转发</div>
+                        </div>
+                        <div class="menu-item" onclick="menuAction('fav')">
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 17.3l-5.4 3 1-6.1-4.4-4.3 6.1-.9L12 3l2.7 5.9 6.1.9-4.4 4.3 1 6.1-5.4-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <div>收藏</div>
+                        </div>
+                        <div class="menu-item" onclick="menuAction('multi')">
+                            <div class="menu-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M8 6h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M8 12h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M8 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M3 6l1 1 2-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M3 12l1 1 2-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <div>多选</div>
+                        </div>
+                        <!-- 提醒放不下了，微信一般是向右翻页，这里先不放或者替换掉上面某个 -->
+                    </div>
+                </div>
+
+            </div>
+            <!-- ========== 【聊天大盒子结束】 ========== -->
+
+
+        </div>
+        <div class="home-indicator"></div>
+    </div>
+
+    <!-- 通用文件上传输入框 (复用) -->
+    <input type="file" id="global-uploader" accept="image/*" style="display:none;">
+
+
+    <input type="file" id="wallpaper-uploader" accept="image/*" style="display:none;">
+
+    <!-- === 新增：转发联系人选择弹窗 === -->
+    <div id="forward-modal" class="modal-layer">
+        <div class="forward-box">
+            <div class="forward-header">
+                <span>选择发送给...</span>
+                <span class="close-btn" onclick="closeForwardModal()">×</span>
+            </div>
+
+            <!-- 联系人列表容器 -->
+            <div id="forward-contact-list" class="forward-list">
+                <!-- JS会自动填充这里 -->
+            </div>
+        </div>
+    </div>
+
+    <div id="offline-confirm-modal" class="modal-layer" style="display:none; background: rgba(0,0,0,0.45); align-items:center; justify-content:center;">
+        <div class="offline-modal-card" role="dialog" aria-modal="true">
+            <div class="offline-modal-title">长叙事模式</div>
+            <div class="offline-modal-desc">开启后将进入独立长叙事小说模式，体验沉浸式剧情。</div>
+            <div class="offline-modal-actions">
+                <button type="button" class="offline-btn secondary" onclick="closeOfflineConfirmModal()">取消</button>
+                <button type="button" class="offline-btn primary" onclick="confirmEnterOfflineMode()">进入</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="offline-archive-modal" class="modal-layer" style="display:none; background: rgba(0,0,0,0.45); align-items:center; justify-content:center;">
+        <div class="offline-archive-card" role="dialog" aria-modal="true">
+            <div class="offline-archive-header">
+                <div class="offline-archive-title">长叙事存档</div>
+                <button type="button" class="offline-archive-close" onclick="closeOfflineArchiveModal()">×</button>
+            </div>
+            <div id="offline-archive-list" class="offline-archive-list"></div>
+        </div>
+    </div>
+
+    <div id="offline-mode-overlay" class="offline-overlay" style="display:none;">
+        <div class="offline-topbar">
+            <button id="offline-exit-btn" type="button" class="offline-topbar-btn secondary" aria-label="关闭长叙事模式">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15 6L9 12L15 18"></path>
+                </svg>
+            </button>
+            <div class="offline-topbar-title">长叙事模式</div>
+            <button id="offline-settings-btn" type="button" class="offline-topbar-btn" aria-label="打开长叙事设置">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3.2"></circle>
+                    <path d="M12 3.8V6"></path>
+                    <path d="M12 18V20.2"></path>
+                    <path d="M20.2 12H18"></path>
+                    <path d="M6 12H3.8"></path>
+                    <path d="M17.8 6.2L16.2 7.8"></path>
+                    <path d="M7.8 16.2L6.2 17.8"></path>
+                    <path d="M17.8 17.8L16.2 16.2"></path>
+                    <path d="M7.8 7.8L6.2 6.2"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="offline-body">
+            <div id="offline-memory-preview" style="display:none; margin-bottom:14px; padding:12px 14px; background:rgba(255,255,255,0.72); border:1px solid rgba(0,0,0,0.08); border-radius:14px; backdrop-filter: blur(8px);">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <div style="font-size:13px; font-weight:700; color:#111;">本次承接的最近 20 条聊天记录</div>
+                    <div id="offline-memory-preview-count" style="font-size:11px; color:#666;">0/20</div>
+                </div>
+                <div id="offline-memory-preview-list" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
+            <div id="offline-chat-history" class="offline-novel-stream"></div>
+        </div>
+
+        <div class="offline-inputbar">
+            <textarea id="offline-msg-input" class="offline-input" placeholder="输入一句话，推动剧情…" rows="1"></textarea>
+            <div class="offline-input-actions">
+                <button id="offline-send-btn" type="button" class="offline-send">发送</button>
+                <button id="offline-rewind-btn" type="button" class="offline-rewind" disabled>重回</button>
+            </div>
+        </div>
+
+        <div id="offline-rewind-modal" class="offline-dialog-mask" style="display:none;">
+            <div class="offline-dialog-card" role="dialog" aria-modal="true" aria-labelledby="offline-rewind-title">
+                <div id="offline-rewind-title" class="offline-dialog-title">重新回到上一句？</div>
+                <div class="offline-dialog-desc">确定后会回退当前这轮剧情，把你刚刚发送的话放回输入框。你可以修改后重新发送，角色会按新内容重新回复。</div>
+                <div class="offline-dialog-actions">
+                    <button id="offline-rewind-cancel-btn" type="button" class="offline-dialog-btn offline-dialog-btn-secondary">取消</button>
+                    <button id="offline-rewind-confirm-btn" type="button" class="offline-dialog-btn">确定重回</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="offline-comment-sheet-mask" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.16); align-items:flex-end; justify-content:center; z-index:12;">
+            <div id="offline-comment-sheet" style="width:100%; max-height:36%; min-height:30%; background:#fff; border-radius:22px 22px 0 0; box-shadow:0 -12px 40px rgba(0,0,0,0.18); display:flex; flex-direction:column; overflow:hidden;">
+                <div style="padding:10px 18px 0; display:flex; justify-content:center;">
+                    <div style="width:42px; height:4px; border-radius:999px; background:rgba(0,0,0,0.12);"></div>
+                </div>
+                <div style="padding:12px 18px 10px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+                    <div style="min-width:0; flex:1 1 auto;">
+                        <div id="offline-comment-sheet-title" style="font-size:15px; font-weight:700; color:#111;">段评</div>
+                        <div id="offline-comment-sheet-quote" style="margin-top:6px; font-size:13px; line-height:1.6; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                    </div>
+                    <button id="offline-comment-sheet-close" type="button" style="border:none; background:transparent; color:#777; font-size:22px; line-height:1; padding:2px 0 0; cursor:pointer;">×</button>
+                </div>
+                <div id="offline-comment-sheet-content" style="padding:0 18px 18px; overflow-y:auto; -webkit-overflow-scrolling:touch;"></div>
+            </div>
+        </div>
+
+        <div id="offline-setup-modal" class="offline-setup-mask" style="display:none;">
+            <div class="offline-setup-sheet" role="dialog" aria-modal="true">
+                <div class="offline-setup-header">
+                    <div>
+                        <div id="offline-setup-title" class="offline-setup-title">开始长叙事互动</div>
+                        <div id="offline-setup-subtitle" class="offline-setup-subtitle">先设置承接方式和阅读偏好，再进入剧情。</div>
+                    </div>
+                    <button id="offline-setup-close-btn" type="button" class="offline-setup-close" aria-label="关闭设置">×</button>
+                </div>
+
+                <div class="offline-setup-scroll">
+                    <div class="offline-form-row">
+                        <div class="offline-form-label" style="display:flex; align-items:center; gap:8px;">
+                            <span style="flex:1;">关联世界书 (可多选)</span>
+                            <button type="button" data-wb-target="offline-worldbook-container" aria-expanded="false" onclick="toggleWorldBookAssociatePanel(this)" style="border:none; background:transparent; padding:2px 6px; border-radius:8px; color:#666; font-size:14px; cursor:pointer;">▸</button>
+                        </div>
+                        <div id="offline-worldbook-container" class="offline-select" style="height:auto; max-height:150px; overflow-y:auto; padding:10px;">
+                            <!-- JS will inject checkbox list here -->
+                        </div>
+                    </div>
+
+                    <div class="offline-form-row">
+                        <div class="offline-form-label">回复字数设置</div>
+                        <div class="offline-range-grid">
+                            <label class="offline-range-item">
+                                <span>最少字数</span>
+                                <input id="offline-min-length-input" class="offline-select" type="number" min="300" max="8000" step="50" value="800">
+                            </label>
+                            <label class="offline-range-item">
+                                <span>最大字数</span>
+                                <input id="offline-max-length-input" class="offline-select" type="number" min="500" max="12000" step="50" value="1200">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="offline-form-row">
+                        <div class="offline-form-label">剧情模式</div>
+                        <div class="offline-radio-group">
+                            <label class="offline-radio">
+                                <input type="radio" name="offline-plot-mode" value="read_memory" checked>
+                                <span>承接记忆</span>
+                            </label>
+                            <label class="offline-radio">
+                                <input type="radio" name="offline-plot-mode" value="new_plot">
+                                <span>开启新剧情</span>
+                            </label>
+                            <label class="offline-radio">
+                                <input type="radio" name="offline-plot-mode" value="resume_plot">
+                                <span>续写历史存档</span>
+                            </label>
+                        </div>
+                        <select id="offline-resume-select" class="offline-select" style="display:none; margin-top:10px;"></select>
+                    </div>
+
+                    <div class="offline-form-row">
+                        <div class="offline-form-label">AI 主动发起</div>
+                        <div class="offline-segment-row" id="offline-ai-initiate-row">
+                            <button type="button" class="offline-segment-btn is-selected" data-offline-ai-initiate="on">允许</button>
+                            <button type="button" class="offline-segment-btn" data-offline-ai-initiate="off">由我开始</button>
+                        </div>
+                    </div>
+
+                    <div class="offline-form-row">
+                        <div class="offline-form-label">人称设定</div>
+                        <div class="offline-segment-row" id="offline-perspective-row">
+                            <button type="button" class="offline-segment-btn" data-offline-perspective="first">第一人称</button>
+                            <button type="button" class="offline-segment-btn" data-offline-perspective="second">第二人称</button>
+                            <button type="button" class="offline-segment-btn is-selected" data-offline-perspective="third">第三人称</button>
+                        </div>
+                    </div>
+
+                    <div class="offline-form-row" id="offline-new-plot-row" style="display:none;">
+                        <div class="offline-form-label">新剧情设定</div>
+                        <textarea id="offline-new-plot-input" class="offline-textarea" placeholder="时间、地点、起因…" rows="4"></textarea>
+                    </div>
+
+                    <div class="offline-form-row">
+                        <div class="offline-form-label">阅读设置</div>
+
+                        <div class="offline-reader-section">
+                            <div class="offline-reader-label">字号</div>
+                            <div class="offline-fontsize-row">
+                                <button type="button" id="offline-fontsize-decrease" class="offline-step-btn">A-</button>
+                                <div id="offline-fontsize-value" class="offline-fontsize-value">24</div>
+                                <button type="button" id="offline-fontsize-increase" class="offline-step-btn">A+</button>
+                            </div>
+                        </div>
+
+                        <div class="offline-reader-section">
+                            <div class="offline-reader-label">颜色</div>
+                            <div class="offline-swatch-row" id="offline-color-theme-row">
+                                <button type="button" class="offline-swatch is-selected" data-offline-color="soft-paper" aria-label="柔白"></button>
+                                <button type="button" class="offline-swatch soft-sepia" data-offline-color="soft-sepia" aria-label="米黄"></button>
+                                <button type="button" class="offline-swatch soft-mint" data-offline-color="soft-mint" aria-label="浅绿"></button>
+                                <button type="button" class="offline-swatch soft-blue" data-offline-color="soft-blue" aria-label="浅蓝"></button>
+                                <button type="button" class="offline-swatch dark-night" data-offline-color="dark-night" aria-label="夜色"></button>
+                                <button type="button" class="offline-swatch dark-ink" data-offline-color="dark-ink" aria-label="墨黑"></button>
+                            </div>
+                        </div>
+
+                        <div class="offline-reader-section">
+                            <div class="offline-reader-label">背景</div>
+                            <div class="offline-background-row" id="offline-background-theme-row">
+                                <button type="button" class="offline-bg-card is-selected" data-offline-bg="plain">纯净</button>
+                                <button type="button" class="offline-bg-card bg-paper" data-offline-bg="paper">纸纹</button>
+                                <button type="button" class="offline-bg-card bg-mist" data-offline-bg="mist">雾白</button>
+                                <button type="button" class="offline-bg-card bg-moon" data-offline-bg="moon">月光</button>
+                                <button type="button" class="offline-bg-card bg-night" data-offline-bg="night">夜读</button>
+                                <button type="button" class="offline-bg-card bg-custom" data-offline-bg="custom">自定义</button>
+                            </div>
+                        </div>
+
+                        <div class="offline-reader-section" id="offline-custom-bg-controls" style="display:none; margin-top:10px;">
+                            <div class="offline-reader-label">上传背景图片</div>
+                            <input type="file" id="offline-custom-bg-upload" accept="image/*" style="display:none;">
+                            <button type="button" class="offline-btn secondary" style="margin-bottom:10px;" onclick="document.getElementById('offline-custom-bg-upload').click()">从相册选择照片</button>
+                            <div id="offline-custom-sliders" style="display:none; width:100%;">
+                                <div style="display:flex; justify-content:space-between; font-size:13px; color:#666; margin-bottom:5px;">
+                                    <span>背景模糊度 (<span id="offline-bg-blur-val">0</span>px)</span>
+                                </div>
+                                <input type="range" id="offline-bg-blur-slider" min="0" max="50" value="0" style="width:100%; margin-bottom:15px;">
+                                <div style="display:flex; justify-content:space-between; font-size:13px; color:#666; margin-bottom:5px;">
+                                    <span>卡片透明度 (<span id="offline-card-opacity-val">80</span>%)</span>
+                                </div>
+                                <input type="range" id="offline-card-opacity-slider" min="0" max="100" value="80" style="width:100%;">
+                            </div>
+                        </div>
+
+                        <div class="offline-reader-section">
+                            <div class="offline-reader-label">段评</div>
+                            <div class="offline-segment-row" id="offline-comments-row">
+                                <button type="button" class="offline-segment-btn is-selected" data-offline-comments="on">开启</button>
+                                <button type="button" class="offline-segment-btn" data-offline-comments="off">关闭</button>
+                            </div>
+                        </div>
+
+                        <div class="offline-reader-section">
+                            <div class="offline-reader-label">自定义 CSS</div>
+                            <textarea id="offline-custom-css-input" class="offline-textarea" style="min-height:120px; resize:vertical; font-family:Consolas, Menlo, monospace;" placeholder="#offline-mode-overlay { background: #111; }&#10;.offline-novel-entry { background: rgba(255,255,255,0.88); }" rows="6"></textarea>
+                            <div style="margin-top:6px; font-size:12px; line-height:1.6; color:#777;">保存后应用到长叙事模式。可写完整 CSS；只写声明时会自动作用到长叙事外层。</div>
+                        </div>
+                    </div>
+
+                    <div class="offline-form-row">
+                        <div class="offline-form-label">总结区域</div>
+                        <div class="offline-summary-panel">
+                            <div class="offline-summary-setting-row">
+                                <div class="offline-summary-setting-copy">
+                                    <div class="offline-summary-setting-title">自动总结</div>
+                                    <div class="offline-summary-setting-desc">按楼层节奏自动整理剧情重点，方便后续回看和注入线上记忆。</div>
+                                </div>
+                                <div class="offline-segment-row" id="offline-summary-auto-row">
+                                    <button type="button" class="offline-segment-btn is-selected" data-offline-summary-auto="on">开启</button>
+                                    <button type="button" class="offline-segment-btn" data-offline-summary-auto="off">关闭</button>
+                                </div>
+                            </div>
+
+                            <div class="offline-summary-frequency-row">
+                                <span>每</span>
+                                <input id="offline-summary-frequency-input" class="offline-summary-frequency-input" type="number" min="1" max="200" step="1" value="10">
+                                <span>楼自动总结一次</span>
+                            </div>
+
+                            <div class="offline-summary-actions">
+                                <button id="offline-summary-manual-btn" type="button" class="offline-btn secondary">手动总结指定楼层</button>
+                            </div>
+
+                            <div id="offline-summary-range-hint" class="offline-summary-range-hint">进入剧情后，可以按楼层范围手动总结。</div>
+                            <div id="offline-summary-status" class="offline-summary-status" style="display:none;"></div>
+                            <div id="offline-summary-list" class="offline-summary-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="offline-start-btn" type="button" class="offline-btn primary full">开始互动</button>
+            </div>
+        </div>
+    </div>
+    <!-- Wallet View (Korean Minimalist) -->
+    <div id="wallet-view" style="display: none;">
+        <!-- Top Bar -->
+        <div class="wallet-header">
+            <div class="wallet-back-btn" onclick="Wallet.close()">
+                <i class='bx bx-chevron-left'></i>
+            </div>
+            <div class="wallet-user-info">
+                <img src="assets/chushitouxiang.jpg" class="wallet-avatar" id="wallet-user-avatar">
+                <span class="wallet-username" id="wallet-username">用户</span>
+            </div>
+            <div style="width: 24px;"></div> <!-- Placeholder for balance -->
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="wallet-content">
+            <div id="wallet-home-page" class="wallet-page">
+                <!-- Asset Card -->
+                <div class="wallet-card">
+                    <div class="wallet-card-label">总资产 (CNY)</div>
+                    <div class="wallet-card-amount" id="wallet-total-assets">0.00</div>
+                    <div class="wallet-card-row">
+                        <div class="wallet-card-col">
+                            <div class="wallet-card-col-label">转账收入</div>
+                            <div class="wallet-card-col-value" id="wallet-income-transfer">0.00</div>
+                        </div>
+                        <div class="wallet-card-col" style="text-align: right;">
+                            <div class="wallet-card-col-label">打工收入</div>
+                            <div class="wallet-card-col-value" id="wallet-income-work">0.00</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transactions -->
+                <div class="wallet-list-header">
+                    <div class="wallet-section-title">明细</div>
+                    <div class="wallet-filter-group">
+                        <button class="wallet-filter-btn active" id="wallet-filter-all" onclick="Wallet.setFilter('all')">全部</button>
+                        <button class="wallet-filter-btn" id="wallet-filter-income" onclick="Wallet.setFilter('income')">收入</button>
+                        <button class="wallet-filter-btn" id="wallet-filter-expense" onclick="Wallet.setFilter('expense')">支出</button>
+                    </div>
+                </div>
+
+                <div id="wallet-list" class="wallet-list">
+                    <!-- Items will be injected here -->
+                </div>
+            </div>
+
+            <div id="wallet-family-page" class="wallet-page wallet-family-page" style="display:none;">
+                <div class="wallet-family-block">
+                    <div class="wallet-family-group-title">我收到的亲属卡</div>
+                    <div id="wallet-family-received-list" class="wallet-family-received-list"></div>
+                </div>
+
+                <div class="wallet-family-block">
+                    <div class="wallet-family-group-title">我赠送的亲属卡</div>
+                    <div id="wallet-family-sent-list" class="wallet-family-sent-list"></div>
+                    <button id="wallet-family-send-btn" type="button" class="wallet-family-send-card">
+                        <div class="wallet-family-send-text">赠送亲属卡</div>
+                        <div class="wallet-family-send-arrow" aria-hidden="true">&gt;</div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="wallet-records-page" class="wallet-page wallet-records-page" style="display:none;">
+                <div id="gift-cabinet-page" class="gift-cabinet-page">
+                    <div class="gift-cabinet-page-header">
+                        <button id="gift-cabinet-profile-btn" type="button" class="gift-cabinet-page-profile" aria-label="选择角色">
+                            <img id="gift-cabinet-avatar" class="gift-cabinet-page-avatar" alt="">
+                            <span class="gift-cabinet-page-switch" aria-hidden="true">▾</span>
+                        </button>
+                        <div id="gift-cabinet-title" class="gift-cabinet-page-title"></div>
+                        <button id="gift-cabinet-settings" type="button" class="gift-cabinet-page-settings" aria-label="设置">
+                            <i class='bx bx-cog'></i>
+                        </button>
+                    </div>
+                    <div class="gift-cabinet-page-body">
+                        <div id="gift-cabinet-empty" class="gift-cabinet-page-empty" style="display:none;">暂无礼物，快去安排打工吧~</div>
+                        <div id="gift-cabinet-grid" class="gift-cabinet-grid"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="wallet-work-page" class="wallet-page" style="display:none;">
+                <div class="work-page-head">
+                    <div class="work-page-header-row">
+                        <div class="work-page-title">角色经营</div>
+                        <div id="work-leaderboard-toggle" class="work-leaderboard-toggle">
+                            <i class='bx bx-bar-chart-alt-2'></i> 排行榜
+                        </div>
+                    </div>
+                    <div class="work-page-subtitle">快让TA来打工赚钱</div>
+                </div>
+                <div id="work-role-grid" class="work-role-grid"></div>
+                <div id="work-leaderboard-view" class="work-leaderboard-view" style="display:none;">
+                    <!-- Leaderboard Content -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Tab Bar -->
+        <div class="wallet-tab-bar">
+            <div class="wallet-tab-item active" id="wallet-tab-home" data-wallet-tab="home">
+                <div class="wallet-tab-icon"><i class='bx bxs-home-alt-2'></i></div>
+                <div class="wallet-tab-text">首页</div>
+            </div>
+            <div class="wallet-tab-item" id="wallet-tab-family" data-wallet-tab="family">
+                <div class="wallet-tab-icon"><i class='bx bx-credit-card'></i></div>
+                <div class="wallet-tab-text">亲属卡</div>
+            </div>
+            <div class="wallet-tab-item" id="wallet-tab-work" data-wallet-tab="work">
+                <div class="wallet-tab-icon"><i class='bx bx-store'></i></div>
+                <div class="wallet-tab-text">经营</div>
+            </div>
+            <div class="wallet-tab-item" id="wallet-tab-records" data-wallet-tab="records">
+                <div class="wallet-tab-icon"><i class='bx bx-notepad'></i></div>
+                <div class="wallet-tab-text">记录</div>
+            </div>
+        </div>
+
+        <div id="gift-role-mask" class="gift-role-mask" style="display:none;">
+            <div class="gift-role-card" role="dialog" aria-modal="true">
+                <div class="gift-role-title">选择角色</div>
+                <div id="gift-role-list" class="gift-role-list"></div>
+            </div>
+        </div>
+
+        <div id="gift-settings-mask" class="gift-settings-mask" style="display:none;">
+            <div class="gift-settings-card" role="dialog" aria-modal="true">
+                <div class="gift-settings-title">礼物柜设置</div>
+                <button id="gift-settings-upload" type="button" class="gift-settings-btn">更换背景图</button>
+                <button id="gift-settings-reset" type="button" class="gift-settings-btn ghost">恢复默认背景</button>
+            </div>
+        </div>
+        <input id="gift-bg-input" type="file" accept="image/*" style="display:none;">
+
+        <div id="gift-detail-mask" class="gift-detail-mask" style="display:none;">
+            <div class="gift-detail-card" role="dialog" aria-modal="true">
+                <button id="gift-detail-close" type="button" class="gift-detail-close" aria-label="关闭">✕</button>
+                <div id="gift-detail-icon" class="gift-detail-icon" aria-hidden="true"></div>
+                <div id="gift-detail-name" class="gift-detail-name"></div>
+                <div id="gift-detail-desc" class="gift-detail-desc"></div>
+            </div>
+        </div>
+
+        <div id="gift-pool-modal-mask" class="gift-pool-modal-mask" style="display:none;">
+            <div class="gift-pool-modal-card" role="dialog" aria-modal="true">
+                <button type="button" class="gift-pool-modal-close" aria-label="关闭">✕</button>
+                <div class="gift-pool-modal-icon"><i class='bx bx-heart'></i></div>
+                <div class="gift-pool-modal-title"></div>
+                <div class="gift-pool-modal-desc"></div>
+                <button type="button" class="gift-pool-modal-ok">知道了</button>
+            </div>
+        </div>
+
+        <div id="work-sheet-mask" class="work-sheet-mask" style="display:none;">
+            <div class="work-sheet" role="dialog" aria-modal="true">
+                <div class="work-sheet-handle" aria-hidden="true"></div>
+
+                <div class="work-sheet-top">
+                    <div class="work-sheet-role">
+                        <img id="work-sheet-avatar" class="work-sheet-avatar" alt="">
+                        <div class="work-sheet-meta">
+                            <div id="work-sheet-name" class="work-sheet-name"></div>
+                            <div id="work-sheet-status" class="work-sheet-status"></div>
+                        </div>
+                    </div>
+
+                    <div class="work-sheet-stats">
+                        <div class="work-stat">
+                            <div class="work-stat-label">体力</div>
+                            <div class="work-stat-bar">
+                                <div id="work-sheet-stamina-fill" class="work-stat-fill"></div>
+                            </div>
+                            <div id="work-sheet-stamina-text" class="work-stat-text"></div>
+                        </div>
+                        <div class="work-stat">
+                            <div class="work-stat-label">心情</div>
+                            <div id="work-sheet-mood-text" class="work-stat-text"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="work-sheet-actions">
+                    <button id="work-btn-auto" type="button" class="work-btn work-btn-primary">让 TA 自己选</button>
+                    <button id="work-btn-manual" type="button" class="work-btn work-btn-ghost">为 TA 安排</button>
+                </div>
+
+                <div id="work-job-list-wrap" class="work-job-list-wrap" style="display:none;">
+                    <div class="work-job-list-title">职业</div>
+                    <div id="work-job-list" class="work-job-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="work-note-mask" class="work-note-mask" style="display:none;">
+            <div class="work-note-card" role="dialog" aria-modal="true">
+                <div class="work-note-title">打工小记</div>
+                <div id="work-note-loading" class="work-note-loading" style="display:none;">
+                    <div class="work-note-spinner" aria-hidden="true"></div>
+                    <div class="work-note-loading-text">正在工作中...</div>
+                </div>
+                <div id="work-note-job" class="work-note-job"></div>
+                <div id="work-note-gift" class="work-gift-card" style="display:none;">
+                    <div id="work-note-gift-icon" class="work-gift-icon" aria-hidden="true"></div>
+                    <div class="work-gift-meta">
+                        <div id="work-note-gift-name" class="work-gift-name"></div>
+                        <div id="work-note-gift-desc" class="work-gift-desc"></div>
+                    </div>
+                </div>
+                <div id="work-note-diary" class="work-note-text diary-text"></div>
+                <div id="work-note-luck" class="work-note-luck" style="display:none;"></div>
+                <div class="work-note-footer">
+                    <div id="work-note-amount" class="work-note-amount"></div>
+                    <button id="work-note-accept" type="button" class="work-btn work-btn-primary">收下</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="work-detail-mask" class="work-detail-mask" style="display:none;">
+            <div class="work-detail-modal" role="dialog" aria-modal="true">
+                <button id="work-detail-close" type="button" class="work-detail-close" aria-label="关闭">✕</button>
+                <div class="work-detail-avatar-area">
+                    <div id="work-detail-avatar-wrap" class="work-detail-avatar-wrap">
+                        <img id="work-detail-avatar" class="work-detail-avatar" alt="">
+                        <div id="work-detail-fx-layer" class="work-detail-fx-layer" aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div id="work-detail-name" class="work-detail-name"></div>
+                <div id="work-detail-status" class="work-detail-status"></div>
+                <div id="work-detail-gold" class="work-detail-gold"></div>
+
+                <div class="work-detail-stats">
+                    <div class="work-detail-stat">
+                        <div class="work-detail-stat-head">
+                            <div class="work-detail-stat-label">心情</div>
+                            <div id="work-detail-mood-text" class="work-detail-stat-value"></div>
+                        </div>
+                        <div class="work-detail-bar">
+                            <div id="work-detail-mood-fill" class="work-detail-bar-fill"></div>
+                        </div>
+                    </div>
+                    <div class="work-detail-stat">
+                        <div class="work-detail-stat-head">
+                            <div class="work-detail-stat-label">体力</div>
+                            <div id="work-detail-stamina-text" class="work-detail-stat-value"></div>
+                        </div>
+                        <div class="work-detail-bar">
+                            <div id="work-detail-stamina-fill" class="work-detail-bar-fill"></div>
+                        </div>
+                    </div>
+                    <div class="work-detail-stat">
+                        <div class="work-detail-stat-head">
+                            <div class="work-detail-stat-label">好运加持</div>
+                            <div id="work-detail-luck-text" class="work-detail-stat-value"></div>
+                        </div>
+                        <div id="work-detail-luck-bar" class="work-detail-bar work-detail-luck-bar">
+                            <div id="work-detail-luck-fill" class="work-detail-bar-fill work-detail-luck-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="work-detail-actions">
+                    <button id="work-detail-btn-feed" type="button" class="work-detail-action" data-action="feed">
+                        <span class="work-detail-action-emoji">🍗</span>
+                        <span class="work-detail-action-text">投喂</span>
+                    </button>
+                    <button id="work-detail-btn-hug" type="button" class="work-detail-action" data-action="hug">
+                        <span class="work-detail-action-emoji">🤍</span>
+                        <span class="work-detail-action-text">抱抱</span>
+                    </button>
+                    <button id="work-detail-btn-kiss" type="button" class="work-detail-action" data-action="kiss">
+                        <span class="work-detail-action-emoji">💋</span>
+                        <span class="work-detail-action-text">亲亲</span>
+                    </button>
+                </div>
+
+                <div id="work-feed-menu" class="work-feed-menu" style="display:none;">
+                    <button type="button" class="work-feed-item" data-feed-type="main">
+                        <span class="work-feed-item-name">主食类</span>
+                        <span class="work-feed-item-price">15¥</span>
+                    </button>
+                    <button type="button" class="work-feed-item" data-feed-type="veg">
+                        <span class="work-feed-item-name">蔬菜类</span>
+                        <span class="work-feed-item-price">5¥</span>
+                    </button>
+                    <button type="button" class="work-feed-item" data-feed-type="fast">
+                        <span class="work-feed-item-name">速食类</span>
+                        <span class="work-feed-item-price">10¥</span>
+                    </button>
+                    <button type="button" class="work-feed-item" data-feed-type="dessert">
+                        <span class="work-feed-item-name">甜品类</span>
+                        <span class="work-feed-item-price">30¥</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="work-confirm-mask" class="work-confirm-mask" style="display:none;">
+                <div class="work-confirm-card" role="dialog" aria-modal="true">
+                    <div id="work-confirm-title" class="work-confirm-title"></div>
+                    <div id="work-confirm-desc" class="work-confirm-desc"></div>
+                    <div class="work-confirm-actions">
+                        <button id="work-confirm-cancel" type="button" class="work-confirm-btn work-confirm-btn-ghost">取消</button>
+                        <button id="work-confirm-ok" type="button" class="work-confirm-btn work-confirm-btn-primary">确定</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 引入本地大容量存储库 localForage -->
+    <script src="vendor/localforage/localforage.min.js"></script>
+    <script src="node_modules/jszip/dist/jszip.min.js"></script>
+    <script src="JS/storage/wechat-store.js"></script>
+
+    <!-- 1. 引入App逻辑 -->
+    <script src="JS/apps.js"></script>
+    <script src="JS/redbook/horror-channel.js"></script>
+    <script src="JS/redbook/entertainment-channel.js"></script>
+    <script src="JS/redbook/nsfw-channel.js"></script>
+    <script src="JS/redbook/abo-channel.js"></script>
+    <script src="JS/redbook/fanfic-channel.js"></script>
+    <script src="JS/redbook.js"></script>
+    <!-- 新增：聊天专用逻辑 -->
+    <script src="JS/api.js"></script>
+    <script src="JS/chat.js"></script>
+    <script src="JS/chat/sec-02-core-render.js"></script>
+    <script src="JS/chat/sec-03-ai-prompt.js"></script>
+    <script src="JS/chat/sec-04-role-state.js"></script>
+    <script src="JS/chat/sec-05-ai-response.js"></script>
+    <script src="JS/chat/sec-06-map-location.js"></script>
+    <script src="JS/chat/sec-07-call-outgoing.js"></script>
+    <script src="JS/chat/sec-08-call-incoming.js"></script>
+    <script src="JS/chat/korean-call-ui.js"></script>
+    <script src="JS/chat/sec-09-menu-settings.js"></script>
+    <script src="JS/chat/sec-10-navigation-tools.js"></script>
+    <script src="JS/chat/sec-10b-memory-archive-v2.js"></script>
+    <script src="JS/chat/group/group-core.js"></script>
+    <script src="JS/chat/group/group-ui.js"></script>
+    <script src="JS/wallet.js"></script>
+    <script src="JS/work.js"></script>
+    <script src="JS/chat-settings.js"></script>
+    <script src="JS/moments.js"></script>
+    <script src="JS/我的/profile.js"></script>
+    <script src="JS/我的/sports.js"></script>
+    <script src="JS/我的/core.js"></script>
+    <script src="JS/worldbook.js?v=2"></script>
+
+    <!-- 2. 引入 技能数据逻辑 -->
+    <script src="JS/widgets.js?v=3"></script>
+    <script src="JS/appearance.js"></script>
+    <script src="JS/settings.js"></script>
+    <!-- 3. 引入 总系统 的逻辑 (必须引入这个，按钮才会有反应！) -->
+    <script src="JS/system.js"></script>
+    <script>
+        /* =========================================================
+           Service Worker 注册逻辑 (必须加这个才能安装到桌面！)
+           ========================================================= */
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('✅ ServiceWorker 注册成功: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('❌ ServiceWorker 注册失败: ', err);
+                    });
+            });
+        }
+
+        /* =========================================================
+           初始化逻辑
+           ========================================================= */
+        window.addEventListener('load', function () {
+            // 1. 启动外观恢复 (壁纸、App图标)
+            if (window.initDesktopState) {
+                window.initDesktopState();
+            } else {
+                setTimeout(() => window.initDesktopState && window.initDesktopState(), 100);
+            }
+
+            // 2. 启动组件恢复 (组件图片)
+            if (window.initWidgetState) {
+                window.initWidgetState();
+            } else {
+                setTimeout(() => window.initWidgetState && window.initWidgetState(), 100);
+            }
+
+        }); // 结束 window load
+    </script>
+    <script>
+        window.currentUploadTargetId = '';
+        function triggerWidgetUpload(imgId) {
+            window.currentUploadTargetId = 'img-' + imgId;
+            window.currentEditingAppIndex = -1;
+            window.activeImgId = null;
+            window.activeHintId = null;
+            const uploader = document.getElementById('global-uploader');
+            if (uploader) {
+                uploader.value = '';
+                uploader.click();
+            }
+        }
+    </script>
+
+    <script>
+        // === INS卡片功能逻辑 (整合版) ===
+
+        // 1. 实时更新卡片顶部时间
+        function updateAesTime() {
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const timeString = `${hours}:${minutes} ${ampm}`;
+
+            const timeEl = document.getElementById('aes-live-time');
+            if (timeEl) timeEl.innerText = timeString;
+        }
+        setInterval(updateAesTime, 1000); // 每秒刷新
+        updateAesTime(); // 立即执行
+
+        // 2. 保存气泡文案
+        function saveAesText() {
+            const textEl = document.getElementById('aes-editable-text');
+            if (textEl) {
+                localStorage.setItem('aes_bubble_text', textEl.innerText);
+            }
+        }
+
+        // 保存圆形组件气泡文案
+        function saveCircularBubbleText() {
+            const textEl = document.getElementById('circular-bubble-text');
+            if (textEl) {
+                localStorage.setItem('circular_bubble_text', textEl.innerText);
+            }
+        }
+
+        // 3. 页面加载时恢复文案
+        window.addEventListener('load', function () {
+            const savedText = localStorage.getItem('aes_bubble_text');
+            const textEl = document.getElementById('aes-editable-text');
+            if (savedText && textEl) {
+                textEl.innerText = savedText;
+            }
+
+            const savedCircularText = localStorage.getItem('circular_bubble_text');
+            const circularTextEl = document.getElementById('circular-bubble-text');
+            if (savedCircularText && circularTextEl) {
+                circularTextEl.innerText = savedCircularText;
+            }
+        });
+        
+        // 4. 桌面滑动指示器逻辑
+        window.addEventListener('load', function() {
+            const container = document.getElementById('desktop-pages-container');
+            const dots = document.querySelectorAll('#page-indicators .dot');
+            if (!container || dots.length === 0) return;
+
+            container.addEventListener('scroll', function() {
+                const scrollLeft = container.scrollLeft;
+                const width = container.clientWidth;
+                const activeIndex = Math.round(scrollLeft / width);
+
+                dots.forEach((dot, index) => {
+                    if (index === activeIndex) {
+                        dot.classList.add('active');
+                    } else {
+                        dot.classList.remove('active');
+                    }
+                });
+            });
+        });
+    </script>
+
+    <div id="text-edit-modal" class="text-edit-modal" style="display:none;">
+        <div class="text-edit-card">
+            <div class="text-edit-title">修改文案</div>
+            <div class="text-edit-body">
+                <input id="text-edit-input" class="text-edit-input" type="text" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="text-edit-actions">
+                <button id="text-edit-cancel" type="button" class="text-edit-btn cancel">取消</button>
+                <button id="text-edit-save" type="button" class="text-edit-btn save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="countdown-settings-modal" class="countdown-settings-modal">
+        <div class="countdown-settings-card" onclick="event.stopPropagation()">
+            <div class="countdown-settings-title">倒数日设置</div>
+            <div class="countdown-settings-body">
+                <div class="countdown-settings-field">
+                    <label class="countdown-settings-label" for="countdown-settings-name">事件名字</label>
+                    <input id="countdown-settings-name" class="countdown-settings-input" type="text" autocomplete="off" spellcheck="false" placeholder="例如：见面纪念日">
+                </div>
+                <div class="countdown-settings-field">
+                    <label class="countdown-settings-label" for="countdown-settings-datetime">日期</label>
+                    <input id="countdown-settings-datetime" class="countdown-settings-input" type="date">
+                </div>
+                <div class="countdown-settings-field">
+                    <label class="countdown-settings-label" for="countdown-settings-color">文字颜色</label>
+                    <div class="countdown-settings-color-row">
+                        <input id="countdown-settings-color" class="countdown-settings-color-input" type="color" value="#FBCFE8">
+                        <div class="countdown-settings-tip">修改后会同步到桌面外观导出 / 导入。</div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-edit-actions">
+                <button id="countdown-settings-cancel" type="button" class="text-edit-btn cancel">取消</button>
+                <button id="countdown-settings-save" type="button" class="text-edit-btn save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="offline-diary-debug-modal" style="display:none; position:fixed; left:0; top:0; right:0; bottom:0; z-index: 30000; align-items:center; justify-content:center; background: rgba(0,0,0,0.38); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);">
+        <div style="width: 86%; max-width: 360px; background:#fff; border-radius: 18px; box-shadow: 0 18px 60px rgba(0,0,0,0.22); overflow:hidden;">
+            <div style="padding: 14px 16px; border-bottom: 1px solid rgba(0,0,0,0.06); font-weight: 700; color:#111; text-align:center;">离线日记调试</div>
+            <div id="offline-diary-debug-modal-text" style="padding: 16px; font-size: 13px; color:#333; line-height: 1.5; text-align:center;">正在生成…</div>
+            <div style="padding: 12px 16px; border-top: 1px solid rgba(0,0,0,0.06); display:flex; justify-content:center;">
+                <button id="offline-diary-debug-modal-close" type="button" style="border:none; background: rgba(0,0,0,0.06); color:#333; font-size: 13px; padding: 10px 16px; border-radius: 12px; cursor:pointer;">关闭</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

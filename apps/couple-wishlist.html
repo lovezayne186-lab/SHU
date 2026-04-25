@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#e7e7e7">
+    <title>心愿单</title>
+    <script src="../vendor/localforage/localforage.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #F8F9FA;
+            --card-bg: #FFFFFF;
+            --text-main: #333333;
+            --text-sub: #999999;
+            --accent-color: #FF4D4F;
+            --font-family: "PingFang SC", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            min-height: 100vh;
+            padding-bottom: 100px;
+            overflow-x: hidden;
+        }
+
+        /* 1. 顶部导航 */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: calc(env(safe-area-inset-top, 40px) + 54px);
+            padding-top: env(safe-area-inset-top, 40px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-left: 16px;
+            padding-right: 16px;
+            background: rgba(248, 249, 250, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 100;
+        }
+
+        .header-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: var(--text-main);
+            cursor: pointer;
+            border: none;
+            background: transparent;
+        }
+
+        .header-btn svg {
+            width: 22px;
+            height: 22px;
+            stroke: currentColor;
+        }
+
+        .header-title {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        /* 2. 用户状态区 */
+        .status-area {
+            margin-top: calc(env(safe-area-inset-top, 40px) + 70px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .avatar-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            height: 64px;
+            margin-bottom: 12px;
+        }
+
+        .avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            object-fit: cover;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .avatar.role {
+            position: relative;
+            z-index: 2;
+        }
+
+        .avatar.user {
+            margin-left: -20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-text {
+            font-size: 13px;
+            color: var(--text-sub);
+            letter-spacing: 1px;
+        }
+
+        /* 3. 核心双栏布局 */
+        .wishlist-container {
+            padding: 0 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* 错位瀑布流效果 */
+        .column-left {
+            margin-top: 0;
+        }
+
+        .column-right {
+            margin-top: 24px;
+        }
+
+        .wish-card {
+            background: var(--card-bg);
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .wish-card:active {
+            transform: scale(0.98);
+        }
+
+        /* 左侧卡片圆角：右上大，右下小 */
+        .column-left .wish-card {
+            border-radius: 24px 32px 8px 24px;
+        }
+
+        /* 右侧卡片圆角：左上大，左下小 */
+        .column-right .wish-card {
+            border-radius: 32px 24px 24px 8px;
+        }
+
+        /* 共同心愿：横跨两栏 */
+        .wish-card.common-wish {
+            grid-column: span 2;
+            background: linear-gradient(135deg, #ffffff 0%, #fff5f6 100%);
+            border-radius: 32px !important;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+
+        .wish-title {
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.4;
+            color: var(--text-main);
+        }
+
+        .wish-date {
+            font-size: 11px;
+            color: var(--text-sub);
+        }
+
+        /* 达成状态 */
+        .wish-card.is-done {
+            background: #FAFAFA;
+        }
+
+        .wish-card.is-done .wish-title {
+            color: #BBBBBB;
+            text-decoration: none;
+        }
+
+        .status-icon {
+            position: absolute;
+            right: 16px;
+            bottom: 16px;
+            display: none;
+        }
+
+        .wish-card.is-done .status-icon {
+            display: block;
+            color: var(--accent-color);
+            filter: drop-shadow(0 0 4px rgba(255, 77, 79, 0.3));
+        }
+
+        /* 4. 底部悬浮按钮 */
+        .fab-container {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            padding: 0 32px;
+            z-index: 100;
+        }
+
+        .fab {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 30px;
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .fab:active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.85);
+        }
+
+        .fab.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        /* 名字标签 */
+        .column-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-sub);
+            margin-bottom: 8px;
+            padding: 0 8px;
+        }
+
+        .empty-state {
+            grid-column: span 2;
+            text-align: center;
+            padding: 60px 0;
+            color: var(--text-sub);
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .wish-card {
+            animation: fadeInUp 0.5s ease backwards;
+        }
+
+        /* 适配移动端 */
+        @media (max-width: 350px) {
+            .wish-card {
+                padding: 16px;
+            }
+            .wish-title {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <button class="header-btn" id="back-btn">＜</button>
+        <div class="header-title">心愿单</div>
+        <button class="header-btn" id="magic-btn" type="button" aria-label="生成角色心愿">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3.5 13.6 8.4 18.5 10 13.6 11.6 12 16.5 10.4 11.6 5.5 10 10.4 8.4 12 3.5Z"></path>
+                <path d="M18 15.5 18.8 18 21.5 18.8 18.8 19.6 18 22 17.2 19.6 14.5 18.8 17.2 18 18 15.5Z"></path>
+            </svg>
+        </button>
+    </header>
+
+    <div class="status-area">
+        <div class="avatar-group">
+            <img id="avatar-role" src="" class="avatar role" alt="Role">
+            <img id="avatar-user" src="" class="avatar user" alt="User">
+        </div>
+        <div class="status-text" id="status-label">共同编织的第 0 个期待</div>
+    </div>
+
+    <main class="wishlist-container" id="wishlist-grid">
+        <div class="column column-left" id="col-left">
+            <div class="column-header" id="name-role-label">TA</div>
+            <!-- 左侧卡片 -->
+        </div>
+        <div class="column column-right" id="col-right">
+            <div class="column-header" id="name-user-label">你</div>
+            <!-- 右侧卡片 -->
+        </div>
+    </main>
+
+    <div class="fab-container">
+        <button class="fab" id="add-btn">
+            <span id="add-icon">+</span>
+            <span id="add-text">添加我们的期待</span>
+        </button>
+    </div>
+
+    <script>
+        const STORAGE_BASE_KEY = 'couple_wishlist_state_v2'; // 升级版本号以适应新 UI
+        const gridEl = document.getElementById('wishlist-grid');
+        const colLeft = document.getElementById('col-left');
+        const colRight = document.getElementById('col-right');
+        const addBtn = document.getElementById('add-btn');
+        const magicBtn = document.getElementById('magic-btn');
+        const backBtn = document.getElementById('back-btn');
+        const avatarRole = document.getElementById('avatar-role');
+        const avatarUser = document.getElementById('avatar-user');
+        const statusLabel = document.getElementById('status-label');
+        const nameRoleLabel = document.getElementById('name-role-label');
+        const nameUserLabel = document.getElementById('name-user-label');
+        const addTextEl = document.getElementById('add-text');
+
+        const runtime = {
+            roleId: '',
+            roleName: 'TA',
+            userName: '你',
+            rolePrompt: '',
+            userBackground: '',
+            worldBookPrompt: '',
+            items: [],
+            generating: false,
+        };
+
+        function getParentWindow() {
+            try { return window.parent && window.parent !== window ? window.parent : null; } catch (e) { return null; }
+        }
+
+        function resolveRoleId() {
+            try {
+                const has = localStorage.getItem('couple_has_linked_v1') === 'true';
+                const rid = String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
+                if (has && rid) return rid;
+            } catch (e) {}
+            return String(localStorage.getItem('currentChatId') || '').trim();
+        }
+
+        function normalizeWorldBookIds(raw) {
+            if (Array.isArray(raw)) return raw.map(item => String(item || '').trim()).filter(Boolean);
+            const text = String(raw || '').trim();
+            return text ? [text] : [];
+        }
+
+        function readWorldBookPromptForProfile(profile) {
+            const p = profile && typeof profile === 'object' ? profile : {};
+            const ids = normalizeWorldBookIds(p.worldbookId);
+            if (!ids.length) return '';
+            const pw = getParentWindow();
+            try {
+                if (pw && typeof pw.buildWorldBookPrompt === 'function') {
+                    const built = String(pw.buildWorldBookPrompt(ids) || '').trim();
+                    if (built) return built;
+                }
+            } catch (e) {}
+            try {
+                const raw = localStorage.getItem('wechat_worldbooks') || '{}';
+                const books = JSON.parse(raw);
+                const parts = [];
+                ids.forEach((id) => {
+                    const book = books && typeof books === 'object' ? books[id] : null;
+                    if (!book || typeof book !== 'object') return;
+                    const title = String(book.title || '').trim();
+                    const content = String(book.content || '').trim();
+                    if (!title && !content) return;
+                    parts.push(`世界书标题：${title || '未命名'}\n世界书内容：${content || '（无内容）'}`);
+                });
+                return parts.join('\n\n').trim();
+            } catch (e2) {
+                return '';
+            }
+        }
+
+        function readMeta(roleId) {
+            const rid = String(roleId || '').trim();
+            let profiles = {}, personas = {};
+            const pw = getParentWindow();
+            try {
+                profiles = pw && pw.charProfiles ? pw.charProfiles : JSON.parse(localStorage.getItem('wechat_charProfiles') || '{}');
+                personas = pw && pw.userPersonas ? pw.userPersonas : JSON.parse(localStorage.getItem('wechat_userPersonas') || '{}');
+            } catch (e) {}
+            
+            const p = profiles[rid] || {};
+            const u = personas[rid] || {};
+            
+            return {
+                roleName: p.remark || p.nickName || p.name || 'TA',
+                userName: u.name || localStorage.getItem('user_name') || '你',
+                rolePrompt: p.desc || p.persona || p.style || '',
+                userBackground: u.setting || u.persona || u.background || '',
+                worldBookPrompt: readWorldBookPromptForProfile(p),
+                roleAvatar: p.avatar || '../assets/avatars/avatar-2.svg',
+                userAvatar: u.avatar || '../assets/avatars/avatar-1.svg'
+            };
+        }
+
+        function readChatHistory(roleId) {
+            const rid = String(roleId || '').trim();
+            if (!rid) return [];
+            const pw = getParentWindow();
+            try {
+                if (pw && pw.chatData && Array.isArray(pw.chatData[rid])) return pw.chatData[rid].slice();
+            } catch (e) {}
+            try {
+                const raw = localStorage.getItem('wechat_chatData') || '{}';
+                const parsed = JSON.parse(raw);
+                return parsed && Array.isArray(parsed[rid]) ? parsed[rid].slice() : [];
+            } catch (e2) {
+                return [];
+            }
+        }
+
+        function buildShortMemory(roleId) {
+            const history = readChatHistory(roleId);
+            const lines = [];
+            for (let i = 0; i < history.length; i++) {
+                const msg = history[i];
+                if (!msg || typeof msg !== 'object') continue;
+                const role = String(msg.role || '').trim();
+                if (role !== 'me' && role !== 'ai') continue;
+                const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+                if (!content) continue;
+                lines.push(`${role === 'me' ? runtime.userName : runtime.roleName}：${content}`);
+            }
+            if (!lines.length) return `${runtime.roleName}和${runtime.userName}最近聊天不多，整体氛围偏日常、温柔、亲密。`;
+            return lines.slice(-24).join('\n');
+        }
+
+        function buildWishlistPrompts() {
+            const shortMemory = buildShortMemory(runtime.roleId);
+            const systemPrompt = [
+                '[[PROMPT_CLASS:ROLE_JSON_TASK]]',
+                '[[SCENE:COUPLE_WISHLIST_GENERATION]]',
+                '【角色身份】',
+                `你现在不是助手，你是${runtime.roleName}。`,
+                runtime.rolePrompt ? `你的人设与相处气质：${runtime.rolePrompt}` : '',
+                runtime.worldBookPrompt ? `【世界书背景】\n${runtime.worldBookPrompt}` : '',
+                '',
+                '【用户身份】',
+                `和你一起进入情侣空间的人是${runtime.userName}，${runtime.userName}是你的恋人。`,
+                runtime.userBackground ? `关于${runtime.userName}的背景：${runtime.userBackground}` : '',
+                '',
+                '【当前页面场景】',
+                '当前页面是情侣空间里的“心愿单”。这里记录的是你们恋爱中真正会写下来的期待和愿望。',
+                '',
+                '【当前任务】',
+                `请生成 1 条最像${runtime.roleName}本人会写下的心愿，这条心愿是希望恋人${runtime.userName}来满足的。`,
+                '心愿类型可以从以下方向里任选一种：想让恋人送的礼物、想让恋人为自己完成的事、想让恋人满足的小愿望。',
+                '这条心愿要贴近关系状态，带一点生活感和画面感，像真的会被写进卡片，而不是空泛口号。',
+                '',
+                '【输出格式】',
+                '你必须只输出 JSON 对象，不要解释，不要 markdown，不要代码块，不要额外文字。',
+                'JSON 格式必须是：{"title":"心愿内容","isCommon":false}',
+                'title 不超过 18 个字。',
+                'isCommon 固定为 false。'
+            ].filter(Boolean).join('\n');
+
+            const userPrompt = [
+                '【关系上下文】',
+                `你是${runtime.roleName}，${runtime.userName}是你的恋人。`,
+                '下面这些近期聊天只是帮助你参考你们最近的关系温度、生活重点和灵感来源，不要照抄原话：',
+                shortMemory,
+                '',
+                '【补充要求】',
+                '优先写温柔、具体、容易想象、像角色本人会认真记下来的小愿望。',
+                '避免重复常见套话，避免“永远爱你”这种空泛表达，避免写成长句。'
+            ].join('\n');
+
+            return { systemPrompt, userPrompt };
+        }
+
+        function logWishlistPromptDebug(debugTag, systemPrompt, userPrompt) {
+            const tag = String(debugTag || '心愿单生成').trim() || '心愿单生成';
+            const systemText = String(systemPrompt || '');
+            const userText = String(userPrompt || '');
+            const payload = {
+                page: 'couple-wishlist',
+                tag: tag,
+                timestamp: Date.now(),
+                systemPrompt: systemText,
+                userPrompt: userText
+            };
+            try {
+                window.__couplePromptDebugHistory = Array.isArray(window.__couplePromptDebugHistory) ? window.__couplePromptDebugHistory : [];
+                window.__couplePromptDebugHistory.unshift(payload);
+                window.__couplePromptDebugHistory = window.__couplePromptDebugHistory.slice(0, 30);
+                window.__lastCoupleWishlistPromptDebug = payload;
+            } catch (e) {}
+            try {
+                console.group(`[AI Prompt][心愿单] ${tag}`);
+                console.log('=== SYSTEM PROMPT START ===\n' + systemText + '\n=== SYSTEM PROMPT END ===');
+                console.log('=== USER PROMPT START ===\n' + userText + '\n=== USER PROMPT END ===');
+                console.groupEnd();
+            } catch (e2) {
+                console.log('[AI Prompt][心愿单][' + tag + ']', payload);
+            }
+        }
+
+        async function readState() {
+            const key = `${STORAGE_BASE_KEY}_${runtime.roleId}`;
+            try {
+                const lf = window.localforage;
+                if (lf) {
+                    const obj = await lf.getItem(key);
+                    if (obj && Array.isArray(obj.items)) return obj;
+                }
+                const raw = localStorage.getItem(key);
+                return raw ? JSON.parse(raw) : { items: [] };
+            } catch (e) { return { items: [] }; }
+        }
+
+        async function writeState() {
+            const key = `${STORAGE_BASE_KEY}_${runtime.roleId}`;
+            const payload = { items: runtime.items };
+            try {
+                const lf = window.localforage;
+                if (lf) await lf.setItem(key, payload);
+                localStorage.setItem(key, JSON.stringify(payload));
+            } catch (e) {}
+        }
+
+        function render() {
+            const items = runtime.items;
+            colLeft.innerHTML = `<div class="column-header">${runtime.roleName}</div>`;
+            colRight.innerHTML = `<div class="column-header">${runtime.userName}</div>`;
+            
+            if (items.length === 0) {
+                gridEl.innerHTML = '<div class="empty-state">请在这里写下你们各自的心愿吧</div>';
+                statusLabel.textContent = '共同编织的第 0 个期待';
+                return;
+            }
+
+            // 如果之前是 empty-state，需要恢复 grid 结构
+            if (gridEl.querySelector('.empty-state')) {
+                gridEl.innerHTML = '';
+                gridEl.appendChild(colLeft);
+                gridEl.appendChild(colRight);
+            }
+
+            let leftCount = 0;
+            let rightCount = 0;
+            let totalDone = 0;
+
+            items.forEach((item, index) => {
+                if (item.completed) totalDone++;
+                
+                const card = document.createElement('div');
+                card.className = `wish-card ${item.completed ? 'is-done' : ''} ${item.isCommon ? 'common-wish' : ''}`;
+                card.style.animationDelay = `${index * 100}ms`;
+                card.innerHTML = `
+                    <div class="wish-title">${item.title}</div>
+                    <div class="wish-date">${item.date || '刚刚'}</div>
+                    <div class="status-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                    </div>
+                `;
+                
+                card.onclick = () => toggleDone(item.id);
+
+                if (item.isCommon) {
+                    gridEl.insertBefore(card, colLeft);
+                } else if (item.owner === 'role') {
+                    colLeft.appendChild(card);
+                    leftCount++;
+                } else {
+                    colRight.appendChild(card);
+                    rightCount++;
+                }
+            });
+
+            statusLabel.textContent = `共同编织的第 ${items.length} 个期待`;
+        }
+
+        function createWishItem(title, owner, isCommon) {
+            return {
+                id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                title: String(title || '').replace(/\s+/g, ' ').trim(),
+                date: new Date().toLocaleDateString(),
+                completed: false,
+                owner: owner === 'user' ? 'user' : 'role',
+                isCommon: !!isCommon
+            };
+        }
+
+        async function toggleDone(id) {
+            const item = runtime.items.find(i => i.id === id);
+            if (item) {
+                item.completed = !item.completed;
+                render();
+                await writeState();
+            }
+        }
+
+        async function addUserWish() {
+            if (runtime.generating) return;
+            const raw = window.prompt('请写下你的心愿');
+            if (raw == null) return;
+            const title = String(raw || '').replace(/\s+/g, ' ').trim();
+            if (!title) {
+                alert('心愿内容不能为空');
+                return;
+            }
+            const newItem = createWishItem(title.slice(0, 40), 'user', false);
+            runtime.items.unshift(newItem);
+            render();
+            await writeState();
+        }
+
+        function setRoleWishGeneratingState(loading) {
+            runtime.generating = !!loading;
+            addBtn.disabled = !!loading;
+            magicBtn.disabled = !!loading;
+            addBtn.classList.toggle('loading', !!loading);
+            magicBtn.style.opacity = loading ? '0.55' : '';
+            addTextEl.textContent = loading ? `${runtime.roleName}正在写下心愿...` : '写下我的心愿';
+        }
+
+        async function callWishlistAI() {
+            const pw = getParentWindow();
+            const callAI = (pw && pw.callAI) || window.callAI;
+            if (!callAI) {
+                alert('AI 接口未初始化');
+                return;
+            }
+
+            setRoleWishGeneratingState(true);
+            const prompts = buildWishlistPrompts();
+            logWishlistPromptDebug('生成角色心愿', prompts.systemPrompt, prompts.userPrompt);
+            
+            try {
+                const text = await new Promise((resolve, reject) => {
+                    callAI(prompts.systemPrompt, [], { text: prompts.userPrompt }, (rawText) => {
+                        resolve(String(rawText || ''));
+                    }, (err) => {
+                        reject(new Error(String(err || '请求失败')));
+                    });
+                });
+                const cleanText = String(text || '').replace(/```json/ig, '').replace(/```/g, '').trim();
+                const data = JSON.parse(cleanText);
+                const title = String(data && data.title ? data.title : '').replace(/\s+/g, ' ').trim();
+                if (!title) throw new Error('未生成有效心愿');
+                const newItem = createWishItem(title.slice(0, 40), 'role', !!(data && data.isCommon));
+                runtime.items.unshift(newItem);
+                render();
+                await writeState();
+            } catch (e) {
+                console.error('AI 角色心愿生成失败', e);
+                alert(`生成失败：${e && e.message ? e.message : '请稍后再试'}`);
+            } finally {
+                setRoleWishGeneratingState(false);
+            }
+        }
+
+        async function init() {
+            runtime.roleId = resolveRoleId();
+            const meta = readMeta(runtime.roleId);
+            runtime.roleName = meta.roleName;
+            runtime.userName = meta.userName;
+            runtime.rolePrompt = String(meta.rolePrompt || '').trim();
+            runtime.userBackground = String(meta.userBackground || '').trim();
+            runtime.worldBookPrompt = String(meta.worldBookPrompt || '').trim();
+            avatarRole.src = meta.roleAvatar;
+            avatarUser.src = meta.userAvatar;
+            nameRoleLabel.textContent = runtime.roleName;
+            nameUserLabel.textContent = runtime.userName;
+
+            const state = await readState();
+            runtime.items = state.items;
+
+            render();
+        }
+
+        function resolveCoupleRecordBackTarget() {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const fromQuery = String(params.get('back') || '').trim();
+                if (fromQuery) return fromQuery;
+            } catch (e) { }
+            try {
+                const fromSession = String(sessionStorage.getItem('couple_space_record_return_target') || '').trim();
+                if (fromSession) return fromSession;
+            } catch (e2) { }
+            return 'couple-space.html?tab=record';
+        }
+
+        function goBackToCoupleRecord() {
+            const target = resolveCoupleRecordBackTarget();
+            window.location.replace(target);
+        }
+
+        backBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (window.parent && window.parent.closeCoupleSubpage) {
+                window.parent.closeCoupleSubpage();
+            } else {
+                goBackToCoupleRecord();
+            }
+        });
+        addBtn.onclick = addUserWish;
+        magicBtn.onclick = callWishlistAI;
+        addTextEl.textContent = '写下我的心愿';
+
+        init();
+    </script>
+</body>
+</html>

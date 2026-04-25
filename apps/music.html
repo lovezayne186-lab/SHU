@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Music</title>
+    <link rel="icon" href="../assets/icons/shubao.png" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.bootcdn.net/ajax/libs/boxicons/2.1.4/css/boxicons.min.css"
+    />
+    <link rel="stylesheet" href="../CSS/music.css" />
+  </head>
+  <body>
+    <header class="top-search" id="topSearch" aria-label="搜索">
+      <div class="top-search-inner">
+        <div class="search-field" id="searchField">
+          <i class="bx bx-search" aria-hidden="true"></i>
+          <span class="search-source" aria-hidden="true">全网</span>
+          <input
+            id="searchInput"
+            type="search"
+            inputmode="search"
+            enterkeyhint="search"
+            autocomplete="off"
+            placeholder="搜索歌曲 / 歌手"
+          />
+          <button class="clear-btn" id="searchClear" type="button" aria-label="清除">
+            <i class="bx bx-x" aria-hidden="true"></i>
+          </button>
+        </div>
+        <button class="import-btn" id="playlistImportBtn" type="button" aria-label="导入歌单">
+          <i class="bx bx-cloud-download" aria-hidden="true"></i>
+        </button>
+        <button class="import-btn" id="localMusicUploadBtn" type="button" aria-label="上传本地音乐">
+          <i class="bx bx-upload" aria-hidden="true"></i>
+        </button>
+        <input id="localMusicInput" type="file" accept=".mp3,audio/mpeg,audio/*,.lrc,.lcr,text/plain,image/*,.jpg,.jpeg,.png,.webp" multiple hidden />
+        <button class="cancel-btn" id="searchCancel" type="button">取消</button>
+      </div>
+      <div class="top-divider" aria-hidden="true"></div>
+    </header>
+
+    <div class="app" id="musicApp">
+      <main class="page page-home" id="homePage">
+        <section class="view is-active" id="recommend-view" aria-label="默认推荐">
+          <header class="home-header">
+            <div class="home-header-row">
+              <div class="home-title-wrap">
+                <button class="home-exit-btn" id="homeExitBtn" type="button" aria-label="退出音乐">
+                  <i class="bx bx-x"></i>
+                </button>
+                <div class="home-title">音乐</div>
+              </div>
+              <div class="home-actions" aria-label="批量操作">
+                <button class="home-action-btn home-action-cancel" id="homeSelectCancel" type="button">取消</button>
+                <button class="home-action-btn home-action-selectall" id="homeSelectAll" type="button">全选</button>
+                <button class="home-action-btn home-action-add" id="homeAddPlaylistBtn" type="button" aria-label="批量添加到歌单">
+                  <i class="bx bx-folder-plus" aria-hidden="true"></i>
+                </button>
+                <button class="home-action-btn home-action-delete" id="homeDeleteBtn" type="button" aria-label="删除">
+                  <i class="bx bx-trash" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+            <div class="home-subtitle">推荐歌单</div>
+          </header>
+
+          <section class="playlist" id="homePlaylist" aria-label="推荐歌单"></section>
+        </section>
+
+        <section class="view" id="search-view" aria-label="搜索结果">
+          <div class="search-hint" id="searchHint">输入关键词后回车搜索</div>
+          <ul class="search-list" id="searchList" aria-label="歌曲列表"></ul>
+        </section>
+      </main>
+
+      <main class="page page-profile" id="profilePage" aria-label="我的" hidden>
+        <section class="profile glass-theme" id="profileRoot">
+          <div class="profile-page-bar">
+            <button class="profile-back-btn" id="profileBackBtn" type="button" aria-label="返回首页">
+              <i class="bx bx-chevron-left"></i>
+            </button>
+            <div class="profile-page-title" id="profilePageTitle">我的主页</div>
+            <button class="profile-settings-trigger" id="profileSettingsBtn" type="button" aria-label="个人主页设置">
+              <i class="bx bx-dots-vertical-rounded"></i>
+            </button>
+          </div>
+
+          <div class="profile-header">
+            <div class="avatar-wrapper">
+              <button class="profile-avatar glow-avatar" id="profileAvatarBtn" type="button" aria-label="更换头像">
+                <img id="profileAvatarImg" src="../assets/images/touxiang.jpg" alt="" />
+              </button>
+              <div class="avatar-halo" aria-hidden="true"></div>
+            </div>
+            <div class="profile-user-info">
+              <button class="profile-name" id="profileNameBtn" type="button" aria-label="编辑用户名">姣月几盏</button>
+              <button class="profile-sign" id="profileSignBtn" type="button" aria-label="编辑个性签名">♀ · 点击设置个性签名</button>
+            </div>
+            <input id="profileAvatarInput" type="file" accept="image/*" hidden />
+          </div>
+
+          <div class="profile-stats glass-panel" aria-label="数据统计">
+            <div class="profile-stat" id="profileFollowStat" role="button" tabindex="0">
+              <div class="profile-stat-num" id="profileFollowNum">6</div>
+              <div class="profile-stat-label">关注</div>
+            </div>
+            <div class="profile-stat">
+              <div class="profile-stat-num" id="profileFansNum">102</div>
+              <div class="profile-stat-label">粉丝</div>
+            </div>
+            <div class="profile-stat">
+              <div class="profile-stat-num">Lv.8</div>
+              <div class="profile-stat-label">等级</div>
+            </div>
+            <div class="profile-stat">
+              <div class="profile-stat-num" id="profileListenNum">4356h</div>
+              <div class="profile-stat-label">听歌时长</div>
+            </div>
+          </div>
+
+          <div class="profile-gallery glass-grid" aria-label="图片展示">
+            <button class="profile-photo glass-photo" type="button" data-slot="0" aria-label="更换图片 1">
+              <img src="../assets/images/beijing.jpg" alt="" />
+            </button>
+            <button class="profile-photo glass-photo" type="button" data-slot="1" aria-label="更换图片 2">
+              <img src="../assets/images/beijing.jpg" alt="" />
+            </button>
+            <button class="profile-photo glass-photo" type="button" data-slot="2" aria-label="更换图片 3">
+              <img src="../assets/images/beijing.jpg" alt="" />
+            </button>
+            <button class="profile-photo glass-photo" type="button" data-slot="3" aria-label="更换图片 4">
+              <img src="../assets/images/beijing.jpg" alt="" />
+            </button>
+            <input id="profileGalleryInput" type="file" accept="image/*" hidden />
+          </div>
+
+          <div class="profile-music-section">
+            <div class="music-tabs" aria-label="内容分类">
+              <span class="music-tab is-active">音乐</span>
+              <span class="music-tab">播客</span>
+              <span class="music-tab">笔记</span>
+            </div>
+            <div class="music-sub-tabs" aria-label="歌单分类">
+              <span class="sub-tab">近期</span>
+              <span class="sub-tab is-active">创建</span>
+              <span class="sub-tab">收藏</span>
+            </div>
+            <div class="glass-playlist-container" id="profilePlaylistContainer" aria-label="我的歌单">
+              <div class="glass-playlist-card" id="favPlaylistCard" data-playlist-kind="favorites" role="button" tabindex="0">
+                <img class="playlist-cover" src="../assets/images/beijing.jpg" alt="cover" />
+                <div class="playlist-info">
+                  <div class="playlist-title">我喜欢的音乐</div>
+                  <div class="playlist-desc">0首 · 收藏歌单</div>
+                </div>
+                <button class="glass-play-btn" type="button" aria-label="播放我喜欢的音乐">
+                  <i class="bx bx-play"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+      <!-- ================= 角色专属主页 ================= -->
+<main class="page page-character" id="characterPage" aria-label="角色主页" hidden>
+  
+  <!-- 沉浸式动态背景层 -->
+  <div class="char-bg-layer">
+    <!-- 背景图用角色头像或立绘，加上极强的模糊和暗化 -->
+    <img id="charBgImg" src="../assets/images/touxiang.jpg" alt="background">
+    <div class="char-bg-overlay"></div>
+  </div>
+
+  <!-- 顶部透明导航 -->
+  <header class="char-topbar">
+    <button class="char-back-btn" id="charBackBtn" type="button">
+      <i class="bx bx-chevron-left"></i>
+    </button>
+    <div class="char-title">角色专属档案</div>
+    <button class="char-more-btn" type="button">
+      <i class="bx bx-share-alt"></i>
+    </button>
+  </header>
+
+  <!-- 角色海报风信息区 -->
+  <section class="char-info-header">
+    <div class="char-avatar-box">
+      <img id="charAvatarImg" src="../assets/images/touxiang.jpg" alt="avatar">
+    </div>
+    <div class="char-details">
+      <h1 class="char-name" id="charName">角色名字</h1>
+      <p class="char-sign" id="charSign">“如果陪伴有声音，那一定是我为你唱的这首歌。”</p>
+      
+      <!-- 陪伴数据胶囊 -->
+      <div class="char-stats-capsule">
+        <div class="stat-item">
+          <i class='bx bx-headphone'></i>
+          <span>总听歌 <b id="charListenTime">128</b> 小时</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <i class='bx bx-music'></i>
+          <span>收录 <b id="charSongCount">35</b> 首</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 底部歌曲列表区域（圆角上滑抽屉感） -->
+  <section class="char-playlist-section">
+    <div class="char-playlist-ctrl">
+      <button class="char-play-all" id="charPlayAllBtn" type="button">
+        <i class="bx bx-play-circle"></i>
+        <span>播放全部</span>
+      </button>
+      <div class="char-playlist-actions">
+        <button class="char-collect-btn" id="charCollectAllBtn" type="button" aria-label="收藏全部到我的歌单">
+          <i class="bx bx-folder-plus"></i>
+        </button>
+        <button class="char-refresh-btn" id="charRefreshBtn" type="button" aria-label="重新生成角色歌单">
+          <i class="bx bx-refresh"></i>
+        </button>
+      </div>
+    </div>
+    
+    <!-- 歌曲列表 -->
+    <ul class="char-song-list" id="charSongList">
+      <!-- 这里是列表项的模板示例，由 JS 动态生成 -->
+      <li class="char-song-item">
+        <div class="char-song-index">1</div>
+        <div class="char-song-info">
+          <div class="char-song-name">角色专属单曲 - 示例</div>
+          <div class="char-song-meta">角色名字 · 专辑名称</div>
+        </div>
+        <button class="char-song-more" type="button"><i class="bx bx-dots-vertical-rounded"></i></button>
+      </li>
+    </ul>
+  </section>
+</main>
+
+
+      <section class="bottom-sheet-modal" id="addToPlaylistModal" aria-hidden="true">
+        <div class="sheet-backdrop"></div>
+        <div class="sheet-content glass-panel">
+          <div class="sheet-title">添加到歌单</div>
+          <div class="sheet-list" id="sheetPlaylistList">
+            <div class="sheet-item" id="createNewPlaylistBtn">
+              <i class="bx bx-plus"></i>
+              <span>创建新歌单</span>
+            </div>
+            <div class="sheet-item" data-sheet-playlist-kind="favorites">
+              <i class="bx bx-heart"></i>
+              <span>我喜欢的音乐</span>
+            </div>
+          </div>
+          <button class="sheet-cancel" type="button">取消</button>
+        </div>
+      </section>
+
+      <section class="mini-player" id="miniPlayer" aria-hidden="true">
+        <button class="mini-main" id="miniOpen" type="button" aria-label="打开播放器">
+          <img id="miniCover" src="../assets/images/beijing.jpg" alt="" />
+          <div class="mini-meta">
+            <div class="mini-title" id="miniTitle">未播放</div>
+            <div class="mini-artist" id="miniArtist">点击搜索或推荐开始</div>
+          </div>
+        </button>
+        <button class="mini-play" id="miniPlayBtn" type="button" aria-label="播放/暂停">
+          <i class="bx bx-play" aria-hidden="true"></i>
+        </button>
+      </section>
+
+      <nav class="tabbar" aria-label="底部导航">
+        <button class="tab is-active" type="button" data-tab="home">
+          <i class="bx bx-home"></i>
+          <span>首页</span>
+        </button>
+        <button class="tab" type="button" data-tab="play">
+          <i class="bx bx-play-circle"></i>
+          <span>播放</span>
+        </button>
+        <button class="tab" type="button" data-tab="me">
+          <i class="bx bx-user"></i>
+          <span>我的</span>
+        </button>
+      </nav>
+    </div>
+
+    <audio id="audioEl" preload="none"></audio>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <section class="player-sheet" id="playerSheet" aria-hidden="true">
+      <div class="player-inner">
+        <header class="np-topbar">
+          <button class="np-icon" id="closePlayer" type="button" aria-label="返回">
+            ＜
+          </button>
+          <div class="np-title">
+            <div class="np-nowplaying" id="npNowPlaying">Now Playing</div>
+            <div class="np-track-title" id="npTrackTitle"></div>
+            <div class="np-track-artist" id="npTrackArtist"></div>
+          </div>
+          <button class="np-icon" id="moreBtn" type="button" aria-label="设置">
+            <i class="bx bx-dots-vertical-rounded"></i>
+          </button>
+        </header>
+
+        <div class="lyric-wrap" id="lyricsView" aria-label="歌词">
+          <ul class="lyric-list" id="lyricList"></ul>
+        </div>
+
+        <div class="cover-wrap">
+          <div class="cover-card" id="coverCard">
+            <img id="coverImg" src="../assets/images/beijing.jpg" alt="cover" />
+          </div>
+        </div>
+
+        <div class="vinyl-player-wrap" id="vinylPlayerWrap" aria-label="唱片播放器">
+          <div class="light-glass-player">
+            <div class="stylus-arm" id="stylusArm" aria-hidden="true">
+              <svg viewBox="0 0 100 250" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M 50 20 L 50 40 L 70 180 L 40 230"
+                  fill="none"
+                  stroke="#e0e0e0"
+                  stroke-width="4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <circle cx="50" cy="30" r="12" fill="#ffffff" stroke="#e0e0e0" stroke-width="3" />
+                <rect
+                  x="30"
+                  y="220"
+                  width="20"
+                  height="25"
+                  rx="5"
+                  fill="#f0f0f0"
+                  stroke="#d0d0d0"
+                  stroke-width="2"
+                  transform="rotate(30 40 230)"
+                />
+              </svg>
+            </div>
+
+            <div class="glass-disc" id="glassDisc">
+              <div class="glass-texture"></div>
+              <img id="vinylCoverImg" class="center-cover" src="../assets/images/beijing.jpg" alt="cover" />
+            </div>
+          </div>
+        </div>
+
+        <div class="track-info">
+          <div class="track-title" id="trackTitle">夜色</div>
+          <div class="track-artist" id="trackArtist">未知歌手</div>
+        </div>
+
+        <div class="np-actions" aria-label="功能">
+          <button class="np-action" id="favBtn" type="button" aria-label="收藏">
+            <i class="bx bxs-heart"></i>
+          </button>
+          <button class="np-action" id="inviteBtn" type="button" aria-label="邀请一起听">
+            <i class="bx bx-dots-horizontal-rounded"></i>
+          </button>
+        </div>
+
+        <div class="simple-progress-area" aria-label="播放进度">
+          <span class="time current-time" id="vinylCurrentTime">0:00</span>
+          <div class="progress-slider-wrapper">
+            <input type="range" id="progressSlider" class="custom-slider" min="0" max="100" value="0" />
+            <div class="slider-track-fill" id="sliderFill"></div>
+          </div>
+          <span class="time total-time" id="vinylDurationTime">0:00</span>
+        </div>
+
+        <div class="together" id="togetherRow" aria-label="一起听">
+          <div class="avatar avatar-left">
+            <img src="../assets/images/touxiang.jpg" alt="" />
+          </div>
+          <div class="together-line" aria-hidden="true">
+            <svg viewBox="0 0 160 40" preserveAspectRatio="none">
+              <polyline
+                points="0,20 46,20 58,12 72,30 86,14 100,20 160,20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <i class="bx bxs-heart heart-beat" id="togetherHeart"></i>
+          </div>
+          <div class="avatar avatar-right placeholder" aria-hidden="true"></div>
+        </div>
+        <div class="together-duration" id="togetherDurationLabel" aria-label="当前听歌时长"></div>
+
+        <div class="wave-wrap" aria-label="播放进度">
+          <div class="wave" id="wave"></div>
+        </div>
+        <div class="time-row" aria-label="时间">
+          <span id="currentTime">0:00</span>
+          <span id="durationTime">0:00</span>
+        </div>
+
+        <footer class="controls" aria-label="控制栏">
+          <button class="icon-btn" id="shuffleBtn" type="button" aria-label="随机播放">
+            <i class="bx bx-shuffle"></i>
+          </button>
+          <button class="icon-btn" id="prevBtn" type="button" aria-label="上一首">
+            <i class="bx bx-skip-previous"></i>
+          </button>
+          <button class="play-btn" id="playBtn" type="button" aria-label="播放">
+            <i class="bx bx-play"></i>
+          </button>
+          <button class="icon-btn" id="nextBtn" type="button" aria-label="下一首">
+            <i class="bx bx-skip-next"></i>
+          </button>
+          <button class="icon-btn" id="repeatBtn" type="button" aria-label="循环播放">
+            <i class="bx bx-refresh"></i>
+          </button>
+        </footer>
+      </div>
+    </section>
+
+    <section class="queue-modal" id="queueModal" aria-hidden="true">
+      <div class="queue-backdrop" id="queueBackdrop" aria-hidden="true"></div>
+      <div class="queue-card" role="dialog" aria-modal="true" aria-label="歌曲列表">
+        <div class="queue-head">
+          <div class="queue-title">歌曲列表</div>
+          <button class="queue-close" id="queueClose" type="button" aria-label="关闭">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="queue-list" id="queueList" aria-label="队列"></div>
+      </div>
+    </section>
+
+    <section class="invite-modal" id="inviteModal" aria-hidden="true">
+      <div class="invite-backdrop" id="inviteBackdrop" aria-hidden="true"></div>
+      <div class="invite-card" role="dialog" aria-modal="true" aria-label="邀请一起听">
+        <div class="invite-head">
+          <div class="invite-title">邀请一起听</div>
+          <button class="invite-close" id="inviteClose" type="button" aria-label="关闭">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="invite-list" id="inviteList" aria-label="角色列表"></div>
+      </div>
+    </section>
+
+    <section class="together-menu-modal" id="togetherMenuModal" aria-hidden="true">
+      <div class="together-menu-backdrop" id="togetherMenuBackdrop" aria-hidden="true"></div>
+      <div class="together-menu-card" role="dialog" aria-modal="true" aria-label="一起听菜单">
+        <button class="together-menu-item is-danger" id="togetherMenuExit" type="button">退出一起听</button>
+      </div>
+    </section>
+
+    <section class="together-exit-modal" id="togetherExitModal" aria-hidden="true">
+      <div class="together-exit-backdrop" id="togetherExitBackdrop" aria-hidden="true"></div>
+      <div class="together-exit-card" role="dialog" aria-modal="true" aria-label="退出一起听">
+        <div class="together-exit-avatars" aria-hidden="true">
+          <span class="together-exit-avatar">
+            <img id="togetherExitAvatarLeft" alt="" />
+          </span>
+          <span class="together-exit-avatar is-right">
+            <img id="togetherExitAvatarRight" alt="" />
+          </span>
+        </div>
+        <div class="together-exit-stats" aria-label="统计">
+          <div class="together-exit-stat">
+            <div class="together-exit-value">
+              <span class="together-exit-num" id="togetherExitSongCount">0</span>
+              <span class="together-exit-unit">首</span>
+            </div>
+            <div class="together-exit-label">本次一起听歌</div>
+          </div>
+          <div class="together-exit-stat">
+            <div class="together-exit-value">
+              <span class="together-exit-num" id="togetherExitDurationMin">0</span>
+              <span class="together-exit-unit">分钟</span>
+            </div>
+            <div class="together-exit-label">本次相互陪伴</div>
+          </div>
+        </div>
+        <div class="together-exit-actions">
+          <button class="together-exit-btn" id="togetherExitShare" type="button">分享</button>
+          <button class="together-exit-btn is-muted" id="togetherExitClose" type="button">关闭</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-modal" id="settingsModal" aria-hidden="true">
+      <div class="settings-backdrop" id="settingsBackdrop" aria-hidden="true"></div>
+      <div class="settings-card" role="dialog" aria-modal="true" aria-label="个性化设置">
+        <div class="settings-head">
+          <div class="settings-title">播放页个性化</div>
+          <button class="settings-close" id="settingsClose" type="button" aria-label="关闭">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="settings-body">
+          <div class="setting-sub-item">
+            <span>音乐组件形式</span>
+            <label><input type="radio" name="miniPlayerMode" value="island" checked /> 灵动岛</label>
+            <label><input type="radio" name="miniPlayerMode" value="float" /> 悬浮球</label>
+          </div>
+
+          <div class="setting-style-group" aria-label="播放器样式">
+            <div class="setting-style-title">播放器样式</div>
+            <div class="player-style-grid">
+              <label class="player-style-card" for="playerStyleSquare">
+                <input type="radio" id="playerStyleSquare" name="playerVisualStyle" value="square" checked />
+                <span class="player-style-thumb player-style-thumb-square" aria-hidden="true">
+                  <span class="thumb-square-cover"></span>
+                  <span class="thumb-square-line"></span>
+                  <span class="thumb-square-wave"></span>
+                </span>
+                <span class="player-style-name">方块封面</span>
+              </label>
+              <label class="player-style-card" for="playerStyleVinyl">
+                <input type="radio" id="playerStyleVinyl" name="playerVisualStyle" value="vinyl" />
+                <span class="player-style-thumb player-style-thumb-vinyl" aria-hidden="true">
+                  <span class="thumb-vinyl-disc"></span>
+                  <span class="thumb-vinyl-cover"></span>
+                  <span class="thumb-vinyl-arm"></span>
+                </span>
+                <span class="player-style-name">圆形唱片</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <label for="bgUpload">播放页背景</label>
+            <button class="setting-upload-btn" id="bgUploadBtn" type="button">选择图片</button>
+            <input type="file" id="bgUpload" accept="image/*" hidden />
+          </div>
+
+          <div class="setting-sub-item">
+            <span>背景遮罩颜色</span>
+            <label><input type="radio" name="overlayTone" value="dark" checked /> 黑色遮罩</label>
+            <label><input type="radio" name="overlayTone" value="light" /> 白色遮罩</label>
+          </div>
+
+          <div class="setting-item">
+            <label for="overlayOpacitySlider">背景遮罩强度</label>
+            <div class="setting-range">
+              <input type="range" id="overlayOpacitySlider" min="0" max="100" step="1" value="44" />
+              <span class="setting-range-value" id="overlayOpacityValue">44%</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <label for="coverUpload">自定义封面（支持多图轮播）</label>
+            <button class="setting-upload-btn" id="coverUploadBtn" type="button">选择图片</button>
+            <input type="file" id="coverUpload" accept="image/*" multiple hidden />
+          </div>
+
+          <div class="setting-sub-item">
+            <span>封面展示模式</span>
+            <label><input type="radio" name="coverMode" value="single" checked /> 单图静止</label>
+            <label><input type="radio" name="coverMode" value="carousel" /> 多图轮播</label>
+          </div>
+
+          <div class="setting-item color-picker-group">
+            <label for="lyricColorPicker">歌词颜色</label>
+            <input type="color" id="lyricColorPicker" value="#111111" />
+          </div>
+
+          <div class="setting-item color-picker-group">
+            <label for="progressColorPicker">播放进度条颜色</label>
+            <input type="color" id="progressColorPicker" value="#111111" />
+          </div>
+
+          <div class="setting-item color-picker-group">
+            <label for="playBtnColorPicker">播放按钮颜色</label>
+            <input type="color" id="playBtnColorPicker" value="#ffffff" />
+          </div>
+
+          <button class="settings-reset-btn" id="settingsReset" type="button">恢复默认设置</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-modal" id="profileSettingsModal" aria-hidden="true">
+      <div class="settings-backdrop" id="profileSettingsBackdrop" aria-hidden="true"></div>
+      <div class="settings-card" role="dialog" aria-modal="true" aria-label="个人主页设置">
+        <div class="settings-head">
+          <div class="settings-title" id="profileSettingsModalTitle">个人主页设置</div>
+          <button class="settings-close" id="profileSettingsClose" type="button" aria-label="关闭">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="settings-body">
+          <div class="setting-item">
+            <label for="profileBgUpload">个人主页全局背景</label>
+            <button class="setting-upload-btn" id="profileBgUploadBtn" type="button">选择图片</button>
+            <input type="file" id="profileBgUpload" accept="image/*" hidden />
+          </div>
+
+          <div class="setting-sub-item">
+            <span>个人主页遮罩颜色</span>
+            <label><input type="radio" name="profileOverlayTone" value="dark" checked /> 黑色遮罩</label>
+            <label><input type="radio" name="profileOverlayTone" value="light" /> 白色遮罩</label>
+          </div>
+
+          <div class="setting-item">
+            <label for="profileOverlayOpacitySlider">个人主页遮罩强度</label>
+            <div class="setting-range">
+              <input type="range" id="profileOverlayOpacitySlider" min="0" max="100" step="1" value="40" />
+              <span class="setting-range-value" id="profileOverlayOpacityValue">40%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      (function () {
+        var urls = [
+          "https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js",
+          "https://unpkg.com/jsmediatags@3.9.7/dist/jsmediatags.min.js",
+        ];
+        function load(i) {
+          if (i >= urls.length) return;
+          var s = document.createElement("script");
+          s.src = urls[i];
+          s.async = true;
+          s.onerror = function () {
+            load(i + 1);
+          };
+          document.head.appendChild(s);
+        }
+        load(0);
+      })();
+    </script>
+    <script src="../JS/music.js"></script>
+  </body>
+</html>

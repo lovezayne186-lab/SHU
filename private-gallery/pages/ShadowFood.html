@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>外卖记录 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #F5F5F5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #333; }
+        .app-container { max-width: 420px; margin: 0 auto; padding: 20px; }
+        .header { font-size: 20px; font-weight: bold; margin: 20px 0; display: flex; align-items: center; gap: 10px; }
+        .header::before { content: '🛵'; }
+        .order-card { background: #FFF; border-radius: 14px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+        .order-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 0.5px solid #EEE; padding-bottom: 8px; gap: 10px; }
+        .shop-name { font-size: 15px; font-weight: 600; color: #000; }
+        .order-status { font-size: 13px; color: #999; }
+        .order-main { display: flex; justify-content: space-between; align-items: flex-start; margin: 10px 0; gap: 12px; }
+        .food-items { font-size: 14px; color: #666; flex: 1; line-height: 1.6; }
+        .price { font-size: 16px; font-weight: bold; font-family: "Helvetica Neue", sans-serif; white-space: nowrap; }
+        .thought-box { background: #F7F8FB; border-left: 3px solid #33312E; border-radius: 0 8px 8px 0; padding: 10px 12px; margin-top: 10px; }
+        .thought-title { font-size: 10px; color: #8C8881; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .thought-text { font-size: 13px; color: #33312E; line-height: 1.6; }
+        .order-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 10px; }
+        .order-time { font-size: 11px; color: #BBB; }
+        .relation-badge { display: inline-flex; align-items: center; justify-content: center; min-height: 22px; padding: 0 10px; border-radius: 999px; background: #EEF5FF; color: #3D6DCC; font-size: 11px; font-weight: 600; }
+        .back-btn { position: fixed; top: 20px; left: 20px; z-index: 100; font-size: 24px; text-decoration: none; color: #333; }
+        .generate-btn { position: fixed; top: 20px; right: 20px; z-index: 100; border: none; background: transparent; color: #111; font-size: 20px; line-height: 1; padding: 6px; cursor: pointer; }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+    <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+    <div class="app-container">
+        <div class="header">全部订单</div>
+        <div id="foodList"></div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        function asString(value) { return String(value == null ? '' : value).trim(); }
+        function escapeHtml(text) {
+            return asString(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的外卖记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '外卖记录');
+                return;
+            }
+            alert(reason);
+        }
+        async function loadFood(force) {
+            const mount = document.getElementById('foodList');
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowFoodContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成。');
+                return;
+            }
+            const roleId = window.SecretCenterCore.getSelectedRoleId();
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再查看外卖记录。');
+                return;
+            }
+            mount.innerHTML = '<div style="text-align:center;color:#999;padding:48px 0;">正在读取订单记录...</div>';
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowFoodContent({ roleId: roleId, force: force === true });
+                if (res && res.ok && res.data && Array.isArray(res.data.orders) && res.data.orders.length) {
+                    mount.innerHTML = res.data.orders.map(function (o) {
+                        return '<div class="order-card"><div class="order-top"><div class="shop-name">' + escapeHtml(o.shop) + ' ›</div><div class="order-status">已送达</div></div><div class="order-main"><div class="food-items">' + escapeHtml(o.items) + '</div><div class="price">¥' + escapeHtml(o.price) + '</div></div><div class="thought-box"><div class="thought-title">Thought</div><div class="thought-text">' + escapeHtml(o.thought) + '</div></div><div class="order-footer"><div class="order-time">' + escapeHtml(o.date) + '</div>' + (o.relatedToUser ? '<div class="relation-badge">与你有关</div>' : '') + '</div></div>';
+                    }).join('');
+                    return;
+                }
+                mount.innerHTML = '';
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                mount.innerHTML = '';
+                console.error('ShadowFood generate failed:', error);
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadFood(true);
+        });
+        window.onload = function () {
+            loadFood(false);
+        };
+    </script>
+</body>
+</html>

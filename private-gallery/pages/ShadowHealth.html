@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>健康与运动 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* 全局深邃忧郁底色 */
+        body {
+            background-color: #0A0A0C;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            color: #E8E8EC;
+            padding-bottom: 50px;
+            min-height: 100vh;
+        }
+
+        .app-container { max-width: 480px; margin: 0 auto; padding: 40px 24px 20px; }
+
+        /* 极简返回与生成按钮 */
+        .back-btn {
+            position: fixed; top: max(20px, env(safe-area-inset-top)); left: 24px;
+            font-size: 28px; color: rgba(255,255,255,0.4); text-decoration: none; z-index: 100;
+            font-weight: 300; transition: color 0.3s; cursor: pointer;
+        }
+        .back-btn:active { color: #fff; }
+
+        .generate-btn {
+            position: fixed; top: max(24px, env(safe-area-inset-top)); right: 24px; z-index: 100;
+            border: none; background: transparent; color: rgba(255,255,255,0.6);
+            font-size: 18px; line-height: 1; padding: 6px; cursor: pointer;
+            transition: all 0.3s ease; outline: none;
+        }
+        .generate-btn:active { transform: scale(0.9); color: #fff; }
+        .generate-btn:disabled { opacity: 0.2; cursor: default; }
+
+        /* 顶部标题区 */
+        .header-wrap { margin-top: 30px; margin-bottom: 25px; }
+        .header-en { font-size: 11px; color: rgba(255,255,255,0.3); letter-spacing: 3px; font-weight: 300; margin-bottom: 4px; }
+        .header-cn { font-size: 26px; font-weight: 300; color: rgba(255,255,255,0.9); letter-spacing: 1px; }
+
+        /* 两列网格布局 */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+        /* 高级黑透玻璃卡片 */
+        .card {
+            background: rgba(25, 25, 30, 0.4);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 24px; padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+
+        /* 莫兰迪色系指示灯 */
+        .label-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px currentColor; }
+        .color-steps { background: rgba(255,255,255,0.8); color: rgba(255,255,255,0.8); }
+        .color-cal { background: #D4AF37; color: #D4AF37; } /* 暗金 */
+        .color-sleep { background: #6C7A89; color: #6C7A89; } /* 蓝灰 */
+        .color-heart { background: #A35D6A; color: #A35D6A; } /* 脏粉/暗红 */
+        .color-workout { background: #8BA88E; color: #8BA88E; } /* 灰绿 */
+
+        .card-title { font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); display: flex; align-items: baseline; gap: 6px; }
+        .card-title em { font-size: 10px; color: rgba(255,255,255,0.3); font-family: "Georgia", serif; font-style: italic; }
+
+        /* 老钱风大数字 */
+        .big-number { font-size: 28px; font-weight: normal; font-family: "Georgia", serif; color: rgba(255,255,255,0.95); letter-spacing: 0.5px; }
+        .unit { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 300; font-family: sans-serif; letter-spacing: 0; }
+
+        /* 睡眠专属卡片 */
+        .sleep-card { margin-bottom: 16px; }
+        .sleep-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .sleep-score {
+            width: 58px; height: 58px; border-radius: 50%;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .sleep-score strong { font-size: 20px; font-weight: normal; font-family: "Georgia", serif; line-height: 1.1; color: rgba(255,255,255,0.9); }
+        .sleep-score span { font-size: 9px; color: rgba(255,255,255,0.3); margin-top: 2px; letter-spacing: 1px; }
+
+        .sleep-note { margin-top: 12px; font-size: 12px; color: rgba(255,255,255,0.6); font-weight: 300; line-height: 1.5; }
+        .sleep-note span { color: #8BA88E; } /* 状态用冷绿色高亮 */
+
+        .sleep-times {
+            display: flex; justify-content: space-between; margin-top: 16px; font-size: 12px;
+            color: rgba(255,255,255,0.4); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; font-weight: 300;
+        }
+
+        .sleep-stages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+        .stage { background: rgba(0,0,0,0.2); border-radius: 14px; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.02); }
+        .stage-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-bottom: 4px; font-weight: 300; }
+        .stage-value { font-size: 16px; font-weight: normal; font-family: "Georgia", serif; color: rgba(255,255,255,0.8); }
+
+        /* 心率模块 */
+        .heart-rate-box { display:flex; gap:24px; margin-top: 5px; }
+        .heart-val-group .unit { margin-bottom: 4px; display: block; }
+        .heart-val-group .val { font-size: 24px; font-family: "Georgia", serif; color: rgba(255,255,255,0.9); }
+        .heart-val-group .val.alert { color: #A35D6A; }
+
+        .heart-anomaly {
+            background: rgba(163, 93, 106, 0.1); border-left: 3px solid #A35D6A;
+            padding: 12px; margin-top: 16px; border-radius: 4px 12px 12px 4px;
+            font-size: 12px; color: #D18C99; line-height: 1.5; font-weight: 300;
+        }
+
+        /* 运动模块 */
+        .workout-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.05); gap: 12px;
+        }
+        .workout-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+        .wk-icon {
+            font-size: 12px; color: #8BA88E; background: rgba(139, 168, 142, 0.1); border: 1px solid rgba(139, 168, 142, 0.2);
+            width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 300;
+        }
+        .wk-info { flex: 1; min-width: 0; }
+        .wk-title { font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.85); margin-bottom: 2px;}
+        .wk-time { font-size: 11px; color: rgba(255,255,255,0.3); font-weight: 300; }
+        .wk-cal { font-size: 16px; font-family: "Georgia", serif; color: rgba(255,255,255,0.9); flex-shrink: 0; }
+
+        .empty-state { color: rgba(255,255,255,0.3); font-size: 12px; padding: 20px 0; text-align: center; font-weight: 300; }
+    </style>
+</head>
+<body>
+    <div class="back-btn" id="summaryBackBtn">‹</div>
+    <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+
+    <div class="app-container">
+        <div class="header-wrap">
+            <div class="header-en">HEALTH SUMMARY</div>
+            <div class="header-cn">健康摘要</div>
+        </div>
+        <div id="healthContent"></div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        function asString(value) { return String(value == null ? '' : value).trim(); }
+        function escapeHtml(text) {
+            return asString(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的运动与健康数据。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '运动与健康');
+                return;
+            }
+            alert(reason);
+        }
+        async function loadHealth(force) {
+            const container = document.getElementById('healthContent');
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowHealthContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成。');
+                return;
+            }
+            const roleId = window.SecretCenterCore.getSelectedRoleId();
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再查看运动与健康。');
+                return;
+            }
+            container.innerHTML = '<div class="empty-state" style="padding:60px 0;">正在同步数据...</div>';
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowHealthContent({ roleId: roleId, force: force === true });
+                if (res && res.ok && res.data) {
+                    const h = res.data;
+                    const workouts = Array.isArray(h.workouts) ? h.workouts : [];
+
+                    container.innerHTML =
+                        '<div class="grid-2">' +
+                            '<div class="card"><div class="card-header"><span class="label-dot color-steps"></span><span class="card-title">总运动时长 <em>Duration</em></span></div><div class="big-number">' + escapeHtml(h.overview && h.overview.steps) + ' <span class="unit">分钟</span></div></div>' +
+                            '<div class="card"><div class="card-header"><span class="label-dot color-cal"></span><span class="card-title">活动能量 <em>Energy</em></span></div><div class="big-number">' + escapeHtml(h.overview && h.overview.calories) + ' <span class="unit">千卡</span></div></div>' +
+                        '</div>' +
+                        '<div class="card sleep-card">' +
+                            '<div class="sleep-head">' +
+                                '<div><div class="card-header"><span class="label-dot color-sleep"></span><span class="card-title">睡眠 <em>Sleep</em></span></div><div class="big-number">' + escapeHtml(h.sleep && h.sleep.duration) + '</div></div>' +
+                                '<div class="sleep-score"><strong>' + escapeHtml(h.sleep && h.sleep.score || '--') + '</strong><span>SCORE</span></div>' +
+                            '</div>' +
+                            '<div class="sleep-note"><span>状态：' + escapeHtml(h.sleep && h.sleep.quality) + '</span> &nbsp;|&nbsp; ' + escapeHtml(h.sleep && h.sleep.note) + '</div>' +
+                            '<div class="sleep-times"><div>就寝: ' + escapeHtml(h.sleep && h.sleep.bedTime) + '</div><div>起床: ' + escapeHtml(h.sleep && h.sleep.wakeTime) + '</div></div>' +
+                            '<div class="sleep-stages">' +
+                                '<div class="stage"><div class="stage-label">深睡</div><div class="stage-value">' + escapeHtml(h.sleep && h.sleep.deep) + '</div></div>' +
+                                '<div class="stage"><div class="stage-label">浅睡</div><div class="stage-value">' + escapeHtml(h.sleep && h.sleep.light) + '</div></div>' +
+                                '<div class="stage"><div class="stage-label">快速眼动</div><div class="stage-value">' + escapeHtml(h.sleep && h.sleep.rem) + '</div></div>' +
+                                '<div class="stage"><div class="stage-label">清醒</div><div class="stage-value">' + escapeHtml(h.sleep && h.sleep.awake) + '</div></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="card" style="margin-bottom: 16px;">' +
+                            '<div class="card-header"><span class="label-dot color-heart"></span><span class="card-title">心率 <em>Heart</em></span></div>' +
+                            '<div class="heart-rate-box">' +
+                                '<div class="heart-val-group"><span class="unit">平均 (BPM)</span><div class="val">' + escapeHtml(h.heartRate && h.heartRate.avg) + '</div></div>' +
+                                '<div class="heart-val-group"><span class="unit">最高 (BPM)</span><div class="val alert">' + escapeHtml(h.heartRate && h.heartRate.max) + '</div></div>' +
+                            '</div>' +
+                            (asString(h.heartRate && h.heartRate.anomaly) ? '<div class="heart-anomaly">' + escapeHtml(h.heartRate && h.heartRate.anomaly) + '</div>' : '') +
+                        '</div>' +
+                        '<div class="card">' +
+                            '<div class="card-header"><span class="label-dot color-workout"></span><span class="card-title">体能训练 <em>Workout</em></span></div>' +
+                            (workouts.length ? workouts.map(function (w) {
+                                return '<div class="workout-item"><div class="wk-icon">训</div><div class="wk-info"><div class="wk-title">' + escapeHtml(w.type) + '</div><div class="wk-time">' + escapeHtml(w.time) + ' &nbsp;·&nbsp; ' + escapeHtml(w.duration) + '</div></div><div class="wk-cal">' + escapeHtml(w.burn) + '</div></div>';
+                            }).join('') : '<div class="empty-state">近期无运动记录</div>') +
+                        '</div>';
+                    return;
+                }
+                container.innerHTML = '';
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                container.innerHTML = '';
+                console.error('ShadowHealth generate failed:', error);
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+        document.getElementById('summaryBackBtn').addEventListener('click', function () {
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToFangCun === 'function') {
+                window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });
+            } else {
+                window.location.replace('FangCun.html');
+            }
+        });
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadHealth(true);
+        });
+        window.onload = function () {
+            loadHealth(false);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#e7e7e7">
+    <title>未来规划</title>
+    <script src="../vendor/localforage/localforage.min.js"></script>
+    <style>
+        :root {
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --text-main: #2f3136;
+            --text-sub: #888888;
+            --accent-pink: #ffb6c1;
+            --accent-lavender: #e6e6fa;
+            --font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: calc(env(safe-area-inset-top, 40px) + 58px);
+            padding-top: env(safe-area-inset-top, 40px);
+            display: grid;
+            grid-template-columns: 44px 1fr 44px;
+            align-items: center;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 20;
+        }
+        .header-btn {
+            border: none;
+            background: transparent;
+            height: 100%;
+            color: #333;
+            font-size: 24px;
+            font-weight: 300;
+        }
+        .header-title {
+            text-align: center;
+            font-size: 17px;
+            font-weight: 500;
+            color: #2f3136;
+            letter-spacing: 0.2px;
+        }
+        .header-star {
+            font-size: 16px;
+            text-align: center;
+            color: #8c8c8c;
+        }
+        .page {
+            padding: calc(env(safe-area-inset-top, 40px) + 72px) 14px calc(env(safe-area-inset-bottom, 0px) + 112px);
+        }
+        .empty {
+            margin-top: 46px;
+            text-align: center;
+            color: #aaa;
+            font-size: 14px;
+            letter-spacing: 0.6px;
+        }
+        .list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .wish-item {
+            background: var(--card);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            padding: 14px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: staggerIn 0.45s ease forwards;
+            transition: all 0.4s ease;
+            cursor: pointer;
+        }
+        .wish-item:active {
+            transform: scale(0.985);
+        }
+        .wish-check {
+            width: 22px;
+            height: 22px;
+            min-width: 22px;
+            border-radius: 50%;
+            border: 1.5px solid #d6d6d6;
+            background: #fff;
+            color: transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.4s ease;
+        }
+        .wish-main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .wish-title {
+            font-size: 16px;
+            color: #1f2329;
+            font-weight: 500;
+            line-height: 1.35;
+            transition: all 0.4s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .wish-desc {
+            font-size: 13px;
+            color: var(--text-sub);
+            line-height: 1.45;
+            transition: all 0.4s ease;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .wish-tag {
+            max-width: 68px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 11px;
+            color: #dc8ea0;
+            background: #ffeef2;
+            border-radius: 4px;
+            padding: 3px 7px;
+            transition: all 0.4s ease;
+        }
+        .future-note-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            padding: 20px;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'PingFang SC', var(--font-family);
+        }
+        .pink-sticky-note {
+            position: relative;
+            width: 85%;
+            max-width: 320px;
+            background-color: #fff2f5;
+            background-image: repeating-linear-gradient(
+                transparent,
+                transparent 30px,
+                #ffd8e1 30px,
+                #ffd8e1 31px
+            );
+            background-attachment: local;
+            border-radius: 4px 15px 4px 15px;
+            box-shadow:
+                3px 5px 15px rgba(255, 182, 193, 0.4),
+                -2px 2px 5px rgba(0,0,0,0.05);
+            padding: 40px 20px 45px 20px;
+            transform: rotate(-1deg);
+            animation: notePopUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .washi-tape {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%) rotate(2deg);
+            width: 100px;
+            height: 25px;
+            background-color: rgba(255, 166, 193, 0.6);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 2px;
+            clip-path: polygon(2% 0, 98% 0, 100% 10%, 97% 20%, 100% 30%, 98% 40%, 100% 50%, 97% 60%, 100% 70%, 98% 80%, 100% 90%, 97% 100%, 3% 100%, 0 90%, 2% 80%, 0 70%, 3% 60%, 0 50%, 2% 40%, 0 30%, 3% 20%, 0 10%);
+        }
+        .future-note-close {
+            position: absolute;
+            top: 12px;
+            right: 15px;
+            border: none;
+            background: transparent;
+            color: #ffa6c1;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .future-note-close:active {
+            transform: scale(0.8);
+        }
+        .note-title {
+            text-align: center;
+            color: #d67a8c;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+        .note-category {
+            display: inline-flex;
+            margin-bottom: 8px;
+            color: #dc8ea0;
+            background: rgba(255, 238, 242, 0.82);
+            border-radius: 4px;
+            padding: 2px 7px;
+            font-size: 12px;
+            line-height: 20px;
+        }
+        .note-scroll-content {
+            max-height: 50vh;
+            overflow-y: auto;
+            padding-right: 10px;
+            color: #8b5a65;
+            font-size: 14px;
+            line-height: 31px;
+        }
+        .note-scroll-content p {
+            margin: 0;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .note-scroll-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .note-scroll-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .note-scroll-content::-webkit-scrollbar-thumb {
+            background: #ffd8e1;
+            border-radius: 10px;
+        }
+        .note-scroll-content::-webkit-scrollbar-thumb:hover {
+            background: #ffa6c1;
+        }
+        .mood-kaomoji {
+            position: absolute;
+            bottom: 12px;
+            right: 15px;
+            color: #ff7b9c;
+            font-size: 16px;
+            font-weight: bold;
+            transform: rotate(-8deg);
+            user-select: none;
+        }
+        .fab-wrap {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+            display: flex;
+            justify-content: center;
+            z-index: 21;
+        }
+        .fab {
+            border: none;
+            border-radius: 999px;
+            min-width: 260px;
+            padding: 13px 24px;
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-lavender));
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 10px 24px rgba(255, 182, 193, 0.36);
+            animation: breathe 2.4s ease-in-out infinite;
+            transition: all 0.3s ease;
+        }
+        .fab.loading {
+            animation: none;
+            opacity: 0.95;
+        }
+        .fab:active {
+            transform: scale(0.97);
+        }
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+        @keyframes staggerIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes notePopUp {
+            0% { transform: scale(0.8) rotate(-5deg); opacity: 0; }
+            100% { transform: scale(1) rotate(-1deg); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <button class="header-btn" type="button" id="back-btn">＜</button>
+        <div class="header-title">未来规划</div>
+        <div class="header-star">✨</div>
+    </header>
+    <main class="page">
+        <div id="empty-view" class="empty">等待 TA 填满我们的未来...</div>
+        <section id="wish-list" class="list"></section>
+    </main>
+    <div class="fab-wrap">
+        <button id="generate-btn" class="fab" type="button">✨ 让TA生成未来规划</button>
+    </div>
+    <script>
+        const STORAGE_BASE_KEY = 'couple_future_planning_state_v1';
+        const listEl = document.getElementById('wish-list');
+        const emptyEl = document.getElementById('empty-view');
+        const generateBtn = document.getElementById('generate-btn');
+        const backBtn = document.getElementById('back-btn');
+        const runtime = {
+            roleId: '',
+            roleName: 'TA',
+            userName: '你',
+            rolePrompt: '',
+            items: [],
+            generating: false,
+        };
+
+        function getParentWindow() {
+            try {
+                return window.parent && window.parent !== window ? window.parent : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function escapeHtml(text) {
+            return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function getStorageEngine() {
+            try {
+                if (window.localforage && typeof window.localforage.getItem === 'function' && typeof window.localforage.setItem === 'function') return window.localforage;
+            } catch (e) {}
+            return null;
+        }
+
+        function resolveRoleId() {
+            try {
+                const has = localStorage.getItem('couple_has_linked_v1') === 'true';
+                const rid = String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
+                if (has && rid) return rid;
+            } catch (e) {}
+            try {
+                return String(localStorage.getItem('currentChatId') || '').trim();
+            } catch (e2) {
+                return '';
+            }
+        }
+
+        function readRoleMeta(roleId) {
+            const rid = String(roleId || '').trim();
+            if (!rid) return { roleName: 'TA', userName: '你', rolePrompt: '' };
+            let profiles = {};
+            let personas = {};
+            const pw = getParentWindow();
+            try {
+                profiles = pw && pw.charProfiles && typeof pw.charProfiles === 'object' ? pw.charProfiles : {};
+                personas = pw && pw.userPersonas && typeof pw.userPersonas === 'object' ? pw.userPersonas : {};
+            } catch (e) {}
+            if (!profiles[rid]) {
+                try {
+                    const raw = localStorage.getItem('wechat_charProfiles') || '{}';
+                    const parsed = JSON.parse(raw);
+                    profiles = parsed && typeof parsed === 'object' ? parsed : {};
+                } catch (e2) {}
+            }
+            if (!personas[rid]) {
+                try {
+                    const raw = localStorage.getItem('wechat_userPersonas') || '{}';
+                    const parsed = JSON.parse(raw);
+                    personas = parsed && typeof parsed === 'object' ? parsed : {};
+                } catch (e3) {}
+            }
+            const p = profiles[rid] || {};
+            const u = personas[rid] || {};
+            const roleName = String(p.remark || p.nickName || p.name || rid || 'TA').trim() || 'TA';
+            const userName = String(u.name || localStorage.getItem('user_name') || '你').trim() || '你';
+            const rolePrompt = String(p.desc || p.persona || p.style || '').trim();
+            return { roleName, userName, rolePrompt };
+        }
+
+        function getStorageKey() {
+            const rid = String(runtime.roleId || '').trim();
+            return rid ? `${STORAGE_BASE_KEY}_${rid}` : STORAGE_BASE_KEY;
+        }
+
+        async function readState() {
+            const key = getStorageKey();
+            const lf = getStorageEngine();
+            if (lf) {
+                try {
+                    const obj = await lf.getItem(key);
+                    if (obj && Array.isArray(obj.items)) return obj;
+                } catch (e) {}
+            }
+            try {
+                const raw = localStorage.getItem(key) || '';
+                const parsed = raw ? JSON.parse(raw) : {};
+                if (parsed && Array.isArray(parsed.items)) return parsed;
+            } catch (e2) {}
+            return { items: [] };
+        }
+
+        async function writeState() {
+            const payload = { items: Array.isArray(runtime.items) ? runtime.items : [] };
+            const key = getStorageKey();
+            const lf = getStorageEngine();
+            if (lf) {
+                try {
+                    await lf.setItem(key, payload);
+                    return;
+                } catch (e) {}
+            }
+            try {
+                localStorage.setItem(key, JSON.stringify(payload));
+            } catch (e2) {}
+        }
+
+        function renderList() {
+            const list = Array.isArray(runtime.items) ? runtime.items : [];
+            if (!list.length) {
+                emptyEl.style.display = 'block';
+                listEl.innerHTML = '';
+                return;
+            }
+            emptyEl.style.display = 'none';
+            listEl.innerHTML = list.map((item, index) => {
+                return `
+                    <article class="wish-item" data-id="${escapeHtml(item.id)}" role="button" tabindex="0" aria-label="查看${escapeHtml(item.title)}的完整规划" style="animation-delay:${index * 90}ms;">
+                        <span class="wish-check" aria-hidden="true"></span>
+                        <div class="wish-main">
+                            <div class="wish-title">${escapeHtml(item.title)}</div>
+                            <div class="wish-desc">${escapeHtml(item.description)}</div>
+                        </div>
+                        <div class="wish-tag">${escapeHtml(item.category)}</div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        function findItemById(id) {
+            const targetId = String(id || '').trim();
+            if (!targetId) return null;
+            const list = Array.isArray(runtime.items) ? runtime.items : [];
+            return list.find(item => item && String(item.id) === targetId) || null;
+        }
+
+        function resolveMoodKaomoji(item) {
+            const mood = item && (item.moodKaomoji || item.moodKaomojiText || item.kaomoji || item.mood);
+            return trimText(mood, 20) || '(*๓´╰╯`๓)♡';
+        }
+
+        function closeFutureNote() {
+            const existing = document.querySelector('.future-note-overlay');
+            if (existing) existing.remove();
+        }
+
+        function openFutureNote(item) {
+            if (!item) return;
+            closeFutureNote();
+            const overlay = document.createElement('div');
+            overlay.className = 'future-note-overlay';
+            overlay.innerHTML = `
+                <div class="pink-sticky-note" role="dialog" aria-modal="true" aria-label="未来规划完整内容">
+                    <div class="washi-tape"></div>
+                    <button class="future-note-close" type="button" aria-label="关闭便签">✖</button>
+                    <div class="note-title"> ${escapeHtml(item.title)} </div>
+                    <div class="note-scroll-content">
+                        <div class="note-category">${escapeHtml(item.category)}</div>
+                        <p>${escapeHtml(item.description)}</p>
+                    </div>
+                    <div class="mood-kaomoji">${escapeHtml(resolveMoodKaomoji(item))}</div>
+                </div>
+            `;
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay || e.target.closest('.future-note-close')) closeFutureNote();
+            });
+            document.body.appendChild(overlay);
+        }
+
+        function resolveCallAI() {
+            if (typeof window.callAI === 'function') return window.callAI;
+            try {
+                const pw = getParentWindow();
+                if (pw && typeof pw.callAI === 'function') return pw.callAI;
+            } catch (e) {}
+            return null;
+        }
+
+        function readChatHistory(roleId) {
+            const rid = String(roleId || '').trim();
+            if (!rid) return [];
+            try {
+                const pw = getParentWindow();
+                if (pw && pw.chatData && Array.isArray(pw.chatData[rid])) return pw.chatData[rid].slice();
+            } catch (e) {}
+            try {
+                const raw = localStorage.getItem('wechat_chatData') || '{}';
+                const parsed = JSON.parse(raw);
+                return parsed && Array.isArray(parsed[rid]) ? parsed[rid].slice() : [];
+            } catch (e2) {
+                return [];
+            }
+        }
+
+        function buildShortMemory(roleId) {
+            const history = readChatHistory(roleId);
+            const lines = [];
+            for (let i = 0; i < history.length; i++) {
+                const msg = history[i];
+                if (!msg || typeof msg !== 'object') continue;
+                const role = String(msg.role || '').trim();
+                if (role !== 'me' && role !== 'ai') continue;
+                const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+                if (!content) continue;
+                lines.push(`${role === 'me' ? '你' : '我'}：${content}`);
+            }
+            if (!lines.length) return '最近聊天节奏偏温柔日常，双方关系亲密。';
+            return lines.slice(-28).join('\n');
+        }
+
+        function cleanJsonResponse(rawText) {
+            const raw = String(rawText || '').trim();
+            if (!raw) return '';
+            const noFence = raw.replace(/```json/ig, '').replace(/```/g, '').trim();
+            return noFence;
+        }
+
+        function parseWishlistArray(rawText) {
+            const cleaned = cleanJsonResponse(rawText);
+            if (!cleaned) return [];
+            const start = cleaned.indexOf('[');
+            const end = cleaned.lastIndexOf(']');
+            if (start === -1 || end === -1 || end <= start) return [];
+            const arrText = cleaned.slice(start, end + 1);
+            try {
+                const parsed = JSON.parse(arrText);
+                if (!Array.isArray(parsed)) return [];
+                return parsed;
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function trimText(text, maxLen) {
+            const v = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!v) return '';
+            if (!maxLen || v.length <= maxLen) return v;
+            return v.slice(0, maxLen);
+        }
+
+        function normalizeGeneratedItems(list) {
+            const out = [];
+            const source = Array.isArray(list) ? list : [];
+            for (let i = 0; i < source.length; i++) {
+                const item = source[i];
+                if (!item || typeof item !== 'object') continue;
+                const title = trimText(item.title, 12);
+                const description = trimText(item.description, 160);
+                const category = trimText(item.category, 4);
+                const moodKaomoji = resolveMoodKaomoji(item);
+                if (!title || !description || !category) continue;
+                out.push({
+                    id: `plan_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+                    title,
+                    description,
+                    category,
+                    moodKaomoji,
+                    completed: false,
+                });
+            }
+            return out.slice(0, 5);
+        }
+
+        function fallbackItems() {
+            return [
+                { title: '一起去海边看日出', description: '我想和你并肩坐在沙滩上，看太阳一点点跃出海平面，迎接我们的每一个明天。', category: '远方', moodKaomoji: '(*๓´╰╯`๓)♡' },
+                { title: '共同布置温馨小家', description: '我想和你一起挑选喜欢的沙发和窗帘，把我们的空间填满温暖的回忆。', category: '生活', moodKaomoji: '(つ≧▽≦)つ' },
+                { title: '开启一场说走就走的旅行', description: '我想带你去你最想去的地方，记录下我们在旅途中的每一个笑容。', category: '探索', moodKaomoji: '٩(๑❛ᴗ❛๑)۶' },
+                { title: '一起学习一项新技能', description: '我想和你一起挑战未知，在互相陪伴中共同成长。', category: '成长', moodKaomoji: '(ง •̀_•́)ง' },
+                { title: '为未来的我们写一封信', description: '我想把现在的爱和期待都写下来，留给五年、十年后的我们。', category: '永恒', moodKaomoji: '(｡･ω･｡)ﾉ♡' },
+            ].map((it, idx) => ({
+                id: `plan_fallback_${Date.now()}_${idx}`,
+                title: it.title,
+                description: it.description,
+                category: it.category,
+                moodKaomoji: it.moodKaomoji,
+                completed: false,
+            }));
+        }
+
+        function buildFuturePlanningPrompts() {
+            const memory = buildShortMemory(runtime.roleId);
+            const systemPrompt = [
+                '[[PROMPT_CLASS:ROLE_JSON_TASK]]',
+                '[[SCENE:COUPLE_FUTURE_PLANNING]]',
+                '【角色身份】',
+                `你现在不是助手，你是${runtime.roleName}。`,
+                '你必须始终站在第一人称“我”的角度，对“你”说话。',
+                runtime.rolePrompt ? `你的人设与性格底色：${runtime.rolePrompt}` : '',
+                '',
+                '【用户身份】',
+                `和你一起谈未来的人是${runtime.userName}。`,
+                '',
+                '【当前页面场景】',
+                '当前页面是情侣空间里的“未来规划”。这里展示的是角色认真设想过、想和恋人一起实现的未来计划。',
+                '',
+                '【当前任务】',
+                '请生成 5 个未来规划。',
+                '每个规划都要像角色本人会认真说出口的计划，既有期待感，也要有生活画面，不要空泛口号。',
+                '',
+                '【输出格式】',
+                '你必须严格输出 JSON 数组，不允许 markdown、不允许代码块、不允许数组外文本。',
+                '数组长度必须是 5。',
+                '每个对象字段必须是：title, description, category, moodKaomoji。',
+                'title 不超过 12 字；description 45-90 字；category 2-4 字。',
+                'moodKaomoji 必须是符合角色当下心情的颜文字，不要使用 emoji，不超过 16 个字符。'
+            ].filter(Boolean).join('\n');
+
+            const userPrompt = [
+                '【关系上下文】',
+                `你是${runtime.roleName}，对方是${runtime.userName}。`,
+                '下面是你们近期对话里最能体现关系状态、期待和生活方向的内容：',
+                memory,
+                '',
+                '【补充要求】',
+                '语气要充满期待、坚定、有画面感。',
+                '5 个规划尽量分布在不同方向，比如生活、旅行、成长、仪式感、长期约定。',
+                '每个 moodKaomoji 要能体现角色写下这条规划时的心情，比如害羞、兴奋、坚定、安心或期待。',
+                '不要重复同一种表达，不要写成口号列表。'
+            ].join('\n');
+
+            return { systemPrompt, userPrompt };
+        }
+
+        function logFuturePlanningPromptDebug(debugTag, systemPrompt, userPrompt) {
+            const tag = String(debugTag || '未来规划生成').trim() || '未来规划生成';
+            const systemText = String(systemPrompt || '');
+            const userText = String(userPrompt || '');
+            const payload = {
+                page: 'couple-future-planning',
+                tag: tag,
+                timestamp: Date.now(),
+                systemPrompt: systemText,
+                userPrompt: userText
+            };
+            try {
+                window.__couplePromptDebugHistory = Array.isArray(window.__couplePromptDebugHistory) ? window.__couplePromptDebugHistory : [];
+                window.__couplePromptDebugHistory.unshift(payload);
+                window.__couplePromptDebugHistory = window.__couplePromptDebugHistory.slice(0, 30);
+                window.__lastCoupleFuturePlanningPromptDebug = payload;
+            } catch (e) {}
+            try {
+                console.group(`[AI Prompt][未来规划] ${tag}`);
+                console.log('=== SYSTEM PROMPT START ===\n' + systemText + '\n=== SYSTEM PROMPT END ===');
+                console.log('=== USER PROMPT START ===\n' + userText + '\n=== USER PROMPT END ===');
+                console.groupEnd();
+            } catch (e2) {
+                console.log('[AI Prompt][未来规划][' + tag + ']', payload);
+            }
+        }
+
+        async function callWishlistAI() {
+            const callAI = resolveCallAI();
+            if (!callAI) return [];
+            const prompts = buildFuturePlanningPrompts();
+            logFuturePlanningPromptDebug('生成未来规划', prompts.systemPrompt, prompts.userPrompt);
+            const raw = await new Promise((resolve) => {
+                try {
+                    callAI(prompts.systemPrompt, [], { text: prompts.userPrompt }, (text) => resolve(String(text || '')), () => resolve(''));
+                } catch (e) {
+                    resolve('');
+                }
+            });
+            const parsed = parseWishlistArray(raw);
+            return normalizeGeneratedItems(parsed);
+        }
+
+        function setGenerateLoading(loading) {
+            runtime.generating = !!loading;
+            generateBtn.disabled = !!loading;
+            if (loading) {
+                generateBtn.classList.add('loading');
+                generateBtn.textContent = `${runtime.roleName}正在描绘未来...`;
+            } else {
+                generateBtn.classList.remove('loading');
+                generateBtn.textContent = '✨ 让TA生成未来规划';
+            }
+        }
+
+        async function handleGenerate() {
+            if (runtime.generating) return;
+            setGenerateLoading(true);
+            try {
+                const generated = await callWishlistAI();
+                runtime.items = generated.length >= 5 ? generated : fallbackItems();
+                renderList();
+                await writeState();
+            } finally {
+                setGenerateLoading(false);
+            }
+        }
+
+        async function init() {
+            runtime.roleId = resolveRoleId();
+            const meta = readRoleMeta(runtime.roleId);
+            runtime.roleName = meta.roleName || 'TA';
+            runtime.userName = meta.userName || '你';
+            runtime.rolePrompt = meta.rolePrompt || '';
+            const stored = await readState();
+            runtime.items = Array.isArray(stored.items) ? stored.items : [];
+            renderList();
+        }
+
+        function resolveCoupleRecordBackTarget() {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const fromQuery = String(params.get('back') || '').trim();
+                if (fromQuery) return fromQuery;
+            } catch (e) { }
+            try {
+                const fromSession = String(sessionStorage.getItem('couple_space_record_return_target') || '').trim();
+                if (fromSession) return fromSession;
+            } catch (e2) { }
+            return 'couple-space.html?tab=record';
+        }
+
+        function goBackToCoupleRecord() {
+            const target = resolveCoupleRecordBackTarget();
+            window.location.replace(target);
+        }
+
+        backBtn.addEventListener('click', () => {
+            if (window.parent && window.parent.closeCoupleSubpage) {
+                window.parent.closeCoupleSubpage();
+            } else {
+                goBackToCoupleRecord();
+            }
+        });
+
+        generateBtn.addEventListener('click', handleGenerate);
+
+        listEl.addEventListener('click', (e) => {
+            const row = e.target.closest('[data-id]');
+            if (!row) return;
+            openFutureNote(findItemById(row.getAttribute('data-id') || ''));
+        });
+
+        listEl.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const row = e.target.closest('[data-id]');
+            if (!row) return;
+            e.preventDefault();
+            openFutureNote(findItemById(row.getAttribute('data-id') || ''));
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeFutureNote();
+        });
+
+        init();
+    </script>
+</body>
+</html>

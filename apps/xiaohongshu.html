@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>仿小红书精美版 UI</title>
+<style>
+    /* 全局重置与基础样式 */
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: #F4F4F4; display: flex; justify-content: center; }
+    
+    /* 模拟手机屏幕 */
+    .app-container {
+        width: 100%;
+        max-width: 414px; /* 模拟 iPhone Max 宽度 */
+        height: 100vh;
+        background-color: #F8F8F8;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+
+    /* === 顶部导航栏 === */
+    .top-nav {
+        height: 88px; /* 包含状态栏高度 */
+        padding-top: 40px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 30px;
+        background: rgba(248, 248, 248, 0.9);
+        backdrop-filter: blur(10px);
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        z-index: 10;
+    }
+    .top-nav .tab {
+        font-size: 16px;
+        color: #999;
+        font-weight: 500;
+        position: relative;
+        cursor: pointer;
+    }
+    .top-nav .tab.active {
+        color: #333;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    .top-nav .tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 20px;
+        height: 3px;
+        background-color: #FF2442; /* 小红书红 */
+        border-radius: 2px;
+    }
+
+    /* === 内容瀑布流区域 === */
+    .view-container {
+        flex: 1;
+        overflow-y: auto;
+        position: relative;
+        display: none; /* 默认隐藏所有视图 */
+        width: 100%;
+        height: 100%;
+    }
+    .view-container.active {
+        display: block;
+    }
+
+    /* 隐藏滚动条让界面更干净 */
+    .view-container::-webkit-scrollbar { display: none; }
+
+    /* 首页视图特有样式 */
+    #home-view {
+        padding: 95px 12px 90px 12px; /* 上下留出导航栏的空间 */
+    }
+
+    .masonry-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    /* === 卡片样式 (核心设计) === */
+    .card {
+        background: #fff;
+        border-radius: 16px;
+        overflow: hidden;
+        /* 这里的 height 是实现“4条全露，2条半露”的关键 */
+        /* 假设可用高度约为 600px，设为 280px 保证第三排刚好露出一点点 */
+        height: 280px; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    /* 仿照你例图的封面配色 */
+    .card-cover { flex: 1; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: #555; position: relative;}
+    .card:nth-child(1) .card-cover { background-color: #E8E4FD; color: #5B4E7A; } /* 浅紫 */
+    .card:nth-child(2) .card-cover { background-color: #6B6B6B; color: #FFF; }    /* 深灰 */
+    .card:nth-child(3) .card-cover { background-color: #FFEFEF; color: #D86B6B; } /* 浅粉 */
+    .card:nth-child(4) .card-cover { background-color: #E6F4EA; color: #538A63; } /* 浅绿 */
+    .card:nth-child(5) .card-cover { background-color: #FFF4E5; color: #A67B40; } /* 浅黄 (半露) */
+    .card:nth-child(6) .card-cover { background-color: #E5F0FF; color: #4A70A6; } /* 浅蓝 (半露) */
+
+    /* 卡片底部的文字信息 */
+    .card-info {
+        padding: 12px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #333;
+        font-weight: 500;
+    }
+    .card-info i { font-size: 14px; } /* 占位图标 */
+
+    /* === 消息页样式 === */
+    #messages-view {
+        background-color: #fff;
+        padding-top: 50px; /* 为顶部标题留空间 */
+        padding-bottom: 90px;
+    }
+    .msg-header {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 50px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #fff;
+        z-index: 10;
+        font-size: 17px;
+        font-weight: 600;
+    }
+    .msg-header .icons {
+        position: absolute;
+        right: 15px;
+        display: flex;
+        gap: 15px;
+    }
+    .msg-header .icons i {
+        font-size: 20px;
+        color: #333;
+        font-style: normal;
+        cursor: pointer;
+    }
+
+    .msg-top-buttons {
+        display: flex;
+        justify-content: space-around;
+        padding: 20px 0 10px 0;
+    }
+    .msg-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .msg-btn-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 28px;
+    }
+    .msg-btn:nth-child(1) .msg-btn-icon { background: linear-gradient(135deg, #FFB6C1, #FFC0CB); color: #FF2442; } /* 赞和收藏 */
+    .msg-btn:nth-child(2) .msg-btn-icon { background: linear-gradient(135deg, #A8C0FF, #8EAEFF); color: #3B82F6; } /* 新增关注 */
+    .msg-btn:nth-child(3) .msg-btn-icon { background: linear-gradient(135deg, #A8E6CF, #88D4AB); color: #10B981; } /* 评论和@ */
+    .msg-btn-text {
+        font-size: 13px;
+        color: #333;
+    }
+
+    .msg-list {
+        margin-top: 10px;
+    }
+    /* 暂时留空的消息列表容器 */
+
+    /* === 关注列表页样式 === */
+    #followers-view {
+        background-color: #fff;
+        padding-top: 95px; /* 顶部导航和搜索栏 */
+    }
+    .follow-header {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        padding: 0 15px;
+        background: #fff;
+        z-index: 10;
+    }
+    .follow-back {
+        font-size: 24px;
+        color: #333;
+        cursor: pointer;
+        position: absolute;
+        left: 15px;
+        text-decoration: none;
+    }
+    .follow-tabs {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+    }
+    .follow-tab {
+        font-size: 15px;
+        color: #999;
+        cursor: pointer;
+        position: relative;
+    }
+    .follow-tab.active {
+        color: #333;
+        font-weight: 600;
+    }
+    .follow-tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 20px;
+        height: 2px;
+        background-color: #FF2442;
+        border-radius: 2px;
+    }
+    .follow-info-icon {
+        position: absolute;
+        right: 15px;
+        color: #999;
+        font-size: 18px;
+        cursor: pointer;
+    }
+
+    .follow-search-container {
+        position: absolute;
+        top: 50px; left: 0; right: 0;
+        padding: 10px 15px;
+        background: #fff;
+        z-index: 10;
+    }
+    .follow-search {
+        background: #F4F4F4;
+        border-radius: 20px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        padding: 0 15px;
+        gap: 8px;
+        color: #999;
+        font-size: 14px;
+    }
+    .follow-search input {
+        border: none;
+        background: transparent;
+        outline: none;
+        flex: 1;
+        font-size: 14px;
+        color: #333;
+    }
+
+    .follow-list {
+        padding: 0 15px 90px 15px;
+    }
+    .follow-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 0;
+    }
+    .follow-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background-color: #EEE;
+        margin-right: 12px;
+        overflow: hidden;
+    }
+    .follow-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .follow-info {
+        flex: 1;
+    }
+    .follow-name {
+        font-size: 16px;
+        color: #333;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 4px;
+    }
+    .vip-icon {
+        color: #1DA1F2;
+        font-size: 14px;
+    }
+    .follow-subtitle {
+        font-size: 12px;
+        color: #999;
+        background: #F4F4F4;
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    .follow-subtitle.plain {
+        background: transparent;
+        padding: 0;
+    }
+    .follow-action {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .follow-btn {
+        padding: 5px 14px;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid #E5E5E5;
+        color: #666;
+        background: #fff;
+    }
+    .follow-more {
+        color: #999;
+        font-size: 20px;
+        cursor: pointer;
+        line-height: 1;
+        margin-top: -4px;
+    }
+
+    /* === 底部导航栏 === */
+    .bottom-nav {
+        height: 70px;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        padding-bottom: 15px; /* 适配 iPhone 底部黑条 */
+        border-top: 1px solid #F0F0F0;
+        z-index: 10;
+    }
+    .nav-item {
+        font-size: 16px;
+        color: #999;
+        font-weight: 500;
+        cursor: pointer;
+    }
+    .nav-item.active { color: #333; font-weight: bold; }
+    
+    /* 中间的加号按钮 */
+    .add-btn {
+        width: 46px;
+        height: 34px;
+        background-color: #FF2442;
+        color: white;
+        border-radius: 12px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 24px;
+        font-weight: 300;
+        box-shadow: 0 4px 10px rgba(255, 36, 66, 0.3);
+    }
+
+</style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- 顶部导航 -->
+    <header class="top-nav">
+        <div class="tab">关注</div>
+        <div class="tab active">发现</div>
+        <div class="tab">附近</div>
+    </header>
+
+    <!-- 首页视图 -->
+    <main class="view-container active" id="home-view">
+        <div class="masonry-grid">
+            <!-- 预加载的 6 张卡片 -->
+            <!-- 第 1-2 张 (完全露出) -->
+            <div class="card">
+                <div class="card-cover">📖 使用说明</div>
+                <div class="card-info"><span>📘</span> 使用说明</div>
+            </div>
+            <div class="card">
+                <div class="card-cover">👤 角色信息</div>
+                <div class="card-info"><span>👤</span> 角色信息</div>
+            </div>
+            <!-- 第 3-4 张 (完全露出) -->
+            <div class="card">
+                <div class="card-cover">OOTD 分享</div>
+                <div class="card-info"><span>👗</span> 春日穿搭</div>
+            </div>
+            <div class="card">
+                <div class="card-cover">探店打卡</div>
+                <div class="card-info"><span>☕️</span> 氛围感咖啡店</div>
+            </div>
+            <!-- 第 5-6 张 (露出头部一小半，引导滑动) -->
+            <div class="card">
+                <div class="card-cover">美妆教程</div>
+                <div class="card-info"><span>💄</span> 日常通勤妆</div>
+            </div>
+            <div class="card">
+                <div class="card-cover">数码开箱</div>
+                <div class="card-info"><span>💻</span> 桌面改造</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 消息视图 -->
+    <main class="view-container" id="messages-view">
+        <div class="msg-header">
+            消息
+            <div class="icons">
+                <i>🔍</i>
+                <i>⊕</i>
+            </div>
+        </div>
+        <div class="msg-top-buttons">
+            <div class="msg-btn">
+                <div class="msg-btn-icon">❤️</div>
+                <div class="msg-btn-text">赞和收藏</div>
+            </div>
+            <div class="msg-btn">
+                <div class="msg-btn-icon">👤</div>
+                <div class="msg-btn-text">新增关注</div>
+            </div>
+            <div class="msg-btn">
+                <div class="msg-btn-icon">💬</div>
+                <div class="msg-btn-text">评论和@</div>
+            </div>
+        </div>
+        <div class="msg-list">
+            <!-- 消息列表暂时留空 -->
+        </div>
+    </main>
+
+    <!-- 关注列表视图 -->
+    <main class="view-container" id="followers-view">
+        <div class="follow-header">
+            <a href="#" class="follow-back" id="back-to-home">‹</a>
+            <div class="follow-tabs">
+                <div class="follow-tab">互相关注</div>
+                <div class="follow-tab active">关注</div>
+                <div class="follow-tab">粉丝</div>
+                <div class="follow-tab">推荐</div>
+            </div>
+            <div class="follow-info-icon">ⓘ</div>
+        </div>
+        <div class="follow-search-container">
+            <div class="follow-search">
+                <i>🔍</i>
+                <input type="text" placeholder="搜索已关注的人">
+            </div>
+        </div>
+        <div class="follow-list">
+            <div class="follow-item">
+                <div class="follow-avatar">
+                    <img src="../assets/avatars/avatar-1.svg" alt="avatar">
+                </div>
+                <div class="follow-info">
+                    <div class="follow-name">恋与深空 <span class="vip-icon">✓</span></div>
+                    <div class="follow-subtitle">10+篇笔记未看</div>
+                </div>
+                <div class="follow-action">
+                    <div class="follow-btn">已关注</div>
+                    <div class="follow-more">...</div>
+                </div>
+            </div>
+            <div class="follow-item">
+                <div class="follow-avatar">
+                    <img src="../assets/avatars/avatar-2.svg" alt="avatar">
+                </div>
+                <div class="follow-info">
+                    <div class="follow-name">毛胖子御用铲屎官</div>
+                    <div class="follow-subtitle">4篇笔记未看</div>
+                </div>
+                <div class="follow-action">
+                    <div class="follow-btn">已关注</div>
+                    <div class="follow-more">...</div>
+                </div>
+            </div>
+            <div class="follow-item">
+                <div class="follow-avatar">
+                    <img src="../assets/avatars/avatar-3.svg" alt="avatar">
+                </div>
+                <div class="follow-info">
+                    <div class="follow-name">K_</div>
+                    <div class="follow-subtitle plain">喜欢整花活的小手机</div>
+                </div>
+                <div class="follow-action">
+                    <div class="follow-btn">已关注</div>
+                    <div class="follow-more">...</div>
+                </div>
+            </div>
+            <div class="follow-item">
+                <div class="follow-avatar">
+                    <img src="../assets/avatars/avatar-4.svg" alt="avatar">
+                </div>
+                <div class="follow-info">
+                    <div class="follow-name">小缘</div>
+                    <div class="follow-subtitle plain"></div>
+                </div>
+                <div class="follow-action">
+                    <div class="follow-btn">互相关注</div>
+                    <div class="follow-more">...</div>
+                </div>
+            </div>
+            <div class="follow-item">
+                <div class="follow-avatar">
+                    <img src="../assets/avatars/avatar-5.svg" alt="avatar">
+                </div>
+                <div class="follow-info">
+                    <div class="follow-name">要炒方师傅</div>
+                    <div class="follow-subtitle plain">只是一个绝望的同人女...</div>
+                </div>
+                <div class="follow-action">
+                    <div class="follow-btn">已关注</div>
+                    <div class="follow-more">...</div>
+                </div>
+            </div>
+            <div class="follow-item">
+                <div class="follow-avatar">
+                    <img src="../assets/avatars/avatar-6.svg" alt="avatar">
+                </div>
+                <div class="follow-info">
+                    <div class="follow-name">祈浅不是祁</div>
+                    <div class="follow-subtitle">2篇笔记未看</div>
+                </div>
+                <div class="follow-action">
+                    <div class="follow-btn">互相关注</div>
+                    <div class="follow-more">...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 底部导航 -->
+    <nav class="bottom-nav">
+        <div class="nav-item active">首页</div>
+        <div class="nav-item">购物</div>
+        <div class="add-btn">+</div>
+        <div class="nav-item">消息</div>
+        <div class="nav-item">我</div>
+    </nav>
+</div>
+
+<script>
+    // 简单的视图切换逻辑
+    const views = {
+        home: document.getElementById('home-view'),
+        messages: document.getElementById('messages-view'),
+        followers: document.getElementById('followers-view')
+    };
+
+    const topNav = document.querySelector('.top-nav');
+    const bottomNav = document.querySelector('.bottom-nav');
+
+    function switchView(viewName) {
+        // 隐藏所有视图
+        Object.values(views).forEach(v => {
+            if (v) v.classList.remove('active');
+        });
+
+        // 显示目标视图
+        if (views[viewName]) {
+            views[viewName].classList.add('active');
+        }
+
+        // 根据视图显示/隐藏导航栏
+        if (viewName === 'followers') {
+            topNav.style.display = 'none';
+            bottomNav.style.display = 'none';
+        } else if (viewName === 'messages') {
+            topNav.style.display = 'none';
+            bottomNav.style.display = 'flex';
+        } else {
+            topNav.style.display = 'flex';
+            bottomNav.style.display = 'flex';
+        }
+    }
+
+    // 绑定底部导航栏点击事件
+    const navItems = document.querySelectorAll('.bottom-nav .nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            navItems.forEach(nav => nav.classList.remove('active'));
+            item.classList.add('active');
+
+            if (item.textContent === '消息') {
+                switchView('messages');
+            } else if (item.textContent === '首页') {
+                switchView('home');
+            }
+        });
+    });
+
+    // 绑定顶部导航栏“关注”点击事件（模拟从个人主页进入）
+    const topTabs = document.querySelectorAll('.top-nav .tab');
+    topTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            topTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            if (tab.textContent === '关注') {
+                switchView('followers');
+            }
+        });
+    });
+
+    // 返回首页
+    document.getElementById('back-to-home').addEventListener('click', (e) => {
+        e.preventDefault();
+        switchView('home');
+
+        // 恢复导航栏激活状态
+        topTabs.forEach(t => t.classList.remove('active'));
+        topTabs[1].classList.add('active'); // 发现
+
+        navItems.forEach(nav => nav.classList.remove('active'));
+        navItems[0].classList.add('active'); // 首页
+    });
+</script>
+</body>
+</html>

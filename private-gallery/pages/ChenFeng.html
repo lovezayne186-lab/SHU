@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>尘封 - ChenFeng</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            /* 燕麦纸色底色 */
+            background-color: #F7F6F2;
+            /* 文艺风的灵魂：宋体/明朝体/衬线体 */
+            font-family: "Noto Serif SC", "Songti SC", "SimSun", "Times New Roman", serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding-top: max(40px, env(safe-area-inset-top));
+            color: #33312E;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            padding: 20px 32px 80px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 极简返回按钮 */
+        .back-btn {
+            position: fixed;
+            top: max(24px, env(safe-area-inset-top));
+            left: 24px;
+            width: 44px;
+            height: 44px;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: #8C8881;
+            font-size: 24px;
+            font-weight: 300;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+            font-family: -apple-system, sans-serif;
+            z-index: 100;
+        }
+        .back-btn:active {
+            color: #33312E;
+            transform: translateX(-4px);
+        }
+
+        .regen-btn {
+            position: fixed;
+            top: max(24px, env(safe-area-inset-top));
+            right: 24px;
+            height: 44px;
+            background: transparent;
+            border: none;
+            color: #8C8881;
+            font-size: 13px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            font-family: -apple-system, sans-serif;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s ease, color .25s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .regen-btn.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .regen-btn:active { color: #33312E; }
+
+        /* 页面头部 */
+        .page-header {
+            text-align: center;
+            margin-top: 20px;
+            margin-bottom: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .page-title {
+            font-size: 16px;
+            font-weight: normal;
+            letter-spacing: 8px;
+            margin-left: 8px;
+            color: #33312E;
+            margin-bottom: 24px;
+        }
+
+        /* 唤醒/生成按钮 (适配浅色主题) */
+        .unlock-btn {
+            background: transparent;
+            border: 1px solid #D5D1C8;
+            color: #8C8881;
+            padding: 8px 20px;
+            font-family: "Noto Serif SC", "Songti SC", serif;
+            font-size: 13px;
+            letter-spacing: 4px;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: all 0.4s;
+            outline: none;
+            text-indent: 4px; /* 补偿letter-spacing带来的视觉偏移 */
+        }
+        .unlock-btn:hover { border-color: #8C8881; color: #33312E; }
+        .unlock-btn:active { transform: scale(0.96); }
+        .unlock-btn.loading {
+            pointer-events: none;
+            border-color: #D5D1C8;
+            color: #9E9A93;
+            animation: pulse 1.5s infinite alternate;
+        }
+        @keyframes pulse { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* ================= 文艺风时间轴 ================= */
+        .timeline-wrapper {
+            display: none; /* 初始隐藏 */
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 28px;
+        }
+
+        /* 极细的灰色主线 */
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 4px;
+            top: 8px;
+            bottom: -30px; /* 让线往下延伸一点，有未完待续的感觉 */
+            width: 1px;
+            background-color: #D5D1C8;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 64px; /* 极大的间距，增强阅读呼吸感 */
+        }
+
+        /* 极简的时间节点圆点 */
+        .timeline-dot {
+            position: absolute;
+            left: -26.5px; /* 精确居中于线条上 */
+            top: 6px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #8C8881;
+            /* 用一个纸色的外发光切断背后的细线，极其优雅的细节 */
+            box-shadow: 0 0 0 6px #F7F6F2;
+            z-index: 2;
+            transition: background-color 0.3s;
+        }
+        .timeline-item:hover .timeline-dot { background-color: #33312E; }
+
+        .timeline-content { padding-top: 0; }
+
+        .date {
+            font-family: "Georgia", serif;
+            font-size: 13px;
+            font-style: italic;
+            color: #9E9A93;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .memory-title {
+            font-size: 18px;
+            color: #33312E;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        .desc {
+            font-size: 15px;
+            color: #4A4742; /* 比纯黑稍微柔和一点，适合长文阅读 */
+            line-height: 2.2;
+            letter-spacing: 1.5px;
+            text-align: justify;
+            white-space: pre-wrap; /* 自动处理 \n 换行 */
+        }
+
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" id="backBtn">‹</a>
+    <button class="regen-btn" id="regenBtn" type="button">重生成</button>
+
+    <div class="container">
+        <!-- 页面头部与触发器 -->
+        <div class="page-header">
+            <h1 class="page-title">尘封</h1>
+            <button class="unlock-btn" id="unlockBtn" onclick="generateMemories()">拂去尘埃</button>
+        </div>
+
+        <!-- 档案展开区 -->
+        <div class="timeline-wrapper" id="archiveContainer">
+            <div class="timeline" id="timelineContent">
+                <!-- 动态渲染的记忆节点 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        const backBtn = document.getElementById('backBtn');
+        const unlockBtn = document.getElementById('unlockBtn');
+        const regenBtn = document.getElementById('regenBtn');
+        const archiveContainer = document.getElementById('archiveContainer');
+        const timelineContent = document.getElementById('timelineContent');
+        let isGenerating = false;
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '尘封档案生成失败，请稍后重试。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '尘封档案');
+                return;
+            }
+            alert(reason);
+        }
+
+        function isValidMemoriesData(data) {
+            const memories = Array.isArray(data && data.memories) ? data.memories : [];
+            if (memories.length !== 3) return false;
+            let totalLen = 0;
+            for (let i = 0; i < memories.length; i++) {
+                const row = memories[i] || {};
+                const time = asString(row.time);
+                const title = asString(row.title);
+                const content = asString(row.content);
+                if (!time || !title || !content || content.length < 180) return false;
+                totalLen += content.length;
+            }
+            return totalLen >= 800;
+        }
+
+        function setGenerating(isBusy) {
+            isGenerating = !!isBusy;
+            unlockBtn.classList.toggle('loading', isBusy);
+            unlockBtn.innerText = isBusy ? '翻阅中...' : '档案已解密';
+            unlockBtn.style.pointerEvents = isBusy ? 'none' : 'none';
+            unlockBtn.style.color = isBusy ? '#9E9A93' : '#D5D1C8';
+            unlockBtn.style.borderColor = isBusy ? '#D5D1C8' : 'transparent';
+            if (regenBtn) {
+                regenBtn.disabled = !!isBusy;
+                regenBtn.style.opacity = isBusy ? '0.55' : '';
+            }
+        }
+
+        function showArchiveAnimated(immediate) {
+            archiveContainer.style.display = 'block';
+            if (immediate) {
+                archiveContainer.style.transition = 'none';
+                archiveContainer.style.opacity = '1';
+                archiveContainer.style.transform = 'translateY(0)';
+                archiveContainer.offsetHeight;
+                archiveContainer.style.transition = '';
+            } else {
+                archiveContainer.offsetHeight;
+                archiveContainer.style.opacity = '1';
+                archiveContainer.style.transform = 'translateY(0)';
+            }
+            if (regenBtn) regenBtn.classList.add('show');
+        }
+
+        function renderMemories(data) {
+            const memories = Array.isArray(data && data.memories) ? data.memories : [];
+            timelineContent.innerHTML = memories.map(item => `
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="date">${escapeHtml(item.time)}</div>
+                        <div class="memory-title">${escapeHtml(item.title)}</div>
+                        <div class="desc">${escapeHtml(item.content)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function restoreFromCacheIfAny() {
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.readSceneCache !== 'function') return false;
+            const roleId = window.SecretCenterCore.getSelectedRoleId && window.SecretCenterCore.getSelectedRoleId();
+            if (!roleId) return false;
+            const cached = window.SecretCenterCore.readSceneCache('chenfeng', roleId);
+            if (!cached || !isValidMemoriesData(cached.data)) return false;
+            renderMemories(cached.data);
+            setGenerating(false);
+            showArchiveAnimated(true);
+            return true;
+        }
+
+        async function generateMemories(force) {
+            if (isGenerating) return;
+            const startedAt = Date.now();
+            setGenerating(true);
+            let data = null;
+            let errorMessage = '';
+
+            try {
+                if (!window.SecretCenterCore) throw new Error('核心模块未加载，暂时无法生成尘封档案。');
+                const roleId = window.SecretCenterCore.getSelectedRoleId && window.SecretCenterCore.getSelectedRoleId();
+                if (!roleId) throw new Error('请先选择角色，再生成尘封档案。');
+
+                const options = {
+                    roleId: roleId,
+                    force: force === true,
+                    requestOptions: {
+                        temperature: 0.84,
+                        maxTokens: 3600
+                    }
+                };
+                let res = null;
+                if (typeof window.SecretCenterCore.generateSceneNow === 'function') {
+                    res = await window.SecretCenterCore.generateSceneNow('chenfeng', options);
+                } else if (typeof window.SecretCenterCore.generateSceneContent === 'function') {
+                    res = await window.SecretCenterCore.generateSceneContent('chenfeng', options);
+                } else {
+                    throw new Error('当前版本不支持尘封档案生成。');
+                }
+
+                if (res && res.ok && isValidMemoriesData(res.data)) {
+                    data = res.data;
+                } else {
+                    throw new Error((res && res.error) || '尘封档案生成不完整（需 3 段且总字数不少于 800）。');
+                }
+            } catch (error) {
+                errorMessage = asString(error && error.message) || '尘封档案生成失败，请稍后重试。';
+            }
+
+            const waitMs = Math.max(0, 2500 - (Date.now() - startedAt));
+            setTimeout(() => {
+                if (!data) {
+                    setGenerating(false);
+                    unlockBtn.innerText = '拂去尘埃';
+                    unlockBtn.style.pointerEvents = 'auto';
+                    unlockBtn.style.color = '#8C8881';
+                    unlockBtn.style.borderColor = '#D5D1C8';
+                    showGenerationFailure(errorMessage);
+                    return;
+                }
+                renderMemories(data);
+                setGenerating(false);
+                showArchiveAnimated(false);
+            }, waitMs);
+        }
+
+        if (backBtn) {
+            backBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToFangCun === 'function') {
+                    window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });
+                } else if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.replace('FangCun.html');
+                }
+            });
+        }
+
+        if (regenBtn) {
+            regenBtn.addEventListener('click', function () {
+                generateMemories(true);
+            });
+        }
+
+        restoreFromCacheIfAny();
+    </script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>备忘录 - FangCun OS</title>
+    <style>
+        /* 基础全局 */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #F7F6F2; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; min-height: 100vh; color: #33312E; padding-bottom: 60px; }
+
+        .top-nav { position: fixed; top: 0; left: 0; width: 100%; padding: max(20px, env(safe-area-inset-top)) 20px 10px; display: flex; justify-content: space-between; align-items: center; z-index: 100; background: linear-gradient(180deg, #F7F6F2 80%, rgba(247, 246, 242, 0) 100%); }
+        .icon-btn { width: 44px; height: 44px; background: transparent; border: none; color: #8C8881; font-size: 24px; cursor: pointer; transition: 0.2s; }
+        .icon-btn:active { transform: scale(0.9); }
+
+        .app-container { max-width: 420px; margin: 0 auto; padding: max(80px, env(safe-area-inset-top) + 60px) 20px 40px; }
+        .header-section { margin-bottom: 24px; }
+        .page-title { font-size: 32px; font-weight: 600; color: #33312E; }
+
+        /* 通用分区标题 */
+        .section-header { margin: 32px 0 16px; display: flex; align-items: center; gap: 8px; }
+        .section-header::after { content: ''; flex: 1; height: 1px; background: #E5E2DC; }
+        .section-title { font-size: 13px; font-weight: bold; color: #A3A09A; text-transform: uppercase; letter-spacing: 1.5px; }
+
+        /* 通用卡片样式 */
+        .memo-card { background: #FFFFFF; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.02); }
+        .inner-thought { margin-top: 10px; padding-top: 10px; border-top: 1px solid #F7F6F2; font-size: 12px; color: #8C8881; font-style: italic; }
+        .inner-thought::before { content: '“'; margin-right: 4px; }
+        .inner-thought::after { content: '”'; margin-left: 4px; }
+
+        /* Tasks样式 */
+        .todo-item { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
+        .checkbox { width: 18px; height: 18px; border: 1.5px solid #D5D1C8; border-radius: 50%; flex-shrink: 0; margin-top: 2px; }
+        .todo-item.done .checkbox { background: #D5D1C8; }
+        .todo-item.done .text { text-decoration: line-through; color: #A3A09A; }
+        .todo-item.priority .text { color: #33312E; font-weight: 600; }
+        .text { font-size: 14px; line-height: 1.4; }
+
+        /* Data/User样式 */
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+        .data-label { color: #8C8881; }
+        .data-value { font-weight: 500; }
+        .data-value.unknown { color: #C93A3A; font-style: italic; }
+
+        /* Gift样式 */
+        .gift-name { font-size: 15px; font-weight: 600; color: #33312E; }
+
+        /* Draft样式 */
+        .draft-deleted { text-decoration: line-through; color: #A3A09A; font-size: 13px; display: block; margin-bottom: 4px; }
+        .draft-text { font-family: "Noto Serif SC", serif; font-size: 15px; line-height: 1.6; color: #33312E; }
+
+        /* Reflections样式 */
+        .reflect-content { font-size: 14px; line-height: 1.6; color: #5A5752; }
+
+        /* Loading */
+        .loading-shimmer { background: linear-gradient(90deg, #F0F0F0 25%, #F8F8F8 50%, #F0F0F0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; height: 100px; border-radius: 16px; margin-bottom: 16px; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+</head>
+<body>
+
+    <div class="top-nav">
+    <a href="FangCun.html" class="icon-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+        <button class="icon-btn" id="generateBtn" onclick="generateAllMemos()">✦</button>
+    </div>
+
+    <div class="app-container">
+        <div class="header-section">
+            <h1 class="page-title">Memos</h1>
+        </div>
+
+        <div id="memosContent">
+            <!-- 初始加载状态 -->
+            <div class="loading-shimmer"></div>
+            <div class="loading-shimmer"></div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        const SCENE_KEY = 'shadow_memos';
+        let currentRoleId = '';
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatMultiline(text) {
+            return escapeHtml(text).replace(/\n/g, '<br>');
+        }
+
+        function renderThought(thought) {
+            if (!thought) return '';
+            return `<div class="inner-thought">${escapeHtml(thought)}</div>`;
+        }
+
+        function renderSections(sections) {
+            const container = document.getElementById('memosContent');
+            const list = Array.isArray(sections) ? sections : [];
+            if (!list.length) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            list.forEach(function (sec) {
+                const items = Array.isArray(sec.items) ? sec.items : [];
+                if (!items.length) return;
+                html += `<div class="section-header"><span class="section-title">${escapeHtml(sec.title)}</span></div>`;
+                items.forEach(function (item) {
+                    html += '<div class="memo-card">';
+                    if (sec.type === 'tasks') {
+                        html += `<div class="todo-item ${item.isDone ? 'done' : ''} ${item.isPriority ? 'priority' : ''}">
+                                    <div class="checkbox"></div>
+                                    <div class="text">${escapeHtml(item.text)}</div>
+                                 </div>`;
+                    } else if (sec.type === 'userdata') {
+                        const isUnknown = /待了解|待测|未知|猜/.test(asString(item.value));
+                        html += `<div class="data-row">
+                                    <span class="data-label">${escapeHtml(item.label)}</span>
+                                    <span class="data-value ${isUnknown ? 'unknown' : ''}">${escapeHtml(item.value)}</span>
+                                 </div>`;
+                    } else if (sec.type === 'gifts') {
+                        html += `<div class="gift-name">${escapeHtml(item.name)}</div>`;
+                    } else if (sec.type === 'drafts') {
+                        (Array.isArray(item.deletedLines) ? item.deletedLines : []).forEach(function (line) {
+                            html += `<span class="draft-deleted">${escapeHtml(line)}</span>`;
+                        });
+                        html += `<div class="draft-text">${formatMultiline(item.finalText)}</div>`;
+                    } else if (sec.type === 'reflections') {
+                        html += `<div class="reflect-content">${formatMultiline(item.content)}</div>`;
+                    }
+                    html += renderThought(item.thought);
+                    html += '</div>';
+                });
+            });
+            container.innerHTML = html;
+        }
+
+        function renderLoading() {
+            document.getElementById('memosContent').innerHTML = '<div class="loading-shimmer"></div>'.repeat(5);
+        }
+
+        function resolveContext() {
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.resolveRoleContext === 'function') {
+                const resolved = window.SecretCenterCore.resolveRoleContext();
+                if (resolved && resolved.ok) return resolved;
+            }
+            return {
+                roleId: localStorage.getItem('SecretCenter_CurrentRoleId') || '',
+                roleName: localStorage.getItem('SecretCenter_CurrentRoleName') || localStorage.getItem('FangCun_CurrentRole') || ''
+            };
+        }
+
+        function readCachedSections(roleId) {
+            if (!roleId || !window.SecretCenterCore || typeof window.SecretCenterCore.readSceneCache !== 'function') {
+                return [];
+            }
+            const cached = window.SecretCenterCore.readSceneCache(SCENE_KEY, roleId);
+            return cached && cached.data && Array.isArray(cached.data.sections) ? cached.data.sections : [];
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的备忘录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '备忘录');
+                return;
+            }
+            alert(reason);
+        }
+
+        async function generateAllMemos(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateSceneContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成。');
+                return;
+            }
+            if (!currentRoleId) {
+                showGenerationFailure('请先选择角色，再生成备忘录。');
+                return;
+            }
+
+            if (btn) btn.disabled = true;
+            renderLoading();
+
+            try {
+                const result = await window.SecretCenterCore.generateSceneContent(SCENE_KEY, {
+                    roleId: currentRoleId,
+                    force: force === true,
+                    requestOptions: {
+                        temperature: 0.72,
+                        maxTokens: 2600
+                    }
+                });
+                if (result && result.ok && result.data && Array.isArray(result.data.sections) && result.data.sections.length) {
+                    renderSections(result.data.sections);
+                    return;
+                }
+                renderSections(readCachedSections(currentRoleId));
+                showGenerationFailure(result && result.error);
+            } catch (error) {
+                console.error('ShadowMemos generate failed:', error);
+                renderSections(readCachedSections(currentRoleId));
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            generateAllMemos(true);
+        });
+
+        window.addEventListener('load', function () {
+            const context = resolveContext();
+            currentRoleId = asString(context.roleId);
+            const cachedSections = readCachedSections(currentRoleId);
+            if (cachedSections.length) {
+                renderSections(cachedSections);
+                return;
+            }
+            generateAllMemos(false);
+        });
+    </script>
+</body>
+</html>

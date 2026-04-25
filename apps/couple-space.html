@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#e7e7e7">
+    <title>情侣空间</title>
+    <script src="../vendor/localforage/localforage.min.js"></script>
+    <link rel="stylesheet" href="../CSS/couple-space.css?v=3">
+    <script src="../JS/couplespace/qa_data.js"></script>
+    <script src="../JS/couplespace/adapters/parent-bridge.js"></script>
+    <script src="../JS/couplespace/adapters/ai-utils.js"></script>
+    <script src="../JS/couplespace/domains/qa/qa-repository.js"></script>
+    <script src="../JS/couplespace/ai/scenes/couple-qa-scene.js"></script>
+    <script src="../JS/couplespace/domains/qa/qa-service.js"></script>
+    <script src="../JS/couplespace/ui/qa/qa-modal.js"></script>
+    <script src="../JS/couplespace/domains/settings/settings-service.js"></script>
+    <script src="../JS/couplespace/ui/settings/settings-modal.js"></script>
+</head>
+<body>
+    <!-- 专属空间角色邀请/选择遮罩层 -->
+    <div class="kr-role-selector" id="roleSelectOverlay" style="display:none;">
+        <div class="kr-bg"></div>
+
+        <header class="kr-header">
+            <button class="kr-back-btn" id="krBackBtn" type="button" aria-label="返回">＜</button>
+            <h1 class="kr-title">Connect</h1>
+            <p class="kr-subtitle">选择你想要共处空间的伴侣</p>
+        </header>
+
+        <div class="kr-scroll-container">
+            <div class="kr-list-layout" id="krRoleGrid"></div>
+        </div>
+
+        <div class="kr-footer">
+            <button class="kr-btn-primary" id="krConfirmBtn" type="button" disabled>
+                确认选择 <span id="krSelectedCount" hidden>(0)</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="couple-app-root" style="display:none;">
+
+    <!-- 1. Fixed Header -->
+    <header class="fixed-header-wrapper" id="fixed-header">
+        <div class="header-bg-layer" onclick="triggerBgChange()">
+            <img id="header-bg-img" src="../assets/默认背景图.jpg" class="header-bg-img" alt="Background">
+            <div class="header-mask"></div>
+        </div>
+
+        <div class="header-card-layer">
+            <div class="card-actions">
+                <div class="action-btn back-icon" onclick="goBack()">
+                    ＜
+                </div>
+                <div class="action-btn more-icon" onclick="openCoupleMoreMenu()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                </div>
+            </div>
+
+            <div class="avatar-group-wrapper">
+                <div class="avatar-group">
+                    <img id="avatar-user" src="../assets/avatars/avatar-1.svg" class="avatar user" alt="User" onclick="triggerAvatarChange('user')">
+                    <img id="avatar-role" src="../assets/avatars/avatar-2.svg" class="avatar role" alt="Role" onclick="triggerAvatarChange('role')">
+                </div>
+            </div>
+
+            <div class="text-group">
+                <!-- 新增：名字行 -->
+                <div class="names-row">
+                    <span id="name-user">User</span>
+                    <span class="heart-icon-small">♥</span>
+                    <span id="name-role">Role</span>
+                </div>
+                
+                <div class="main-title">在一起已经 <span id="days-count">--</span> 天</div>
+                <div class="sub-title" id="anniversary-label" role="button" tabindex="0">--</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. Main Content (Center Interaction) -->
+    <main class="main-content">
+        <section class="page page-home" data-page="home">
+            <div class="qa-entry-float">
+                <button class="qa-entry-btn" type="button" onclick="openCoupleQAModal()">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                </button>
+                <div class="qa-entry-label">情侣问答</div>
+            </div>
+            <div class="diffused-circle" id="miss-btn">
+                <span class="miss-text">想你 +1</span>
+            </div>
+            
+            <div class="stats-text">
+                <div><span id="miss-user-prefix">今天我想你</span><span class="stats-count" id="miss-count-user">0</span>次</div>
+                <div><span id="miss-role-prefix">今天你想我</span><span class="stats-count" id="miss-count-role">0</span>次</div>
+            </div>
+        </section>
+
+        <section class="page page-mood" data-page="mood" hidden>
+            <div class="mood-content-wrapper">
+                <div class="mood-calendar" id="mood-calendar"></div>
+                <div id="diary-note-container"></div>
+            </div>
+        </section>
+
+        <!-- 记录页 -->
+        <section class="page page-record" data-page="record" hidden>
+            <div class="record-container">
+                <div class="bento-grid">
+                    <!-- 1. 恋爱相册 -->
+                    <div class="bento-item love-album" onclick="openCoupleSubpage('couple-album.html?back=' + encodeURIComponent('couple-space.html?tab=record'))">
+                        <div class="love-album-text">
+                            <div class="subtitle">MEMORIES</div>
+                            <div class="title">恋爱相册</div>
+                            <div class="desc">定格甜蜜瞬间吧</div>
+                        </div>
+                        <div class="love-album-images">
+                            <div class="polaroid p1"></div>
+                            <div class="polaroid p2"></div>
+                            <div class="polaroid p3"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 2. 并排两张方卡 -->
+                    <div class="bento-row">
+                        <div class="bento-item bento-square wishlist" onclick="openCoupleSubpage('couple-wishlist.html?back=' + encodeURIComponent('couple-space.html?tab=record'))">
+                            <div class="icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                            </div>
+                            <div class="card-content">
+                                <div class="title">心愿单</div>
+                                <div class="subtitle">WISHLIST</div>
+                            </div>
+                            <div class="bottom-text">⭐ 留下共同心愿</div>
+                        </div>
+                        
+                        <div class="bento-item bento-square future-plans" onclick="openCoupleSubpage('couple-future-planning.html?back=' + encodeURIComponent('couple-space.html?tab=record'))">
+                            <div class="icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
+                            </div>
+                            <div class="card-content">
+                                <div class="title">未来规划</div>
+                                <div class="subtitle">FUTURE</div>
+                            </div>
+                            <div class="bottom-text timeline">
+                                <span class="dot"></span>
+                                <span>看看他的规划</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 情书页 -->
+        <section class="page page-letter" data-page="letter" hidden>
+            <div class="letter-top-area">
+                <button class="letter-placeholder" id="letter-reply-trigger" type="button" onclick="triggerLetterReply()">她在远方酝酿信笺...</button>
+                <button class="letter-write-btn" type="button" onclick="openLetterInput()">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="#333" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path>
+                        <line x1="16" y1="8" x2="2" y2="22"></line>
+                        <line x1="17.5" y1="15" x2="9" y2="15"></line>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="letter-timeline-container" id="letter-timeline">
+                <div class="letter-center-line"></div>
+                <!-- Cards will be generated dynamically -->
+            </div>
+        </section>
+    </main>
+
+    <!-- 3. Fixed Bottom Dock -->
+    <nav class="dock-bar">
+        <!-- 1. 首页 -->
+        <div class="dock-item active" data-tab="home">
+            <div class="dock-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            </div>
+            <span class="dock-text">首页</span>
+        </div>
+        
+        <!-- 2. 心情 -->
+        <div class="dock-item" data-tab="mood">
+            <div class="dock-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+            </div>
+            <span class="dock-text">心情</span>
+        </div>
+
+        <!-- 3. 空间 (Center Button) -->
+        <div class="dock-item-center" data-tab="home">
+            <div class="center-icon">
+                <!-- 纯色填充的心 -->
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+            </div>
+        </div>
+
+        <!-- 4. 记录 -->
+        <div class="dock-item" data-tab="record">
+            <div class="dock-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            </div>
+            <span class="dock-text">记录</span>
+        </div>
+
+        <!-- 5. 情书 -->
+        <div class="dock-item" data-tab="letter">
+            <div class="dock-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            </div>
+            <span class="dock-text">情书</span>
+        </div>
+    </nav>
+
+    <div class="couple-qa-modal" id="couple-qa-modal">
+        <div class="couple-qa-header">
+            <button class="qa-close-btn" type="button" onclick="closeCoupleQAModal()">✕</button>
+            <div class="couple-qa-title">今日问答</div>
+            <div class="qa-header-placeholder"></div>
+        </div>
+        <div class="qa-mini-toast" id="qa-mini-toast" hidden></div>
+        <div class="qa-printer-wrapper">
+            <div class="qa-printer-body">
+                <button class="qa-print-btn" type="button" id="qa-print-btn" onclick="handleQaPrint()">PUSH</button>
+                <div class="qa-printer-slot"></div>
+            </div>
+            <div class="qa-paper-container">
+                <div class="qa-paper" id="qa-paper">
+                    <div class="qa-date" id="qa-date"></div>
+                    <div class="qa-text" id="qa-text"></div>
+                </div>
+            </div>
+        </div>
+        <div class="qa-interaction-area" id="qa-interaction-area">
+            <div class="qa-my-card">
+                <div class="qa-my-header">
+                    <img class="qa-my-avatar" id="qa-user-avatar" alt="">
+                    <div class="qa-my-name" id="qa-user-name"></div>
+                </div>
+                <textarea class="qa-my-input" id="qa-my-input" placeholder="写下你的真实想法..."></textarea>
+                <div class="qa-my-display" id="qa-my-display"></div>
+                <div class="qa-card-actions qa-card-actions-right">
+                    <button class="qa-edit-btn" type="button" id="qa-my-edit-btn" onclick="editCoupleQaMyAnswer()" hidden aria-label="修改自己的答案">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <button class="qa-submit-btn" type="button" id="qa-submit-btn" onclick="submitCoupleQaAnswer()">确认投递</button>
+            </div>
+            <div class="qa-partner-card locked" id="qa-partner-card">
+                <div class="qa-lock-overlay">
+                    <svg class="qa-lock-icon" viewBox="0 0 24 24">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <div class="qa-lock-text" id="qa-lock-text">回答后解锁对方心声</div>
+                </div>
+                <div class="qa-partner-header">
+                    <img class="qa-partner-avatar" id="qa-partner-avatar" alt="">
+                    <div class="qa-partner-name" id="qa-partner-name">Ta 的回答</div>
+                </div>
+                <div class="qa-partner-content" id="qa-partner-content"></div>
+                <div class="qa-card-actions qa-card-actions-right">
+                    <button class="qa-edit-btn" type="button" id="qa-partner-edit-btn" onclick="editCoupleQaPartnerAnswer()" hidden aria-label="重新生成角色答案">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="qa-tip-text" id="qa-tip-text"></div>
+            <button class="qa-history-link" id="qa-history-link" type="button" onclick="openCoupleQaHistory()">查看历史</button>
+        </div>
+        <div class="qa-history-modal" id="qa-history-modal" hidden>
+            <div class="qa-history-mask" onclick="closeCoupleQaHistory()"></div>
+            <div class="qa-history-sheet" role="dialog" aria-modal="true">
+                <div class="qa-history-sheet-header">
+                    <div class="qa-history-sheet-title">问答历史</div>
+                    <button class="qa-history-close" type="button" onclick="closeCoupleQaHistory()">完成</button>
+                </div>
+                <div class="qa-history-list" id="qa-history-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="qa-confirm-modal" id="qa-confirm-modal" hidden>
+        <div class="qa-confirm-mask" onclick="closeCoupleQaConfirm()"></div>
+        <div class="qa-confirm-card" role="dialog" aria-modal="true">
+            <div class="qa-confirm-title" id="qa-confirm-title">确认操作</div>
+            <div class="qa-confirm-text" id="qa-confirm-text">是否继续？</div>
+            <div class="qa-confirm-actions">
+                <button class="qa-confirm-btn" type="button" onclick="closeCoupleQaConfirm()">取消</button>
+                <button class="qa-confirm-btn qa-confirm-btn-primary" type="button" onclick="confirmCoupleQaConfirm()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="secret-space-modal" id="secret-space-modal" hidden>
+        <div class="secret-space-panel" role="dialog" aria-modal="true">
+            <div class="secret-space-header">
+                <button class="secret-space-icon-btn" type="button" data-action="close-secret" aria-label="返回">＜</button>
+                <div class="secret-space-title">秘密空间</div>
+                <button class="secret-space-icon-btn" type="button" data-action="open-secret-settings" aria-label="更多">...</button>
+            </div>
+            <div class="secret-space-main" id="secret-space-main">
+                <div id="secret-timeline-container"></div>
+            </div>
+            <div class="secret-space-settings" id="secret-space-settings" hidden>
+                <div class="secret-space-settings-inner">
+                    <div class="secret-space-settings-nav">
+                        <button class="secret-space-settings-back" type="button" data-action="close-secret-settings" aria-label="返回">＜</button>
+                        <div class="secret-space-settings-title">秘密空间设置</div>
+                        <div class="secret-space-settings-gap"></div>
+                    </div>
+
+                    <section class="secret-settings-group">
+                        <div class="secret-settings-group-title">允许角色查看权限</div>
+
+                        <label class="secret-settings-row">
+                            <div class="secret-settings-row-main">
+                                <div class="secret-settings-row-title">允许角色查看使用记录</div>
+                                <div class="secret-settings-row-desc">关闭后不会因为你的操作记录触发角色主动回复</div>
+                            </div>
+                            <span class="secret-settings-switch">
+                                <input type="checkbox" id="secret-usage-master-switch">
+                                <span class="secret-settings-slider"></span>
+                            </span>
+                        </label>
+
+                        <label class="secret-settings-row">
+                            <div class="secret-settings-row-main">
+                                <div class="secret-settings-row-title">钱包</div>
+                            </div>
+                            <span class="secret-settings-switch">
+                                <input type="checkbox" id="secret-usage-wallet-switch">
+                                <span class="secret-settings-slider"></span>
+                            </span>
+                        </label>
+
+                        <label class="secret-settings-row">
+                            <div class="secret-settings-row-main">
+                                <div class="secret-settings-row-title">音乐</div>
+                            </div>
+                            <span class="secret-settings-switch">
+                                <input type="checkbox" id="secret-usage-music-switch">
+                                <span class="secret-settings-slider"></span>
+                            </span>
+                        </label>
+
+                        <label class="secret-settings-row">
+                            <div class="secret-settings-row-main">
+                                <div class="secret-settings-row-title">经期</div>
+                            </div>
+                            <span class="secret-settings-switch">
+                                <input type="checkbox" id="secret-usage-period-switch">
+                                <span class="secret-settings-slider"></span>
+                            </span>
+                        </label>
+
+                        <label class="secret-settings-row">
+                            <div class="secret-settings-row-main">
+                                <div class="secret-settings-row-title">低电量提醒</div>
+                                <div class="secret-settings-row-desc">手机电量低于 30% 时，允许角色主动提醒你充电</div>
+                            </div>
+                            <span class="secret-settings-switch">
+                                <input type="checkbox" id="secret-usage-battery-switch">
+                                <span class="secret-settings-slider"></span>
+                            </span>
+                        </label>
+                    </section>
+
+                    <button class="secret-view-peer-usage-btn" type="button" data-action="view-peer-usage">查看他的使用记录</button>
+                </div>
+            </div>
+            <div class="secret-space-footer">
+                <div class="secret-space-input-wrap">
+                    <button class="secret-space-peek-btn" type="button" data-action="peek-peer-usage">查看他在干嘛</button>
+                    <input class="secret-space-input" id="secret-space-input" type="text" placeholder="说点悄悄话…" autocomplete="off">
+                </div>
+                <button class="secret-space-btn secret-space-btn-secondary secret-space-heart-btn" type="button" data-action="receive-secret" aria-label="爱心">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                </button>
+                <button class="secret-space-btn secret-space-btn-primary" type="button" data-action="send-secret">message</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隐藏的文件输入 -->
+    <input type="file" id="bg-input" accept="image/*">
+    <input type="file" id="avatar-user-input" accept="image/*">
+    <input type="file" id="avatar-role-input" accept="image/*">
+    <input type="file" id="diary-image-input" accept="image/*" multiple>
+    <input type="date" id="anniversary-input" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;">
+
+    <div class="mood-modal" id="mood-modal" hidden>
+        <div class="mood-modal-mask" id="mood-modal-mask"></div>
+        <div class="mood-modal-card" role="dialog" aria-modal="true">
+            <div id="mood-modal-content"></div>
+        </div>
+    </div>
+
+    <div class="couple-menu-modal" id="couple-menu-modal" hidden>
+        <div class="couple-menu-mask" id="couple-menu-mask"></div>
+        <div class="couple-menu-card" role="dialog" aria-modal="true">
+            <div class="couple-menu-content" id="couple-menu-content"></div>
+        </div>
+    </div>
+
+    <div class="diary-edit-modal" id="diary-edit-modal" hidden>
+        <div class="diary-edit-mask" id="diary-edit-mask"></div>
+        <div class="diary-edit-card">
+            <div class="diary-edit-title">要修改心情日记吗？</div>
+            <div class="diary-edit-actions">
+                <button class="diary-edit-btn" type="button" data-action="cancel-edit-diary">取消</button>
+                <button class="diary-edit-btn diary-edit-btn-primary" type="button" data-action="confirm-edit-diary">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 情书输入弹窗 -->
+    <div class="letter-input-modal" id="letter-input-modal" hidden>
+        <div class="letter-input-mask" onclick="closeLetterInput()"></div>
+        <div class="letter-input-card">
+            <div class="letter-input-title">写一封情书</div>
+            <textarea class="letter-input-textarea" id="letter-textarea" placeholder="写下你想对Ta说的话..."></textarea>
+            <div class="letter-input-actions">
+                <button class="letter-input-btn cancel" type="button" onclick="closeLetterInput()">取消</button>
+                <button class="letter-input-btn confirm" type="button" onclick="submitLetter()">寄出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 情书展开详情弹窗 -->
+    <div class="letter-detail-modal" id="letter-detail-modal">
+        <div class="letter-detail-mask" onclick="closeLetterDetail()"></div>
+        <div class="letter-detail-paper">
+            <div class="letter-detail-content">
+                <div class="letter-detail-date" id="letter-detail-date"></div>
+                <div class="letter-detail-text" id="letter-detail-text"></div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- 修罗场霸屏弹窗容器 -->
+    <div class="jealousy-overlay" id="jealousyOverlay"></div>
+
+    <template id="jealousyCardTemplate">
+        <div class="korean-window">
+            <div class="kw-header">
+                <span class="kw-dot red"></span>
+                <span class="kw-dot yellow"></span>
+                <span class="kw-dot green"></span>
+                <span class="kw-title">SYSTEM ALERT</span>
+            </div>
+            <div class="kw-body">
+                <p class="kw-msg"></p>
+                <div class="kw-footer">
+                    <button class="kw-btn primary" type="button">回到我身边</button>
+                    <button class="kw-btn secondary" type="button">晚点再说</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    
+    <script src="../JS/couplespace/couple-space.js?v=3"></script>
+    <script>
+        // 情书相关逻辑
+        const LETTER_STORAGE_KEY = 'couple_space_letters_v1';
+        let letterData = [];
+        let letterReplyLoading = false;
+
+        function getLetterParentWindow() {
+            try { return window.parent && window.parent !== window ? window.parent : null; } catch (e) { return null; }
+        }
+
+        function resolveLetterRoleId() {
+            try {
+                const linked = localStorage.getItem('couple_has_linked_v1') === 'true';
+                const rid = String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
+                if (linked && rid) return rid;
+            } catch (e) {}
+            return String(localStorage.getItem('currentChatId') || '').trim();
+        }
+
+        function buildLetterStorageKey() {
+            const rid = resolveLetterRoleId();
+            return rid ? `${LETTER_STORAGE_KEY}__${rid}` : LETTER_STORAGE_KEY;
+        }
+
+        function formatLetterDate(ts) {
+            const date = ts instanceof Date ? ts : new Date(ts || Date.now());
+            return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function enforceLetterReplyFooterDate(text, date) {
+            const todayText = formatLetterDate(date || new Date());
+            const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+            while (lines.length && !String(lines[lines.length - 1] || '').trim()) lines.pop();
+            const dateLinePattern = /^\s*(?:\d{4}\s*[年./-]\s*\d{1,2}\s*[月./-]\s*\d{1,2}\s*日?|[零〇一二三四五六七八九十]{2,4}\s*年\s*[零〇一二三四五六七八九十]{1,3}\s*月\s*[零〇一二三四五六七八九十]{1,3}\s*日?|(?:今天|今日)|\d{1,2}\s*月\s*\d{1,2}\s*日)\s*$/;
+            if (lines.length && dateLinePattern.test(String(lines[lines.length - 1] || '').trim())) {
+                lines.pop();
+            }
+            lines.push(todayText);
+            return lines.join('\n').trim();
+        }
+
+        function readLetterPromptMeta() {
+            const rid = resolveLetterRoleId();
+            let profiles = {};
+            let personas = {};
+            const pw = getLetterParentWindow();
+            try {
+                profiles = pw && pw.charProfiles ? pw.charProfiles : JSON.parse(localStorage.getItem('wechat_charProfiles') || '{}');
+                personas = pw && pw.userPersonas ? pw.userPersonas : JSON.parse(localStorage.getItem('wechat_userPersonas') || '{}');
+            } catch (e) {}
+            const p = profiles[rid] || {};
+            const u = personas[rid] || {};
+            let worldBookPrompt = '';
+            try {
+                if (pw && typeof pw.buildWorldBookPrompt === 'function' && p.worldbookId) {
+                    worldBookPrompt = String(pw.buildWorldBookPrompt(p.worldbookId) || '').trim();
+                }
+            } catch (e2) {}
+            if (!worldBookPrompt) {
+                try {
+                    const rawBooks = JSON.parse(localStorage.getItem('wechat_worldbooks') || '{}');
+                    const ids = Array.isArray(p.worldbookId) ? p.worldbookId : (p.worldbookId ? [p.worldbookId] : []);
+                    worldBookPrompt = ids.map((id) => {
+                        const book = rawBooks && typeof rawBooks === 'object' ? rawBooks[String(id || '').trim()] : null;
+                        if (!book || typeof book !== 'object') return '';
+                        const title = String(book.title || '').trim();
+                        const content = String(book.content || '').trim();
+                        if (!title && !content) return '';
+                        return `世界书标题：${title || '未命名'}\n世界书内容：${content || '（无内容）'}`;
+                    }).filter(Boolean).join('\n\n');
+                } catch (e3) {}
+            }
+            return {
+                roleId: rid,
+                roleName: String(p.remark || p.nickName || p.name || 'TA').trim() || 'TA',
+                userName: String(u.name || localStorage.getItem('user_name') || '你').trim() || '你',
+                rolePrompt: String(p.desc || p.persona || p.style || '').trim(),
+                userBackground: String(u.setting || u.persona || u.background || '').trim(),
+                worldBookPrompt: String(worldBookPrompt || '').trim()
+            };
+        }
+
+        function readLetterChatHistory(roleId) {
+            const rid = String(roleId || '').trim();
+            if (!rid) return [];
+            const pw = getLetterParentWindow();
+            try {
+                if (pw && pw.chatData && Array.isArray(pw.chatData[rid])) return pw.chatData[rid].slice();
+            } catch (e) {}
+            try {
+                const raw = localStorage.getItem('wechat_chatData') || '{}';
+                const parsed = JSON.parse(raw);
+                return parsed && Array.isArray(parsed[rid]) ? parsed[rid].slice() : [];
+            } catch (e2) {
+                return [];
+            }
+        }
+
+        function buildLetterShortMemory(meta) {
+            const history = readLetterChatHistory(meta.roleId);
+            const lines = [];
+            for (let i = 0; i < history.length; i++) {
+                const msg = history[i];
+                if (!msg || typeof msg !== 'object') continue;
+                const role = String(msg.role || '').trim();
+                if (role !== 'me' && role !== 'ai') continue;
+                const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+                if (!content) continue;
+                lines.push(`${role === 'me' ? meta.userName : meta.roleName}：${content}`);
+            }
+            if (!lines.length) {
+                return `${meta.roleName}和${meta.userName}最近聊天不多，整体氛围偏日常、温柔、亲密。`;
+            }
+            return lines.slice(-24).join('\n');
+        }
+
+        function buildLetterReplyPrompts(targetLetter) {
+            const meta = readLetterPromptMeta();
+            const shortMemory = buildLetterShortMemory(meta);
+            const letterText = String(targetLetter && targetLetter.text ? targetLetter.text : '').trim();
+            const todayText = formatLetterDate(new Date());
+            const systemPrompt = [
+                '[[PROMPT_CLASS:ROLE_LITE]]',
+                '[[SCENE:COUPLE_LETTER_REPLY]]',
+                `你和${meta.userName}是恋人关系，现在要求你根据${meta.userName}写的信件来回复一封情书。`,
+                '【角色身份】',
+                `你现在不是助手，你是${meta.roleName}。`,
+                meta.rolePrompt ? `你的人设与相处气质：${meta.rolePrompt}` : '',
+                meta.worldBookPrompt ? `【世界书背景】\n${meta.worldBookPrompt}` : '',
+                '',
+                '【用户身份】',
+                `${meta.userName}是你的恋人。`,
+                meta.userBackground ? `关于${meta.userName}的背景：${meta.userBackground}` : '',
+                '',
+                '【当前页面场景】',
+                '当前页面是情侣空间里的“情书”页。',
+                `现在${meta.userName}刚刚给你写来一封信，你要正式回一封情书。`,
+                '',
+                '【写作要求】',
+                '这封回复必须像一封正式的信件，而不是聊天消息。',
+                '文笔可以参考沈从文、朱生豪这类温柔、真挚、含蓄又有画面感的书信风格，但不要照抄任何现成句子。',
+                '必须包含：称呼、正文、署名、日期。',
+                `今天的日期固定是 ${todayText}，回信结尾的日期必须只写 ${todayText}，不要编造其他日期。`,
+                '正文要围绕对方这封来信的内容认真回应，既要回应情绪，也要回应细节。',
+                '必须是中文。',
+                '总字数不得少于 200 字，500 字左右最佳。',
+                '不要输出解释、不要输出 markdown、不要输出代码块、不要写成诗歌条目。'
+            ].filter(Boolean).join('\n');
+
+            const userPrompt = [
+                '【近期聊天记录】',
+                shortMemory,
+                '',
+                '【刚刚收到的情书】',
+                letterText,
+                '',
+                '【补充提醒】',
+                `请以${meta.roleName}的身份回信，既保留恋人之间的亲密，又要保持书信体的正式与完整。`,
+                `末尾日期必须写成：${todayText}`
+            ].join('\n');
+
+            return { meta, systemPrompt, userPrompt };
+        }
+
+        function logCoupleLetterPromptDebug(tag, systemPrompt, userPrompt) {
+            const payload = {
+                page: 'couple-space-letter',
+                tag: String(tag || '情书回复').trim() || '情书回复',
+                timestamp: Date.now(),
+                systemPrompt: String(systemPrompt || ''),
+                userPrompt: String(userPrompt || '')
+            };
+            try {
+                window.__couplePromptDebugHistory = Array.isArray(window.__couplePromptDebugHistory) ? window.__couplePromptDebugHistory : [];
+                window.__couplePromptDebugHistory.unshift(payload);
+                window.__couplePromptDebugHistory = window.__couplePromptDebugHistory.slice(0, 30);
+                window.__lastCoupleLetterPromptDebug = payload;
+            } catch (e) {}
+            try {
+                console.group(`[AI Prompt][情侣空间情书] ${payload.tag}`);
+                console.log('=== SYSTEM PROMPT START ===\n' + payload.systemPrompt + '\n=== SYSTEM PROMPT END ===');
+                console.log('=== USER PROMPT START ===\n' + payload.userPrompt + '\n=== USER PROMPT END ===');
+                console.groupEnd();
+            } catch (e2) {
+                console.log('[AI Prompt][情侣空间情书]', payload);
+            }
+        }
+
+        function readLetterState() {
+            try {
+                const raw = localStorage.getItem(buildLetterStorageKey());
+                const parsed = raw ? JSON.parse(raw) : null;
+                return parsed && Array.isArray(parsed.items) ? parsed.items : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function writeLetterState() {
+            try {
+                localStorage.setItem(buildLetterStorageKey(), JSON.stringify({ items: letterData }));
+            } catch (e) {}
+        }
+
+        function getLatestPendingUserLetter() {
+            for (let i = letterData.length - 1; i >= 0; i--) {
+                const item = letterData[i];
+                if (!item || item.side !== 'right') continue;
+                if (item.replied) continue;
+                const text = String(item.text || '').trim();
+                if (!text) continue;
+                return item;
+            }
+            return null;
+        }
+
+        function refreshLetterReplyTrigger() {
+            const trigger = document.getElementById('letter-reply-trigger');
+            if (!trigger) return;
+            const meta = readLetterPromptMeta();
+            const pending = getLatestPendingUserLetter();
+            if (letterReplyLoading) {
+                trigger.textContent = `${meta.roleName}正在为你写回信...`;
+            } else if (pending) {
+                trigger.textContent = `点击收下${meta.roleName}的回信`;
+            } else if (letterData.length > 0) {
+                trigger.textContent = `${meta.roleName}在远方酝酿信笺...`;
+            } else {
+                trigger.textContent = `${meta.roleName}在远方等你来信...`;
+            }
+        }
+
+        function renderLetterTimeline() {
+            const container = document.getElementById('letter-timeline');
+            if (!container) return;
+            
+            // Keep the center line
+            container.innerHTML = '<div class="letter-center-line"></div>';
+            
+            letterData.forEach(item => {
+                const wrapper = document.createElement('div');
+                wrapper.className = `letter-card-wrapper ${item.side}`;
+
+                const safeText = String(item.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                wrapper.innerHTML = `
+                    <div class="letter-dot"></div>
+                    <div class="letter-stamp" onclick="openLetterDetail('${item.id}')">
+                        <div class="letter-stamp-content">
+                            <div class="letter-date">${item.date}</div>
+                            <div class="letter-text">${safeText}</div>
+                            <div class="letter-bottom-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d48fa0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(wrapper);
+            });
+            refreshLetterReplyTrigger();
+        }
+
+        function openLetterDetail(id) {
+            const target = letterData.find(item => String(item.id) === String(id));
+            if (!target) return;
+            
+            const modal = document.getElementById('letter-detail-modal');
+            const dateEl = document.getElementById('letter-detail-date');
+            const textEl = document.getElementById('letter-detail-text');
+            
+            if (modal && dateEl && textEl) {
+                dateEl.textContent = target.date;
+                textEl.textContent = target.text;
+                modal.classList.add('show');
+            }
+        }
+
+        function closeLetterDetail() {
+            const modal = document.getElementById('letter-detail-modal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
+        }
+
+        function openLetterInput() {
+            const modal = document.getElementById('letter-input-modal');
+            if (modal) {
+                modal.hidden = false;
+                document.getElementById('letter-textarea').value = '';
+                document.getElementById('letter-textarea').focus();
+            }
+        }
+
+        function closeLetterInput() {
+            const modal = document.getElementById('letter-input-modal');
+            if (modal) {
+                modal.hidden = true;
+            }
+        }
+
+        function submitLetter() {
+            const text = document.getElementById('letter-textarea').value.trim();
+            if (!text) return;
+            
+            const now = new Date();
+            const dateStr = formatLetterDate(now);
+            
+            letterData.push({
+                id: Date.now(),
+                side: 'right',
+                date: dateStr,
+                text: text,
+                isAi: false,
+                replied: false,
+                createdAt: now.getTime()
+            });
+            
+            closeLetterInput();
+            writeLetterState();
+            renderLetterTimeline();
+            
+            // Scroll to bottom
+            setTimeout(() => {
+                const scrollEl = document.querySelector('.main-content');
+                if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+            }, 100);
+        }
+
+        function sanitizeLetterReplyText(text) {
+            let clean = String(text || '').replace(/```(?:text|markdown)?/ig, '').replace(/```/g, '').trim();
+            clean = clean.replace(/^情书回复[:：]\s*/i, '').trim();
+            return clean;
+        }
+
+        function resolveLetterCallAI() {
+            const pw = getLetterParentWindow();
+            if (pw && typeof pw.callAI === 'function') return pw.callAI;
+            if (typeof window.callAI === 'function') return window.callAI;
+            return null;
+        }
+
+        async function triggerLetterReply() {
+            if (letterReplyLoading) return;
+            const pendingLetter = getLatestPendingUserLetter();
+            if (!pendingLetter) {
+                alert('先写一封情书，再邀请对方回信吧。');
+                return;
+            }
+            const callAI = resolveLetterCallAI();
+            if (!callAI) {
+                alert('AI 接口未初始化');
+                return;
+            }
+            const prompts = buildLetterReplyPrompts(pendingLetter);
+            logCoupleLetterPromptDebug('情书回复', prompts.systemPrompt, prompts.userPrompt);
+            letterReplyLoading = true;
+            refreshLetterReplyTrigger();
+            try {
+                const raw = await new Promise((resolve, reject) => {
+                    callAI(
+                        prompts.systemPrompt,
+                        [],
+                        { text: prompts.userPrompt },
+                        (text) => resolve(String(text || '')),
+                        (err) => reject(new Error(String(err || '请求失败')))
+                    );
+                });
+                const now = new Date();
+                const replyText = enforceLetterReplyFooterDate(sanitizeLetterReplyText(raw), now);
+                if (!replyText) throw new Error('未生成有效回信');
+                if (replyText.replace(/\s+/g, '').length < 200) throw new Error('生成的回信过短，请稍后重试');
+                letterData.push({
+                    id: Date.now(),
+                    side: 'left',
+                    date: formatLetterDate(now),
+                    text: replyText,
+                    isAi: true,
+                    createdAt: now.getTime(),
+                    replyTo: pendingLetter.id
+                });
+                pendingLetter.replied = true;
+                writeLetterState();
+                renderLetterTimeline();
+                setTimeout(() => {
+                    const scrollEl = document.querySelector('.main-content');
+                    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+                }, 100);
+            } catch (e) {
+                console.error('情书回复生成失败', e);
+                alert(`生成失败：${e && e.message ? e.message : '请稍后再试'}`);
+            } finally {
+                letterReplyLoading = false;
+                refreshLetterReplyTrigger();
+            }
+        }
+
+        // Initialize when ready
+        document.addEventListener('DOMContentLoaded', () => {
+            letterData = readLetterState();
+            renderLetterTimeline();
+        });
+    </script>
+</body>
+</html>

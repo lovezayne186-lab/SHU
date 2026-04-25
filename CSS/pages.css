@@ -1,0 +1,628 @@
+
+/* --- 1. 顶部时间区域 --- */
+.top-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 60px 30px 0 30px; 
+    color: var(--text-color);
+}
+
+.date-info {
+    font-size: 18px;
+    opacity: 0.7;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.time-huge {
+    font-size: 90px;
+    font-weight: 200;
+    line-height: 0.9;
+    letter-spacing: -3px;
+    margin-left: -5px;
+}
+
+/* --- 弹性占位符 --- */
+.spacer {
+    flex-grow: 1;
+}
+
+/* --- 2. 核心内容区域 --- */
+.content-section {
+    display: flex;
+    flex-direction: row;
+    padding: 0 25px;
+    gap: 40px;
+    align-items: flex-end;
+    margin-bottom: 75px; /* App图标底部到Dock栏的距离 */
+}
+
+/* 左侧自定义大图 */
+.widget-box {
+    width: 150px; 
+    height: 150px;
+    border-radius: 24px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.05);
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.widget-box:active { transform: scale(0.98); }
+
+.widget-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.upload-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    color: #999;
+    pointer-events: none;
+}
+
+/* 右侧软件图标网格 (包含文字后，整体对齐) */
+.app-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 60px 60px; /* 稍微窄一点，让它在右侧居中好看些 */
+    grid-template-rows: 1fr 1fr;
+    gap: 14px; 
+    height: 150px; 
+    justify-content: start; 
+}
+
+.app-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    gap: 5px; /* 图标和文字的间距 */
+}
+
+/* 图标盒子 */
+.app-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(240,240,250,0.4));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 28px;
+    color: var(--theme-foreground);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.5s ease;
+}
+
+.app-icon-box:active {
+    transform: scale(0.95);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+
+/* App 名称 */
+.app-name {
+    font-size: 10px;
+    color: var(--theme-label);
+    font-weight: 500;
+    text-align: center;
+    line-height: 1;
+}
+/* 隐藏文件输入框 */
+input[type="file"] { display: none; }
+/* =========================================
+   UI 2.0 重构 - Bento Grid 布局
+   ========================================= */
+
+/* 1. 桌面主容器 */
+.desktop-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 15px 10px calc(78px + var(--safe-bottom-compact, 0px)) 10px; /* 上避开刘海，下避开Dock */
+    box-sizing: border-box;
+    gap: 20px; /* 行与行之间的间距 */
+    overflow-y: auto; /* 防止小屏溢出 */
+}
+
+/* 2. 通用行布局 (Row) */
+.desktop-section {
+    display: flex;
+    width: 100%;
+    gap: 15px; /* 左右分栏的间距 */
+}
+
+/* 3. 第一行 (Top): 左侧双层 + 右侧大块 */
+.desktop-top {
+    height: 160px; /* 固定高度 */
+}
+
+.desktop-top-left {
+    width: 38%; /* 左侧稍窄 */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.desktop-top-right {
+    flex: 1; /* 右侧占满剩余 */
+}
+
+/* 4. 第二行 (Middle): 左侧应用 + 右侧长条 */
+.desktop-middle {
+    height: 160px;
+}
+.desktop-middle-left {
+    width: 48%; /* 左侧应用区宽度 */
+    contain: paint;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+.desktop-middle-right {
+    flex: 1;
+    contain: layout style;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    overflow: visible;
+}
+
+/* 5. 第三行 (Bottom): 左侧大块 + 右侧应用 */
+.desktop-main {
+    height: 160px;
+    flex: none;
+}
+.desktop-main-left {
+    width: 48%; /* 左侧大块 */
+    contain: paint;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+.desktop-main-right {
+    flex: 1; /* 右侧应用区 */
+    contain: paint;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+
+/* --- 容器卡片样式 (统一灰色背景) --- */
+/* 这些类对应 HTML 里的灰色块 */
+.card-widget, 
+.hero-card, 
+.hero-main-slot, 
+.moments-preview-card, 
+.main-widget-card {
+    background: rgba(0, 0, 0, 0.05); /* 浅灰色背景，模拟图示 */
+    border-radius: 24px; /* 大圆角 */
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.02); /* 轻微阴影 */
+}
+
+.heart-badge-widget {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    filter: drop-shadow(0 12px 20px rgba(60, 60, 67, 0.16)) drop-shadow(0 2px 4px rgba(60, 60, 67, 0.18));
+    transition: transform 160ms ease;
+}
+
+.heart-badge-widget:active {
+    transform: scale(0.96);
+}
+
+.heart-badge-shape {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 36%, rgba(255, 255, 255, 0.96), rgba(247, 248, 248, 0.9) 55%, rgba(232, 235, 235, 0.86) 100%);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 92%22%3E%3Cpath fill=%22black%22 d=%22M50 86C35 73 6 53 6 28C6 13 18 4 31 4c8 0 15 4 19 11C54 8 61 4 69 4c13 0 25 9 25 24c0 25-29 45-44 58z%22/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 92%22%3E%3Cpath fill=%22black%22 d=%22M50 86C35 73 6 53 6 28C6 13 18 4 31 4c8 0 15 4 19 11C54 8 61 4 69 4c13 0 25 9 25 24c0 25-29 45-44 58z%22/%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.heart-badge-widget img {
+    width: 100%;
+    height: 100%;
+    display: none;
+    object-fit: cover;
+}
+
+.heart-badge-widget .upload-hint {
+    position: absolute;
+    inset: 0;
+    top: 0;
+    left: 0;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: rgba(86, 88, 92, 0.7);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.heart-badge-widget .upload-hint i {
+    font-size: 30px;
+}
+
+.heart-badge-shine {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 38% 28%, rgba(255, 255, 255, 0.68), transparent 34%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(180, 186, 190, 0.12) 74%);
+    mix-blend-mode: screen;
+}
+
+/* 第一行左侧的小卡片 */
+.hero-card {
+    border-radius: 20px; 
+}
+
+
+/* --- 应用网格 (2x2) --- */
+.app-grid-2x2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+.app-item-small {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    background: transparent;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    cursor: pointer;
+}
+.app-item-small:active {
+    transform: scale(0.95);
+    box-shadow: none;
+}
+
+.app-icon-text {
+    font-size: 12px;
+    color: var(--theme-label);
+    font-weight: 500;
+    margin-top: 5px;
+}
+
+.app-item-small i {
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(240,240,250,0.4));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.5);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: var(--theme-foreground);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.5s ease;
+}
+
+.app-item-small img {
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    object-fit: cover;
+    display: block;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+/* =========================================
+   悬浮组件修正补丁 (精准控制边距版)
+   替换 pages.css 最底部的对应代码
+   ========================================= */
+
+/* --- 1. 左边的盒子 (靠左屏幕) --- */
+.desktop-middle-left,
+.desktop-main-left {
+    background: transparent !important; /* 隐身：容器变透明 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none !important;
+    border: none !important;
+
+    /* ▼▼▼ 关键修改在这里 ▼▼▼ */
+    /* 上0(不缩)，右5(中间缝隙)，下10(收缩)，左15(靠屏幕边缘) */
+    padding: 0px 5px 10px 15px !important;
+    width: 50% !important;
+}
+
+/* --- 2. 右边的盒子 (靠右屏幕) --- */
+.desktop-main-right,
+.desktop-middle-right {
+    background: transparent !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+
+    /* ▼▼▼ 关键修改在这里 ▼▼▼ */
+    /* 上0(不缩)，右15(靠屏幕边缘)，下10(收缩)，左5(中间缝隙) */
+    padding: 0px 15px 10px 5px !important;
+    width: 50% !important;
+}
+
+.circular-bubble-widget {
+    overflow: visible;
+    isolation: isolate;
+}
+
+/* --- 3. 顶部的长条盒子 (如果有的话) --- */
+.desktop-top {
+    background: transparent !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none !important;
+    border: none !important;
+
+    /* 顶部盒子通常横跨两边，所以左右都要大一点 */
+    padding: 0px 15px 10px 15px !important;
+}
+
+/* --- 下面这一段是你原有的，一定要保留！不要删！ --- */
+/* --- 2. 处理小组件本体 (内容) --- */
+.aesthetic-card,
+.main-widget-card,
+.top-unified-container {
+    background: rgba(0, 0, 0, 0.05) !important; 
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 20px !important; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
+    overflow: hidden !important; 
+    box-sizing: border-box !important;
+}
+
+.aesthetic-card {
+    background: rgba(217, 216, 216, 0.55) !important;
+    backdrop-filter: blur(10px);
+}
+
+.couple-sheet-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.28);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 23000;
+}
+
+.couple-sheet {
+    width: 100%;
+    max-width: 520px;
+    background: #fff;
+    border-radius: 24px 24px 0 0;
+    padding: 14px 16px 18px 16px;
+    position: relative;
+    transform: translateY(24px);
+    opacity: 0.98;
+    transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1), opacity 220ms ease;
+    max-height: 78vh;
+    overflow: hidden;
+}
+
+.couple-sheet-exit {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.06);
+    color: #111;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.couple-sheet-exit:active {
+    transform: scale(0.96);
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.couple-sheet.open {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.couple-sheet.closing {
+    transform: translateY(24px);
+    opacity: 0.96;
+}
+
+.couple-sheet-handle {
+    width: 44px;
+    height: 4px;
+    background: #eaeaea;
+    border-radius: 999px;
+    margin: 2px auto 12px auto;
+}
+
+.couple-sheet-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #111;
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+.couple-sheet-subtitle {
+    font-size: 12px;
+    font-weight: 500;
+    color: #777;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.couple-sheet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 2px 14px 2px;
+    max-height: calc(78vh - 160px);
+    overflow-y: auto;
+}
+
+.couple-sheet-item {
+    width: 100%;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: #fff;
+    border-radius: 16px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.couple-sheet-item:active {
+    transform: scale(0.99);
+}
+
+.couple-sheet-item.selected {
+    border-color: rgba(236, 72, 153, 0.55);
+    background: rgba(236, 72, 153, 0.06);
+}
+
+.couple-sheet-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    object-fit: cover;
+    background: #f5f5f5;
+    flex: 0 0 auto;
+}
+
+.couple-sheet-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: #111;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+}
+
+.couple-sheet-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.couple-sheet-btn {
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #fff;
+    color: #111;
+    font-size: 14px;
+    font-weight: 900;
+    cursor: pointer;
+    width: 100%;
+}
+
+.couple-sheet-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.couple-sheet-btn-primary {
+    border-color: rgba(236, 72, 153, 0.25);
+    background: rgba(236, 72, 153, 0.12);
+    color: #b91c1c;
+}
+
+.couple-sheet-btn-ghost {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: #fff;
+    color: #111;
+}
+
+.couple-sheet-empty {
+    padding: 8px 4px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.couple-sheet-empty-title {
+    font-size: 14px;
+    font-weight: 900;
+    color: #111;
+}
+
+.couple-sheet-empty-subtitle {
+    font-size: 12px;
+    font-weight: 500;
+    color: #777;
+    text-align: center;
+    line-height: 1.5;
+}
+
+
