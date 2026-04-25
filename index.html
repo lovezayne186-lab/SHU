@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="CSS/widgets.css?v=2">
     <link rel="stylesheet" href="CSS/pages.css?v=2">
     <link rel="stylesheet" href="CSS/weixin.css">
-    <link rel="stylesheet" href="CSS/global.css?v=2">
+    <link rel="stylesheet" href="CSS/global.css?v=3">
     <link rel="stylesheet" href="CSS/mine.css">
     <script src="vendor/tailwind/tailwindcss.js"></script>
     <script src="vendor/vue/vue.global.js"></script>
@@ -33,100 +33,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="书包机">
     <link rel="apple-touch-icon" href="assets/icons/shubao.png">
-    <script>
-        (function () {
-            var stableViewportHeight = 0;
-
-            function isEditableActive() {
-                try {
-                    var active = document.activeElement;
-                    if (!active) return false;
-                    var tag = String(active.tagName || '').toUpperCase();
-                    if (tag === 'TEXTAREA') return true;
-                    if (tag === 'INPUT') {
-                        var type = String(active.type || '').toLowerCase();
-                        return type !== 'button' && type !== 'submit' && type !== 'checkbox' && type !== 'radio' && type !== 'range' && type !== 'file';
-                    }
-                    return active.isContentEditable === true;
-                } catch (e) {
-                    return false;
-                }
-            }
-
-            function getVisualHeight() {
-                var vv = window.visualViewport;
-                if (!vv) return 0;
-                return Math.round((vv.height || 0) + (vv.offsetTop || 0));
-            }
-
-            function setAppViewportHeight(force) {
-                var inner = Math.round(window.innerHeight || 0);
-                var client = Math.round((document.documentElement && document.documentElement.clientHeight) || 0);
-                var visual = getVisualHeight();
-                
-                var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-                
-                var current = Math.max(visual || 0, inner || 0, client || 0);
-                if (!current) return;
-
-                var keyboardLikelyOpen = false;
-                if (!force && stableViewportHeight > 0 && visual > 0 && isEditableActive()) {
-                    keyboardLikelyOpen = (stableViewportHeight - visual) > 80 && visual < stableViewportHeight;
-                }
-
-                if (force || !stableViewportHeight || !keyboardLikelyOpen) {
-                    stableViewportHeight = current;
-                }
-
-                if (isIOS) {
-                    // iOS 使用 innerHeight，防止出现底部留白和页面上移
-                    // 参照项目记忆，使用 window.innerHeight 作为基础高度，防止键盘弹出时触发全局页面上移和底部留白
-                    var iosHeight = inner > 0 ? inner : current;
-                    document.documentElement.style.setProperty('--app-vh', iosHeight + 'px');
-                } else {
-                    // Android 使用计算的高度，防止键盘弹出时 UI 挤压
-                    var heightToApply = keyboardLikelyOpen ? stableViewportHeight : current;
-                    document.documentElement.style.setProperty('--app-vh', heightToApply + 'px');
-                }
-            }
-
-            setAppViewportHeight(true);
-            window.addEventListener('resize', function () {
-                setAppViewportHeight(false);
-            }, { passive: true });
-            if (window.visualViewport) {
-                window.visualViewport.addEventListener('resize', function () {
-                    setAppViewportHeight(false);
-                }, { passive: true });
-                window.visualViewport.addEventListener('scroll', function () {
-                    setAppViewportHeight(false);
-                }, { passive: true });
-            }
-            window.addEventListener('orientationchange', function () {
-                stableViewportHeight = 0;
-                setTimeout(function () {
-                    setAppViewportHeight(true);
-                }, 120);
-            }, { passive: true });
-            window.addEventListener('pageshow', function () {
-                stableViewportHeight = 0;
-                setTimeout(function () {
-                    setAppViewportHeight(true);
-                }, 60);
-            }, { passive: true });
-            document.addEventListener('visibilitychange', function () {
-                if (document.visibilityState !== 'visible') return;
-                setTimeout(function () {
-                    setAppViewportHeight(false);
-                }, 60);
-            }, { passive: true });
-            window.addEventListener('focusout', function () {
-                setTimeout(function () {
-                    setAppViewportHeight(false);
-                }, 120);
-            }, { passive: true });
-        })();
-    </script>
     <script>
         (function () {
             function isMobileDevice() {
