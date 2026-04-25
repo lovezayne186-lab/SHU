@@ -2959,19 +2959,56 @@ if (apiModal) {
     });
 }
 
+function readOptimizedDesktopImage(file, options) {
+    if (typeof window.readWallpaperFileAsDataUrl === 'function') {
+        return window.readWallpaperFileAsDataUrl(file, options);
+    }
+    return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onerror = function () {
+            reject(reader.error || new Error('读取图片失败'));
+        };
+        reader.onload = function (evt) {
+            resolve(String(evt && evt.target && evt.target.result || ''));
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function getUploadImageOptimizeOptions(targetId, isAppIcon) {
+    const id = String(targetId || '').toLowerCase();
+    if (isAppIcon) {
+        return { maxSize: 420, quality: 0.9, forceReencode: true };
+    }
+    if (/avatar|badge/.test(id)) {
+        return { maxSize: 420, quality: 0.86, mime: 'image/jpeg', forceReencode: true };
+    }
+    if (/large-bg|wallpaper/.test(id)) {
+        return { maxSize: 1500, quality: 0.84, mime: 'image/jpeg', forceReencode: true };
+    }
+    if (/top-right-banner|main-widget|aesthetic-bg|aesthetic-photo|sticker/.test(id)) {
+        return { maxSize: 900, quality: 0.82, mime: 'image/jpeg', forceReencode: true };
+    }
+    return { maxSize: 820, quality: 0.82, mime: 'image/jpeg', forceReencode: true };
+}
+
 /* --- 4. 全局文件上传监听 --- */
 document.addEventListener('DOMContentLoaded', function() {
     
     // (A) 壁纸
     const wallpaperInput = document.getElementById('wallpaper-uploader');
     if (wallpaperInput) {
-        wallpaperInput.addEventListener('change', function(e) {
+        wallpaperInput.addEventListener('change', async function(e) {
             if (e.target.files && e.target.files[0]) {
                 const file = e.target.files[0];
-                const reader = new FileReader();
-                reader.onload = function(evt) {
+                try {
                     const screen = document.querySelector('.screen');
-                    const wallpaperData = evt.target.result;
+                    const wallpaperData = await readOptimizedDesktopImage(file, {
+                        maxSize: 1500,
+                        quality: 0.84,
+                        mime: 'image/jpeg',
+                        forceReencode: true
+                    });
                     if(screen) {
                         screen.style.backgroundImage = `url('${wallpaperData}')`;
                         screen.style.backgroundSize = 'cover';
@@ -2993,8 +3030,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             window.updateThemeFromWallpaper(wallpaperData);
                         }
                     }
-                };
-                reader.readAsDataURL(file);
+                } catch (err) {
+                    console.error('壁纸处理失败：', err);
+                    if (window.uiToast) window.uiToast('壁纸处理失败，请换一张图片试试');
+                }
             }
         });
     }
@@ -3002,18 +3041,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // (B) App图标 / 组件图片
     const appIconInput = document.getElementById('global-uploader');
     if (appIconInput) {
-        appIconInput.addEventListener('change', function(e) {
+        appIconInput.addEventListener('change', async function(e) {
             if (e.target.files && e.target.files[0]) {
                 const file = e.target.files[0];
-                const reader = new FileReader();
-
-                reader.onload = function(evt) {
-                    const resultSrc = evt.target.result;
+                try {
                     const uploadTargetId = (typeof window.currentUploadTargetId === 'string') ? window.currentUploadTargetId : '';
+                    const isAppIconUpload = !uploadTargetId && !window.activeImgId && typeof window.currentEditingAppIndex === 'number' && window.currentEditingAppIndex !== -1;
+                    const resultSrc = await readOptimizedDesktopImage(file, getUploadImageOptimizeOptions(uploadTargetId || window.activeImgId || '', isAppIconUpload));
 
                     if (uploadTargetId) {
                         const imgEl = document.getElementById(uploadTargetId);
                         if (imgEl) {
+                            imgEl.decoding = 'async';
+                            imgEl.loading = 'lazy';
                             imgEl.src = resultSrc;
                             imgEl.style.opacity = '1';
                             if (imgEl.style.display === 'none') {
@@ -3056,9 +3096,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         const hint = window.activeHintId ? document.getElementById(window.activeHintId) : null;
                         
                         // 2. 更新视图
-                        if (img) { 
-                            img.src = resultSrc; 
-                            img.style.display = 'block'; 
+                        if (img) {
+                            img.decoding = 'async';
+                            img.loading = 'lazy';
+                            img.src = resultSrc;
+                            img.style.display = 'block';
                             
                             // 【新增】保存到数据库 (之前这里缺了这一句，导致刷新就没)
                             if(window.localforage) {
@@ -3082,8 +3124,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.currentEditingAppIndex = -1;
                         appIconInput.value = '';
                     }
-                };
-                reader.readAsDataURL(file);
+                } catch (err) {
+                    console.error('图片处理失败：', err);
+                    if (window.uiToast) window.uiToast('图片处理失败，请换一张图片试试');
+                    appIconInput.value = '';
+                }
             }
         });
     }

@@ -1050,6 +1050,41 @@
     border-radius: 6px;
 }
 
+.ai-photo-bubble {
+    width: 96px;
+    height: 96px;
+    overflow: hidden;
+    border-radius: 6px !important;
+    background: #f2f4f7 !important;
+}
+
+.ai-photo-bubble img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ai-photo-fallback {
+    display: none;
+    width: 96px;
+    height: 96px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    color: #6b7280;
+    background: #f2f4f7;
+    font-size: 13px;
+}
+
+.ai-photo-fallback i {
+    font-size: 28px;
+}
+
+.ai-photo-bubble.is-photo-fallback .ai-photo-fallback {
+    display: flex;
+}
+
 .msg-bubble-image::before,
 .msg-bubble-image::after {
     display: none !important;
@@ -4009,6 +4044,26 @@
 .msg-bubble.transfer-bubble.transfer-bubble-accepted .chat-transfer-card-surface {
     background-color: #f2f2f2;
     color: #999;
+}
+
+.msg-bubble.money-receive-anim .chat-transfer-card-surface,
+.msg-bubble.money-receive-anim .chat-redpacket-card-surface {
+    animation: moneyReceiveFlash 0.75s ease-out;
+}
+
+@keyframes moneyReceiveFlash {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 rgba(247, 158, 77, 0);
+    }
+    36% {
+        transform: scale(1.035);
+        box-shadow: 0 8px 22px rgba(247, 158, 77, 0.28);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 rgba(247, 158, 77, 0);
+    }
 }
 
 .msg-bubble.redpacket-bubble {

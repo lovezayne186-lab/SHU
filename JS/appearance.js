@@ -310,6 +310,8 @@ function readWallpaperFileAsDataUrl(file, options) {
     const settings = options && typeof options === 'object' ? options : {};
     const maxSize = Number(settings.maxSize || 2160) || 2160;
     const quality = Math.max(0.8, Math.min(0.98, Number(settings.quality || 0.96)));
+    const forceReencode = settings.forceReencode === true;
+    const forcedMime = typeof settings.mime === 'string' ? settings.mime.trim().toLowerCase() : '';
     return new Promise(function (resolve, reject) {
         if (!file) {
             resolve('');
@@ -329,7 +331,7 @@ function readWallpaperFileAsDataUrl(file, options) {
                 const originalWidth = Number(img.naturalWidth || img.width || 0);
                 const originalHeight = Number(img.naturalHeight || img.height || 0);
                 const longestEdge = Math.max(originalWidth, originalHeight);
-                if (!originalWidth || !originalHeight || longestEdge <= maxSize) {
+                if (!originalWidth || !originalHeight || (longestEdge <= maxSize && !forceReencode)) {
                     resolve(originalDataUrl);
                     return;
                 }
@@ -355,10 +357,12 @@ function readWallpaperFileAsDataUrl(file, options) {
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                 const mime = String(file.type || '').toLowerCase();
-                let exportMime = 'image/jpeg';
-                if (mime === 'image/png') exportMime = 'image/png';
-                else if (mime === 'image/webp') exportMime = 'image/webp';
-                else if (mime === 'image/jpeg' || mime === 'image/jpg') exportMime = 'image/jpeg';
+                let exportMime = forcedMime || 'image/jpeg';
+                if (!forcedMime) {
+                    if (mime === 'image/png') exportMime = 'image/png';
+                    else if (mime === 'image/webp') exportMime = 'image/webp';
+                    else if (mime === 'image/jpeg' || mime === 'image/jpg') exportMime = 'image/jpeg';
+                }
 
                 const output = (exportMime === 'image/jpeg' || exportMime === 'image/webp')
                     ? canvas.toDataURL(exportMime, quality)
@@ -369,6 +373,82 @@ function readWallpaperFileAsDataUrl(file, options) {
         };
         reader.readAsDataURL(file);
     });
+}
+
+window.readWallpaperFileAsDataUrl = readWallpaperFileAsDataUrl;
+
+function optimizeImageDataUrlForDesktop(src, options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    const dataUrl = String(src || '').trim();
+    if (!/^data:image\//i.test(dataUrl)) return Promise.resolve(dataUrl);
+    const maxSize = Number(settings.maxSize || 1200) || 1200;
+    const quality = Math.max(0.72, Math.min(0.94, Number(settings.quality || 0.84)));
+    const exportMime = String(settings.mime || 'image/jpeg').trim().toLowerCase() || 'image/jpeg';
+    return new Promise(function (resolve) {
+        const img = new Image();
+        img.onerror = function () { resolve(dataUrl); };
+        img.onload = function () {
+            const originalWidth = Number(img.naturalWidth || img.width || 0);
+            const originalHeight = Number(img.naturalHeight || img.height || 0);
+            const longestEdge = Math.max(originalWidth, originalHeight);
+            if (!originalWidth || !originalHeight || (longestEdge <= maxSize && dataUrl.length < 350000)) {
+                resolve(dataUrl);
+                return;
+            }
+            let width = originalWidth;
+            let height = originalHeight;
+            if (longestEdge > maxSize) {
+                if (width > height) {
+                    height *= maxSize / width;
+                    width = maxSize;
+                } else {
+                    width *= maxSize / height;
+                    height = maxSize;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(width));
+            canvas.height = Math.max(1, Math.round(height));
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                resolve(dataUrl);
+                return;
+            }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            try {
+                resolve(canvas.toDataURL(exportMime, quality));
+            } catch (e) {
+                resolve(dataUrl);
+            }
+        };
+        img.src = dataUrl;
+    });
+}
+
+function getDesktopImageOptimizeOptions(elementId) {
+    const id = String(elementId || '').toLowerCase();
+    if (/avatar|badge/.test(id)) return { maxSize: 420, quality: 0.86, mime: 'image/jpeg' };
+    if (/large-bg|desktopwallpaper|wallpaper/.test(id)) return { maxSize: 1500, quality: 0.84, mime: 'image/jpeg' };
+    if (/top-right-banner|main-widget|aesthetic-bg|aesthetic-photo|sticker/.test(id)) {
+        return { maxSize: 900, quality: 0.82, mime: 'image/jpeg' };
+    }
+    return { maxSize: 820, quality: 0.82, mime: 'image/jpeg' };
+}
+
+function scheduleDesktopImageOptimization(key, src, options, onOptimized) {
+    const raw = String(src || '');
+    if (!key || !/^data:image\//i.test(raw) || raw.length < 350000) return;
+    const run = function () {
+        optimizeImageDataUrlForDesktop(raw, options).then(function (optimized) {
+            if (!optimized || optimized === raw || optimized.length >= raw.length * 0.94) return;
+            if (typeof onOptimized === 'function') onOptimized(optimized);
+        }).catch(function () { });
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 1800 });
+    } else {
+        window.setTimeout(run, 300);
+    }
 }
 
 async function persistGlobalChatWallpaper(value) {
@@ -507,6 +587,8 @@ async function collectLocalForageByPrefix(prefix) {
 function applyWidgetImageToElement(elementId, src) {
     const imgEl = document.getElementById(String(elementId || ''));
     if (!imgEl || !src) return;
+    imgEl.decoding = 'async';
+    imgEl.loading = 'lazy';
     imgEl.src = src;
     imgEl.style.opacity = '1';
     imgEl.style.display = 'block';
@@ -523,7 +605,19 @@ function applyWidgetImageToElement(elementId, src) {
             imgEl.nextElementSibling.style.display = 'none';
         }
     }
+    scheduleDesktopImageOptimization('widget_img_' + elementId, src, getDesktopImageOptimizeOptions(elementId), function (optimized) {
+        imgEl.src = optimized;
+        try {
+            if (window.localforage && typeof window.localforage.setItem === 'function') {
+                window.localforage.setItem('widget_img_' + elementId, optimized);
+            } else {
+                localStorage.setItem('widget_save_' + elementId, optimized);
+            }
+        } catch (e) { }
+    });
 }
+
+window.applyWidgetImageToElement = applyWidgetImageToElement;
 
 async function restoreWidgetImagesToScreen() {
     const widgetImages = await collectLocalForageByPrefix('widget_img_');
@@ -641,6 +735,14 @@ function applyDesktopWallpaperToScreen(wallpaper) {
         screen.style.backgroundImage = `url('${src}')`;
         screen.style.backgroundSize = 'cover';
         screen.style.backgroundPosition = 'center';
+        scheduleDesktopImageOptimization('desktopWallpaper', src, getDesktopImageOptimizeOptions('desktopWallpaper'), function (optimized) {
+            screen.style.backgroundImage = `url('${optimized}')`;
+            try {
+                if (window.localforage && typeof window.localforage.setItem === 'function') {
+                    window.localforage.setItem('desktopWallpaper', optimized);
+                }
+            } catch (e) { }
+        });
     } else {
         screen.style.backgroundImage = '';
         screen.style.backgroundSize = '';
@@ -1496,15 +1598,9 @@ function initDesktopState() {
     // 2. 恢复壁纸
     localforage.getItem('desktopWallpaper').then(savedWallpaper => {
         if (savedWallpaper) {
-            const screen = document.querySelector('.screen');
-            if (screen) {
-                screen.style.backgroundImage = `url('${savedWallpaper}')`;
-                screen.style.backgroundSize = 'cover';
-                screen.style.backgroundPosition = 'center';
+            if (document.querySelector('.screen')) {
+                applyDesktopWallpaperToScreen(savedWallpaper);
                 console.log("✅ 已恢复桌面壁纸，数据大小:", (savedWallpaper.length / 1024).toFixed(2), "KB");
-                if (typeof window.updateThemeFromWallpaper === 'function') {
-                    window.updateThemeFromWallpaper(savedWallpaper);
-                }
             } else {
                 console.error("❌ 找不到 .screen 元素");
             }

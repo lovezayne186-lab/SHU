@@ -1,0 +1,821 @@
+step goto start
+[error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+[info] You are running a development build of Vue.
+Make sure to use the production build (*.prod.js) when deploying for production.
+[error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[log] 当前无角色，停留在桌面
+[log] === 开始恢复桌面数据 ===
+[log] localforage 是否可用: true
+[log] === 桌面数据恢复流程已启动 ===
+[log] 小组件图片已恢复
+[log] ℹ️ 没有找到保存的 App 列表，使用默认配置
+[log] ℹ️ 没有找到保存的壁纸
+[log] ✅ ServiceWorker 注册成功:  http://127.0.0.1:4173/
+step loaded home
+step click-check 微信入口: count=1
+step clicked 微信入口
+step opened wechat
+wechatState={
+  "bodyText": "正在同步数据中...\n11:49\n100\n冬日童谣\n@1208 ❄️\n✨ Thoughts in Winter ✨\n漠河\nS\nM\nT\nW\nT\nF\nS\n5\n6\n7\n8\n9\n10\n11\n和宝宝一起\n点击设置日期\n--\n天\n微信\n音乐\n世界书\n情侣空间\n照片1\n照片2\n点击上传\n聊天截图\n秘密中心\n住所\n推特\n小红书\n11:49 AM\nlove yourself. 💕\nChange\nMessage...\n游戏\n记账\n购物\n驿站\nWeixin\n全部\n群聊\n岑野\n11:49\n1\n我是岑野\n空空\n11:49\n1\n我是空空\n安安\n11:49\n1\n我是安安\nChats\nMoments\nMe",
+  "globals": [
+    "GroupChat",
+    "__chatSendButtonTouchGuardBound",
+    "__chatSettingsBubblePreviewCore",
+    "__chatSettingsInitCore",
+    "__chatSettingsSaveCore",
+    "__chatSettingsToggleSummaryCore",
+    "__chatStickerPanelState",
+    "__chatViewportBaseHeight",
+    "__chatViewportInputSyncBound",
+    "__chatViewportLayoutSyncBound",
+    "addCustomGroup",
+    "appendLocationShareChatRow",
+    "applyChatBackground",
+    "applyChatBubbleCssFromSettings",
+    "applyChatFontSizeFromSettings",
+    "applyEditedChatMessageContent",
+    "beginTrackedChatResponseRequest",
+    "bindChatMessageEditorEvents",
+    "bindChatSendButtonTouchGuardOnce",
+    "bindChatViewportLayoutSyncOnce",
+    "buildDevWechatPrivatePromptPreview",
+    "buildFullChatPrompt",
+    "buildMomentsChatFocusContext",
+    "buildRecentChatSummaryTextForPrompt",
+    "buildWechatPrivatePromptV2",
+    "cancelChatPress",
+    "chatBackgrounds",
+    "chatData",
+    "chatMapData",
+    "chatUnread",
+    "clampChatFontSize",
+    "cleanupStaleChatAiRequestLock",
+    "clearChatAiRequestInFlight",
+    "clearChatHistory",
+    "closeChatMessageEditor",
+    "closeForwardModal",
+    "closeWechatImportChooser",
+    "countChatsForDate",
+    "createChatTimeDividerElement",
+    "createDefaultMomentsData",
+    "createEmptyStickerScope",
+    "createFamilyCardMessage",
+    "createImageBitmap",
+    "createMessageRow",
+    "createNewBook",
+    "createNewCategory",
+    "createVideoSessionUI",
+    "currentChatRole",
+    "deleteChat",
+    "deleteCustomGroup",
+    "disableChatStatusBarInteraction",
+    "enableChatStatusBarInteraction",
+    "ensureChatHeaderAvatar",
+    "ensureChatMessageId",
+    "ensureChatRuntimeForRole",
+    "enterChat",
+    "enterChatRoom",
+    "exportWechatContactBackup",
+    "filterChatList",
+    "filterChatListByCategory",
+    "finishTrackedChatResponseRequest",
+    "focusChatInputSafely",
+    "formatChatDividerTime",
+    "formatChatTime",
+    "formatMomentsChatTimestamp",
+    "forwardMessageTo",
+    "getAllGroupNames",
+    "getChatAiRequestLockInfo",
+    "getChatAiRequestLockMaxAgeMs",
+    "getChatAiRequestLockStore",
+    "getChatMessageEditorElements",
+    "getChatSettingsForRole",
+    "getChatSettingsForTranslateMode",
+    "getChatStoreKeys",
+    "getChatViewportKeyboardOffset",
+    "getCurrentChatRoleId",
+    "getCurrentChatSettings",
+    "getEditableChatMessageDraft",
+    "getEffectiveChatMemoryLimit",
+    "getEffectiveChatSummaryFreq"
+  ]
+}
+step click-check 微信右上角加号: count=1
+step click-failed 微信右上角加号: locator.click: Timeout 1500ms exceeded.
+Call log:
+[2m  - waiting for locator('#top-plus-btn').first()[22m
+[2m    - locator resolved to <div id="top-plus-btn" onclick="openCreator()">…</div>[22m
+[2m  - attempting click action[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not visible[22m
+[2m    - retrying click action[22m
+[2m    - waiting 20ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not visible[22m
+[2m    - retrying click action[22m
+[2m      - waiting 100ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not visible[22m
+[2m    - retrying click action[22m
+[2m      - waiting 500ms[22m
+
+step fallback openChatCreationMenu
+afterPlus={
+  "bodyText": "正在同步数据中...\n11:49\n100\n冬日童谣\n@1208 ❄️\n✨ Thoughts in Winter ✨\n漠河\nS\nM\nT\nW\nT\nF\nS\n5\n6\n7\n8\n9\n10\n11\n和宝宝一起\n点击设置日期\n--\n天\n微信\n音乐\n世界书\n情侣空间\n照片1\n照片2\n点击上传\n聊天截图\n秘密中心\n住所\n推特\n小红书\n11:49 AM\nlove yourself. 💕\nChange\nMessage...\n游戏\n记账\n购物\n驿站\nWeixin\n全部\n群聊\n岑野\n11:49\n1\n我是岑野\n空空\n11:49\n1\n我是空空\n安安\n11:49\n1\n我是安安\nChats\nMoments\nMe\n创建聊天\n\n你可",
+  "nodes": [
+    {
+      "text": "选择导入类型 导入角色备份 导入角色 取消",
+      "cls": "fixed inset-0 z-[9999] hidden flex items-end justify-center pb-8",
+      "id": "wechat-import-chooser"
+    },
+    {
+      "text": "选择导入类型 导入角色备份 导入角色 取消",
+      "cls": "relative w-[90vw] max-w-[400px] flex flex-col gap-2",
+      "id": ""
+    },
+    {
+      "text": "选择导入类型 导入角色备份 导入角色",
+      "cls": "rounded-2xl bg-white/95 backdrop-blur-xl overflow-hidden shadow-xl",
+      "id": ""
+    },
+    {
+      "text": "选择导入类型",
+      "cls": "px-5 py-4 text-center border-b border-gray-200/50",
+      "id": ""
+    },
+    {
+      "text": "选择导入类型",
+      "cls": "text-[13px] font-medium text-gray-500",
+      "id": ""
+    },
+    {
+      "text": "取消",
+      "cls": "rounded-2xl bg-white/95 backdrop-blur-xl overflow-hidden shadow-xl",
+      "id": ""
+    },
+    {
+      "text": "取消",
+      "cls": "w-full text-center py-4 text-[18px] font-semibold text-[#007aff] cursor-pointer active:bg-gray-100 transition-colors",
+      "id": ""
+    },
+    {
+      "text": "全部 群聊",
+      "cls": "w-full py-3 flex items-center gap-4 mb-2 overflow-x-auto no-scrollbar",
+      "id": "chat-filter-bar"
+    },
+    {
+      "text": "群聊",
+      "cls": "filter-pill px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-medium cursor-pointer whitespace-nowrap",
+      "id": ""
+    },
+    {
+      "text": "创建角色",
+      "cls": "flex justify-between items-center px-6 pt-12 pb-4 bg-white/0",
+      "id": ""
+    },
+    {
+      "text": "创建角色",
+      "cls": "text-lg font-bold text-black tracking-wide",
+      "id": "modal-title"
+    },
+    {
+      "text": "取消 保存",
+      "cls": "creator-sticky-footer absolute bottom-0 left-0 w-full px-6 pb-8 pt-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent",
+      "id": ""
+    },
+    {
+      "text": "取消 保存",
+      "cls": "flex gap-4",
+      "id": ""
+    },
+    {
+      "text": "取消",
+      "cls": "flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity",
+      "id": ""
+    },
+    {
+      "text": "我的 他的 通用 + 分类 全选 删除 完成",
+      "cls": "chat-sticker-panel",
+      "id": "chat-sticker-panel"
+    },
+    {
+      "text": "分类 全选 删除 完成",
+      "cls": "sticker-manage-bar",
+      "id": "sticker-manage-bar"
+    },
+    {
+      "text": "完成",
+      "cls": "sticker-manage-btn",
+      "id": "sticker-manage-done-btn"
+    },
+    {
+      "text": "导入表情包 导入到分组： 我的表情 他的表情 当前聊天通用 取消 导入",
+      "cls": "modal-layer",
+      "id": "sticker-import-modal"
+    },
+    {
+      "text": "导入表情包 导入到分组： 我的表情 他的表情 当前聊天通用 取消 导入",
+      "cls": "",
+      "id": ""
+    },
+    {
+      "text": "取消 导入",
+      "cls": "",
+      "id": ""
+    },
+    {
+      "text": "取消",
+      "cls": "",
+      "id": "sticker-import-cancel-btn"
+    },
+    {
+      "text": "忙碌或睡觉时，选择角色用系统提示框提醒，还是直接自动回复一句。",
+      "cls": "busy-reply-hint",
+      "id": ""
+    },
+    {
+      "text": "取消 保存修改",
+      "cls": "creator-sticky-footer absolute bottom-0 left-0 w-full px-6 pb-8 pt-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent",
+      "id": ""
+    },
+    {
+      "text": "取消 保存修改",
+      "cls": "flex gap-4",
+      "id": ""
+    },
+    {
+      "text": "取消",
+      "cls": "flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity",
+      "id": ""
+    }
+  ]
+}
+step click-check 创建群聊入口: count=1
+step clicked 创建群聊入口
+afterOpenCreator={
+  "bodyText": "正在同步数据中...\n11:49\n100\n冬日童谣\n@1208 ❄️\n✨ Thoughts in Winter ✨\n漠河\nS\nM\nT\nW\nT\nF\nS\n5\n6\n7\n8\n9\n10\n11\n和宝宝一起\n点击设置日期\n--\n天\n微信\n音乐\n世界书\n情侣空间\n照片1\n照片2\n点击上传\n聊天截图\n秘密中心\n住所\n推特\n小红书\n11:49 AM\nlove yourself. 💕\nChange\nMessage...\n游戏\n记账\n购物\n驿站\nWeixin\n全部\n群聊\n岑野\n11:49\n1\n我是岑野\n空空\n11:49\n1\n我是空空\n安安\n11:49\n1\n我是安安\nChats\nMoments\nMe\n选择群聊联系人\n",
+  "candidates": [
+    {
+      "text": "Weixin 全部 群聊 岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安 Chats Moments Me",
+      "cls": "app-window active",
+      "id": "app-window",
+      "type": "DIV"
+    },
+    {
+      "text": "Weixin 全部 群聊 岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安 Chats Moments Me",
+      "cls": "app-content",
+      "id": "app-content-area",
+      "type": "DIV"
+    },
+    {
+      "text": "Weixin 全部 群聊 岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安 Chats Moments Me",
+      "cls": "w-full h-full bg-gray-50 flex flex-col relative overflow-hidden font-sans",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "Weixin 全部 群聊 岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安",
+      "cls": "w-full h-full pb-16 relative",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "Weixin 全部 群聊 岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安",
+      "cls": "chat-tab-page w-full h-full flex flex-col relative",
+      "id": "tab-chat",
+      "type": "DIV"
+    },
+    {
+      "text": "选择导入类型 导入角色备份 导入角色 取消",
+      "cls": "fixed inset-0 z-[9999] hidden flex items-end justify-center pb-8",
+      "id": "wechat-import-chooser",
+      "type": "DIV"
+    },
+    {
+      "text": "选择导入类型 导入角色备份 导入角色 取消",
+      "cls": "relative w-[90vw] max-w-[400px] flex flex-col gap-2",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "选择导入类型 导入角色备份 导入角色",
+      "cls": "rounded-2xl bg-white/95 backdrop-blur-xl overflow-hidden shadow-xl",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "选择导入类型",
+      "cls": "px-5 py-4 text-center border-b border-gray-200/50",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "选择导入类型",
+      "cls": "text-[13px] font-medium text-gray-500",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消",
+      "cls": "rounded-2xl bg-white/95 backdrop-blur-xl overflow-hidden shadow-xl",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消",
+      "cls": "w-full text-center py-4 text-[18px] font-semibold text-[#007aff] cursor-pointer active:bg-gray-100 transition-colors",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "全部 群聊 岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安",
+      "cls": "flex-1 overflow-y-auto px-4 no-scrollbar",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "全部 群聊",
+      "cls": "w-full py-3 flex items-center gap-4 mb-2 overflow-x-auto no-scrollbar",
+      "id": "chat-filter-bar",
+      "type": "DIV"
+    },
+    {
+      "text": "群聊",
+      "cls": "filter-pill px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-medium cursor-pointer whitespace-nowrap",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安",
+      "cls": "mb-4",
+      "id": "normal-section",
+      "type": "DIV"
+    },
+    {
+      "text": "岑野 11:49 1 我是岑野 空空 11:49 1 我是空空 安安 11:49 1 我是安安",
+      "cls": "flex flex-col bg-white rounded-[24px] overflow-hidden shadow-sm",
+      "id": "kawaii-chat-list-container",
+      "type": "DIV"
+    },
+    {
+      "text": "岑野 11:49 1 我是岑野",
+      "cls": "chat-item bg-white p-3.5 flex items-center gap-3 active:scale-95 transition-transform duration-100 cursor-pointer border-b border-gray-100/50 last:border-0 select-none",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "岑野 11:49 1 我是岑野",
+      "cls": "flex-1 min-w-0 ml-1",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "岑野 11:49 1",
+      "cls": "flex justify-between items-center mb-1",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "岑野",
+      "cls": "font-bold text-gray-900 text-[16px] truncate pr-2",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "我是岑野",
+      "cls": "text-[13px] text-gray-500 truncate flex items-center",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "空空 11:49 1 我是空空",
+      "cls": "chat-item bg-white p-3.5 flex items-center gap-3 active:scale-95 transition-transform duration-100 cursor-pointer border-b border-gray-100/50 last:border-0 select-none",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "空空 11:49 1 我是空空",
+      "cls": "flex-1 min-w-0 ml-1",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "空空 11:49 1",
+      "cls": "flex justify-between items-center mb-1",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "空空",
+      "cls": "font-bold text-gray-900 text-[16px] truncate pr-2",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "我是空空",
+      "cls": "text-[13px] text-gray-500 truncate flex items-center",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "安安 11:49 1 我是安安",
+      "cls": "chat-item bg-white p-3.5 flex items-center gap-3 active:scale-95 transition-transform duration-100 cursor-pointer border-b border-gray-100/50 last:border-0 select-none",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "安安 11:49 1 我是安安",
+      "cls": "flex-1 min-w-0 ml-1",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "安安 11:49 1",
+      "cls": "flex justify-between items-center mb-1",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "安安",
+      "cls": "font-bold text-gray-900 text-[16px] truncate pr-2",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "我是安安",
+      "cls": "text-[13px] text-gray-500 truncate flex items-center",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "创建角色",
+      "cls": "flex justify-between items-center px-6 pt-12 pb-4 bg-white/0",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "创建角色",
+      "cls": "text-lg font-bold text-black tracking-wide",
+      "id": "modal-title",
+      "type": "DIV"
+    },
+    {
+      "text": "取消 保存",
+      "cls": "creator-sticky-footer absolute bottom-0 left-0 w-full px-6 pb-8 pt-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消 保存",
+      "cls": "flex gap-4",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消",
+      "cls": "flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity",
+      "id": "",
+      "type": "BUTTON"
+    },
+    {
+      "text": "转账 红包 语音通话 视频通话 相册 拍照 位置 语音 一键重Roll 长叙事模式 抽卡 骰子 我的 他的 通用 + 分类 全选 删除 完成",
+      "cls": "chat-more-panel",
+      "id": "chat-more-panel",
+      "type": "DIV"
+    },
+    {
+      "text": "我的 他的 通用 + 分类 全选 删除 完成",
+      "cls": "chat-sticker-panel",
+      "id": "chat-sticker-panel",
+      "type": "DIV"
+    },
+    {
+      "text": "分类 全选 删除 完成",
+      "cls": "sticker-manage-bar",
+      "id": "sticker-manage-bar",
+      "type": "DIV"
+    },
+    {
+      "text": "完成",
+      "cls": "sticker-manage-btn",
+      "id": "sticker-manage-done-btn",
+      "type": "BUTTON"
+    },
+    {
+      "text": "导入表情包 导入到分组： 我的表情 他的表情 当前聊天通用 取消 导入",
+      "cls": "modal-layer",
+      "id": "sticker-import-modal",
+      "type": "DIV"
+    },
+    {
+      "text": "导入表情包 导入到分组： 我的表情 他的表情 当前聊天通用 取消 导入",
+      "cls": "",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消 导入",
+      "cls": "",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消",
+      "cls": "",
+      "id": "sticker-import-cancel-btn",
+      "type": "BUTTON"
+    },
+    {
+      "text": "忙时不回消息 忙碌或睡觉时，选择角色用系统提示框提醒，还是直接自动回复一句。 系统提示框 自动回复 生成自动回复词条 刷新词条库",
+      "cls": "settings-item",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "忙时不回消息 忙碌或睡觉时，选择角色用系统提示框提醒，还是直接自动回复一句。 系统提示框 自动回复 生成自动回复词条 刷新词条库",
+      "cls": "",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "忙碌或睡觉时，选择角色用系统提示框提醒，还是直接自动回复一句。 系统提示框 自动回复",
+      "cls": "busy-reply-box",
+      "id": "setting-busy-reply-mode-box",
+      "type": "DIV"
+    },
+    {
+      "text": "忙碌或睡觉时，选择角色用系统提示框提醒，还是直接自动回复一句。",
+      "cls": "busy-reply-hint",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消 保存修改",
+      "cls": "creator-sticky-footer absolute bottom-0 left-0 w-full px-6 pb-8 pt-6 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消 保存修改",
+      "cls": "flex gap-4",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "取消",
+      "cls": "flex-1 h-12 bg-white text-black border border-black rounded-full font-bold text-sm hover:opacity-80 transition-opacity",
+      "id": "",
+      "type": "BUTTON"
+    },
+    {
+      "text": "我的身份 点击更换头像 姓名 性别 保密 女 男 生日 农历 阳历 我的设定 选择预设 点击后会直接读取并保存应用 × 预设 保存为预设 保存",
+      "cls": "modal-layer bg-gray-50 flex flex-col h-full",
+      "id": "user-persona-modal",
+      "type": "DIV"
+    },
+    {
+      "text": "选择预设 点击后会直接读取并保存应用 ×",
+      "cls": "absolute inset-0 z-20",
+      "id": "user-persona-preset-sheet",
+      "type": "DIV"
+    },
+    {
+      "text": "选择预设 点击后会直接读取并保存应用 ×",
+      "cls": "absolute left-0 right-0 bottom-0 bg-white rounded-t-[28px] px-6 pt-5 pb-7 shadow-2xl",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "选择预设 点击后会直接读取并保存应用 ×",
+      "cls": "flex items-center justify-between mb-4",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "选择预设 点击后会直接读取并保存应用",
+      "cls": "",
+      "id": "",
+      "type": "DIV"
+    },
+    {
+      "text": "选择预设",
+      "cls": "text-base font-bold text-black",
+      "id": "",
+      "type": "DIV"
+    }
+  ]
+}
+step click-check 选择联系人-岑野: count=1
+step clicked 选择联系人-岑野
+step click-check 选择联系人-空空: count=1
+step clicked 选择联系人-空空
+step click-check 选择联系人-安安: count=1
+step clicked 选择联系人-安安
+step click-check 群聊联系人确认: count=1
+step clicked 群聊联系人确认
+roomState={
+  "currentChatRole": "group_1775533773880_z3vuv0",
+  "currentChatName": "安安等3人 (3)",
+  "bodyText": "正在同步数据中...\n11:49\n100\n安安等3人 (3)"
+}
+promptPreview={
+  "promptPreview": "[[PROMPT_CLASS:ROLE_JSON_TASK]]\n[[SCENE:WECHAT_GROUP_V1]]\n# 核心任务：群聊导演\n你是一个群聊AI导演，负责扮演微信群“安安等3人”里除了用户以外的所有角色。\n群聊设定：安安等3人 群聊\n# 输出格式铁律\n- 你的回复必须是一个 JSON 数组。\n- JSON 数组的第一个元素必须是 {\"type\":\"thought_chain\", ...}。\n- thought_chain 之后，才是所有角色的具体行动对象。\n# 角色扮演核心规则\n- 必须先思后行，先完成 thought_chain，再输出可见动作。\n- 角色之间必须互相回应、补充、反驳，形成自然讨论。\n- 用户的身份是【我】，本名是【我】。\n- 绝不能透露你是 AI 或模型，严禁发展线下剧情。\n# 导演策略与节奏控制\n- 不是每个角色都必须在每一轮都发言。\n- 允许角色之间形成短暂的两人对话或三人讨论。\n- 如果对话陷入平淡，可以主动创造轻微群事件来打破僵局。\n- 优先使用主要群聊场景：text、voice_message、quote_reply、system_message、send_and_recall、change_group_name、location_share。\n# 指令格式\n- thought_chain: {\"type\":\"thought_chain\",\"analysis\":\"...\",\"strategy\":\"...\",\"character_thoughts\":{\"角色名\":\"想法\"}}\n- text: {\"type\":\"text\",\"name\":\"角色本名\",\"message\":\"内容\"}\n- voice_message: {\"type\":\"voice_message\",\"name\":\"角色本名\",\"content\":\"语音文字\"}\n- quote_reply: {\"type\":\"quote_reply\",\"name\":\"角色本名\",\"target_timestamp\":\"已有时间戳\",\"reply_content\":\"回复内容\"}\n- send_and_recall: {\"type\":\"send_and_recall\",\"name\":\"角色本名\",\"content\":\"内容\"}\n- system_message: {\"type\":\"system_message\",\"content\":\"系统文本\"}\n- change_group_name: {\"type\":\"change_group_name\",\"name\":\"角色本名\",\"new_name\":\"新群名\"}\n- location_share: {\"type\":\"location_share\",\"name\":\"角色本名\",\"content\":\"位置名\"}\n- sticker: {",
+  "hasThoughtChainRule": true,
+  "hasGroupDirector": true
+}
+step created group maybe
+step filled input
+[log] 消息已发送，等待魔法棒触发回复...
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]
+[warning] AI proactive moment JSON parse failed: SyntaxError: Unexpected non-whitespace character after JSON at position 151 (line 1 column 152)
+    at JSON.parse (<anonymous>)
+    at http://127.0.0.1:4173/JS/moments.js:2018:28
+    at eval (eval at evaluate (:302:30), <anonymous>:42:26) [{"type":"thought_chain","analysis":"先让一个角色接住用户的话，再让另一个角色补充，形成真实群聊感。","strategy":"两个人先后回应，不刷屏。","character_thoughts":{"岑野":"先直接回应用户","空空":"补一句带点情绪的接话"}},{"type":"text","name":"岑野","senderRoleId":"role_cenye","message":"你突然在群里这么问，是想确认刚刚谁回你的？"},{"type":"text","name":"空空","senderRoleId":"role_kongkong","message":"我在，你继续说。"}]

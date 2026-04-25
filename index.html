@@ -214,6 +214,8 @@
             touch-action: pan-x;
             transform: translateZ(0);
             backface-visibility: hidden;
+            contain: layout paint;
+            will-change: scroll-position;
         }
 
         .desktop-pages-container::-webkit-scrollbar {
@@ -231,6 +233,19 @@
             overscroll-behavior-y: none;
             transform: translateZ(0);
             backface-visibility: hidden;
+            contain: layout paint style;
+        }
+
+        #desktop-view.desktop-is-scrolling .large-widget-overlay::before {
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+
+        #desktop-view.desktop-is-scrolling .large-widget,
+        #desktop-view.desktop-is-scrolling .top-unified-container,
+        #desktop-view.desktop-is-scrolling .aesthetic-card,
+        #desktop-view.desktop-is-scrolling .main-widget-card {
+            box-shadow: none !important;
         }
 
         /* Page 1 首页布局 */
@@ -2704,19 +2719,29 @@
             const dots = document.querySelectorAll('#page-indicators .dot');
             if (!container || dots.length === 0) return;
 
-            container.addEventListener('scroll', function() {
+            const desktopView = document.getElementById('desktop-view');
+            let scrollRaf = 0;
+            let scrollStopTimer = 0;
+            const updateDots = function() {
+                scrollRaf = 0;
                 const scrollLeft = container.scrollLeft;
-                const width = container.clientWidth;
+                const width = container.clientWidth || 1;
                 const activeIndex = Math.round(scrollLeft / width);
-
                 dots.forEach((dot, index) => {
-                    if (index === activeIndex) {
-                        dot.classList.add('active');
-                    } else {
-                        dot.classList.remove('active');
-                    }
+                    dot.classList.toggle('active', index === activeIndex);
                 });
-            });
+            };
+
+            container.addEventListener('scroll', function() {
+                if (desktopView) desktopView.classList.add('desktop-is-scrolling');
+                window.clearTimeout(scrollStopTimer);
+                scrollStopTimer = window.setTimeout(function() {
+                    if (desktopView) desktopView.classList.remove('desktop-is-scrolling');
+                }, 140);
+                if (!scrollRaf) {
+                    scrollRaf = window.requestAnimationFrame(updateDots);
+                }
+            }, { passive: true });
         });
     </script>
 

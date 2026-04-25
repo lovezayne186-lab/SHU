@@ -1707,24 +1707,77 @@ function normalizeMoneyActionKind(kind, remark, fallbackText) {
 
 window.normalizeMoneyActionKind = normalizeMoneyActionKind;
 
+function findLatestPendingUserMoneyKindForAI(roleId) {
+    const id = String(roleId || window.currentChatRole || '').trim();
+    const list = id && window.chatData && Array.isArray(window.chatData[id]) ? window.chatData[id] : [];
+    for (let i = list.length - 1; i >= 0; i--) {
+        const m = list[i];
+        if (!m || m.role !== 'me') continue;
+        if (m.type === 'transfer' && m.status !== 'accepted' && m.status !== 'returned') return 'transfer';
+        if (m.type === 'redpacket' && m.status !== 'opened' && m.status !== 'returned') return 'redpacket';
+        if (m.type !== 'text' && m.type !== undefined) return '';
+    }
+    return '';
+}
+
+function consumeMoneyAcceptDirectiveCodes(rawText, roleId) {
+    let text = String(rawText || '');
+    const result = { text: text, acceptTransfer: false, openRedpacket: false };
+    if (!text) return result;
+
+    const acceptTransferPatterns = [
+        /\[\[\s*ACCEPT_TRANSFER\s*\]\]/gi,
+        /(?:\[\[?\s*|【\s*)(?:accept|receive|received|collect|take)\s*[-_\s]*(?:transfer|zhuan\s*zhang|money|payment)(?:\s*[:：]\s*[\w.-]+)?\s*(?:\]\]?|】)/gi
+    ];
+    const openRedpacketPatterns = [
+        /\[\[\s*OPEN_REDPACKET\s*\]\]/gi,
+        /(?:\[\[?\s*|【\s*)(?:open|accept|receive|received|claim|take)\s*[-_\s]*(?:red\s*packet|redpacket|hong\s*bao|hongbao|red|红包)(?:\s*[:：]\s*[\w.-]+)?\s*(?:\]\]?|】)/gi
+    ];
+    const inferredKind = findLatestPendingUserMoneyKindForAI(roleId);
+    const inferAcceptPatterns = [
+        /(?:\[\[?\s*|【\s*)(?:accept|receive|received|claim|take|open)(?:\s*[-_:：]\s*[\w.-]+)?\s*(?:\]\]?|】)/gi
+    ];
+
+    for (let i = 0; i < acceptTransferPatterns.length; i++) {
+        text = text.replace(acceptTransferPatterns[i], function () {
+            result.acceptTransfer = true;
+            return ' ';
+        });
+    }
+    for (let i = 0; i < openRedpacketPatterns.length; i++) {
+        text = text.replace(openRedpacketPatterns[i], function () {
+            result.openRedpacket = true;
+            return ' ';
+        });
+    }
+    if (inferredKind && !result.acceptTransfer && !result.openRedpacket) {
+        for (let i = 0; i < inferAcceptPatterns.length; i++) {
+            text = text.replace(inferAcceptPatterns[i], function () {
+                if (inferredKind === 'redpacket') result.openRedpacket = true;
+                else result.acceptTransfer = true;
+                return ' ';
+            });
+        }
+    }
+
+    result.text = text.trim();
+    return result;
+}
+
+window.consumeMoneyAcceptDirectiveCodes = consumeMoneyAcceptDirectiveCodes;
+
 // 🔥 必须保留：解析AI回复中的转账标记
-function parseAITransferFromContent(rawText) {
+function parseAITransferFromContent(rawText, roleId) {
     if (!rawText) {
         return { text: '', transfer: null, acceptTransfer: false, openRedpacket: false };
     }
 
     let acceptTransfer = false;
     let openRedpacket = false;
-    const acceptPattern = /\[\[ACCEPT_TRANSFER\]\]/gi;
-    const openRedpacketPattern = /\[\[OPEN_REDPACKET\]\]/gi;
-    if (acceptPattern.test(rawText)) {
-        acceptTransfer = true;
-        rawText = rawText.replace(acceptPattern, '');
-    }
-    if (openRedpacketPattern.test(rawText)) {
-        openRedpacket = true;
-        rawText = rawText.replace(openRedpacketPattern, '');
-    }
+    const codeParsed = consumeMoneyAcceptDirectiveCodes(rawText, roleId);
+    acceptTransfer = codeParsed.acceptTransfer;
+    openRedpacket = codeParsed.openRedpacket;
+    rawText = codeParsed.text;
 
     const acceptUiPatterns = [
         /[\[【]\s*(?:已\s*收\s*款|已\s*收\s*取|已\s*收\s*下|收\s*下\s*转\s*账|已\s*接受\s*转\s*账|转\s*账\s*已\s*收)\s*[：:\s]*[¥￥]?\s*\d*(?:\.\d+)?\s*(?:元)?\s*[\]】]/gi,

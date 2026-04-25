@@ -48,6 +48,12 @@ async function initWidgetState() {
 
             if (!savedImg) return;
 
+            if (typeof window.applyWidgetImageToElement === 'function') {
+                window.applyWidgetImageToElement(img.id, savedImg);
+                return;
+            }
+            img.decoding = 'async';
+            img.loading = 'lazy';
             img.src = savedImg;
             img.style.display = 'block';
             img.style.opacity = '1';
@@ -503,7 +509,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const hintEl = document.getElementById(widget.hintId);
 
                     // 1. 恢复图片
-                    if (imgEl) {
+                    if (typeof window.applyWidgetImageToElement === 'function') {
+                        window.applyWidgetImageToElement(widget.imgId, imgSrc);
+                    } else if (imgEl) {
+                        imgEl.decoding = 'async';
+                        imgEl.loading = 'lazy';
                         imgEl.src = imgSrc;
                         imgEl.style.display = 'block';
                     }

@@ -1191,8 +1191,13 @@ function stripControlDirectivesFromText(text) {
     if (!s) return '';
     s = s.replace(/\[QUOTE\]([\s\S]*?)\[\/QUOTE\]/gi, ' ');
     s = s.replace(/\[\[\s*LISTEN_TOGETHER_(?:ACCEPT|DECLINE)\s*:\s*[^\]]+?\s*\]\]/gi, ' ');
-    s = s.replace(/\[\[\s*ACCEPT_TRANSFER\s*\]\]/gi, ' ');
-    s = s.replace(/\[\[\s*OPEN_REDPACKET\s*\]\]/gi, ' ');
+    if (typeof window.consumeMoneyAcceptDirectiveCodes === 'function') {
+        s = window.consumeMoneyAcceptDirectiveCodes(s, window.currentChatRole || '').text;
+    } else {
+        s = s.replace(/\[\[\s*ACCEPT_TRANSFER\s*\]\]/gi, ' ');
+        s = s.replace(/\[\[\s*OPEN_REDPACKET\s*\]\]/gi, ' ');
+    }
+    s = s.replace(/(?:\[\[?\s*|【\s*)(?:accept|accepted|receive|received|collect|claim|take|open|agree|reject|decline|refuse)(?:[-_\s:：]*[\w.-]+)?\s*(?:\]\]?|】)/gi, ' ');
     s = s.replace(/:::\s*TRANSFER\s*:(\{[\s\S]*?\})\s*:::/gi, ' ');
     s = s.replace(/[\[【]\s*(?:已\s*收\s*款|已\s*收\s*取|已\s*收\s*下|收\s*下\s*转\s*账|已\s*接受\s*转\s*账|转\s*账\s*已\s*收)\s*[：:\s]*[¥￥]?\s*\d*(?:\.\d+)?\s*(?:元)?\s*[\]】]/gi, ' ');
     s = s.replace(/[\[【]\s*(?:已\s*收\s*款|已\s*收\s*取|已\s*收\s*下)\s*[\]】]\s*[¥￥]?\s*\d+(?:\.\d+)?\s*(?:元)?/gi, ' ');
@@ -1862,7 +1867,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                 const familyCardAmountFromText = familyParsed.amount;
                 commandCarrierText = familyParsed.text || '';
 
-                const parsed = parseAITransferFromContent(commandCarrierText || '');
+                const parsed = parseAITransferFromContent(commandCarrierText || '', roleId);
                 const transferInfo = parsed.transfer;
                 const acceptTransfer = parsed.acceptTransfer;
                 const openRedpacket = parsed.openRedpacket;
@@ -2413,6 +2418,7 @@ function markLastUserTransferAccepted(roleId) {
                 const bubble = historyBox.querySelector(selector);
                 if (bubble) {
                     bubble.classList.add('transfer-bubble-accepted');
+                    playMoneyReceiveAnimation(bubble);
                     const footer = bubble.querySelector('.transfer-footer');
                     if (footer) {
                         footer.innerText = '对方已收钱';
@@ -2423,6 +2429,16 @@ function markLastUserTransferAccepted(roleId) {
             break;
         }
     }
+}
+
+function playMoneyReceiveAnimation(bubble) {
+    if (!bubble || !bubble.classList) return;
+    bubble.classList.remove('money-receive-anim');
+    void bubble.offsetWidth;
+    bubble.classList.add('money-receive-anim');
+    setTimeout(function () {
+        if (bubble && bubble.classList) bubble.classList.remove('money-receive-anim');
+    }, 850);
 }
 
 function markLastUserRedpacketOpened(roleId) {
@@ -2439,6 +2455,7 @@ function markLastUserRedpacketOpened(roleId) {
                 const bubble = historyBox.querySelector(selector);
                 if (bubble) {
                     bubble.setAttribute('data-status', 'opened');
+                    playMoneyReceiveAnimation(bubble);
                     const statusEl = bubble.querySelector('.redpacket-status-text');
                     if (statusEl) {
                         statusEl.innerText = '红包已领取';
@@ -3364,9 +3381,16 @@ function appendMessageToDOM(msg) {
             </div>
         `;
     } else if (msg.type === 'ai_secret_photo') {
+        const fallbackVirtualPhotoPath = 'assets/chatphoto.jpg';
+        const photoSource = String(window.virtualPhotoImagePath || fallbackVirtualPhotoPath).trim() || fallbackVirtualPhotoPath;
+        const photoAlt = escapeHtmlText(content || '照片');
         bubbleHtml = `
             <div class="msg-bubble msg-bubble-image ai-photo-bubble custom-bubble-content custom-image-message">
-                <img src="${window.virtualPhotoImagePath}">
+                <img src="${escapeHtmlText(photoSource)}" alt="${photoAlt}">
+                <div class="ai-photo-fallback" aria-hidden="true">
+                    <i class="bx bx-image-alt"></i>
+                    <span>照片</span>
+                </div>
             </div>
         `;
     } else {
@@ -3532,6 +3556,33 @@ function appendMessageToDOM(msg) {
     if (msg.type === 'ai_secret_photo') {
         const bubble = row.querySelector('.ai-photo-bubble');
         if (bubble) {
+            const imageEl = bubble.querySelector('img');
+            const showPhotoFallback = function () {
+                bubble.classList.add('is-photo-fallback');
+                if (imageEl) {
+                    imageEl.style.display = 'none';
+                }
+            };
+            const hidePhotoFallback = function () {
+                bubble.classList.remove('is-photo-fallback');
+                if (imageEl) {
+                    imageEl.style.display = '';
+                }
+            };
+            if (imageEl && !imageEl.__aiPhotoFallbackBound) {
+                imageEl.__aiPhotoFallbackBound = true;
+                imageEl.addEventListener('error', showPhotoFallback);
+                imageEl.addEventListener('load', function () {
+                    if (imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0) {
+                        hidePhotoFallback();
+                    } else {
+                        showPhotoFallback();
+                    }
+                });
+                if (imageEl.complete && (!imageEl.naturalWidth || !imageEl.naturalHeight)) {
+                    showPhotoFallback();
+                }
+            }
             bubble.addEventListener('click', function (e) {
                 if (e && typeof e.stopPropagation === 'function') {
                     e.stopPropagation();

@@ -1819,7 +1819,7 @@ function initChatSettingsUI(roleId) {
         memoryLimitInput.value = String(settings.memoryLimit);
     }
     if (momentsPostingSwitch) {
-        momentsPostingSwitch.checked = settings.momentsPostingEnabled !== false;
+        momentsPostingSwitch.checked = settings.momentsPostingEnabled === true;
     }
     if (allowOfflineInviteSwitch) {
         allowOfflineInviteSwitch.checked = settings.allowOfflineInvite !== false;

@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
+  }
+}

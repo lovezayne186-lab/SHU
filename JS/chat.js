@@ -1201,7 +1201,7 @@ window.voiceCallHistory = window.voiceCallHistory || [];
 window.editVideoAlbumData = window.editVideoAlbumData || [];
 window.chatUnread = window.chatUnread || {};
 window.familyCardState = window.familyCardState || { receivedCards: [], sentCards: [] };
-window.virtualPhotoImagePath = window.virtualPhotoImagePath || 'assets/images/chatphoto.jpg';
+window.virtualPhotoImagePath = window.virtualPhotoImagePath || 'assets/chatphoto.jpg';
 
 function makeStickerEntryId() {
     return 'stk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);

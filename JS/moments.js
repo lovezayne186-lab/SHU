@@ -1,6 +1,7 @@
 const MOMENTS_STORAGE_KEY = 'wechat_moments_data';
 const MOMENTS_DB_KEY = 'wechat_moments_data_v2';
-const DEFAULT_MOMENTS_COVER = 'assets/images/beijing.jpg';
+const LEGACY_DEFAULT_MOMENTS_COVER = 'assets/images/beijing.jpg';
+const DEFAULT_MOMENTS_COVER = 'assets/chushibeijing.jpg';
 const DEFAULT_MOMENTS_AVATAR = 'assets/chushitouxiang.jpg';
 const DEFAULT_MOMENTS_NAME = '我';
 
@@ -9,7 +10,7 @@ let momentsHydrationPromise = null;
 function normalizeMomentsData(rawData) {
     const data = rawData && typeof rawData === 'object' ? rawData : {};
     if (!Array.isArray(data.posts)) data.posts = [];
-    if (!data.userCover) data.userCover = DEFAULT_MOMENTS_COVER;
+    if (!data.userCover || data.userCover === LEGACY_DEFAULT_MOMENTS_COVER) data.userCover = DEFAULT_MOMENTS_COVER;
     if (!data.userAvatar) data.userAvatar = DEFAULT_MOMENTS_AVATAR;
     if (!data.userName) data.userName = DEFAULT_MOMENTS_NAME;
     return data;
@@ -1876,7 +1877,7 @@ function getChatSettingsForRole(roleId) {
 
 function isRoleMomentsPostingEnabled(roleId) {
     var settings = getChatSettingsForRole(roleId);
-    return settings.momentsPostingEnabled !== false;
+    return settings.momentsPostingEnabled === true;
 }
 
 function checkProactiveMomentsTick() {

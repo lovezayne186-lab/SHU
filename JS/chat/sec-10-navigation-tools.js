@@ -172,8 +172,49 @@ function tryParseCoupleInviteDecision(rawText) {
         const parsed = JSON.parse(candidate);
         return parsed && typeof parsed === 'object' ? parsed : null;
     } catch (e) {
-        return null;
+        return parseCoupleInviteDecisionDirective(raw);
     }
+}
+
+function parseCoupleInviteDecisionDirective(rawText) {
+    let text = String(rawText || '');
+    if (!text) return null;
+    let accepted = null;
+    const re = /(?:\[\[?\s*|【\s*)(accept|accepted|agree|yes|reject|decline|refuse|no)\s*(?:[-_\s]*(?:couple\s*invite|couple\s*space|couplespace|couple|relation|invite|情侣空间|情侣|邀请|[\w.-]+))?(?:\s*[:：]\s*[\w.-]+)?\s*(?:\]\]?|】)/gi;
+    text = text.replace(re, function (_, action) {
+        const a = String(action || '').toLowerCase();
+        if (/^(accept|accepted|agree|yes)$/.test(a)) accepted = true;
+        if (/^(reject|decline|refuse|no)$/.test(a)) accepted = false;
+        return ' ';
+    }).replace(/\s{2,}/g, ' ').trim();
+    if (accepted === null) return null;
+    return {
+        is_accepted: accepted,
+        reply_message: text
+    };
+}
+
+function stripCoupleInviteDecisionDirectives(text) {
+    const raw = String(text || '');
+    if (!raw) return '';
+    return raw.replace(/(?:\[\[?\s*|【\s*)(?:accept|accepted|agree|yes|reject|decline|refuse|no)\s*(?:[-_\s]*(?:couple\s*invite|couple\s*space|couplespace|couple|relation|invite|情侣空间|情侣|邀请|[\w.-]+))?(?:\s*[:：]\s*[\w.-]+)?\s*(?:\]\]?|】)/gi, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
+function updateCoupleInviteStatusInData(roleId, inviteId, nextStatus) {
+    const id = String(roleId || '').trim();
+    const key = String(inviteId || '').trim();
+    const list = id && window.chatData && Array.isArray(window.chatData[id]) ? window.chatData[id] : [];
+    for (let i = list.length - 1; i >= 0; i--) {
+        const msg = list[i];
+        if (!msg || msg.type !== 'couple_invite') continue;
+        if (key && String(msg.inviteId || '').trim() !== key) continue;
+        msg.inviteStatus = String(nextStatus || '');
+        saveData();
+        return msg;
+    }
+    return null;
 }
 
 function requestCoupleInviteDecision(roleId, inviteId) {
@@ -237,12 +278,16 @@ function requestCoupleInviteDecision(roleId, inviteId) {
                 finishTrackedTyping();
                 if (headerTitle && oldTitle) headerTitle.innerText = oldTitle;
             const payload = tryParseCoupleInviteDecision(aiResponseText) || {};
-            const accepted = payload.is_accepted === true || payload.isAccepted === true || payload.accepted === true;
+            const decisionText = String(payload.decision || payload.status || payload.result || '').trim().toLowerCase();
+            const baseAccepted = payload.is_accepted === true || payload.isAccepted === true || payload.accepted === true || /^(accept|accepted|agree|yes|同意|接受|愿意)$/.test(decisionText);
             const reply = typeof payload.reply_message === 'string'
                 ? payload.reply_message
                 : (typeof payload.replyMessage === 'string' ? payload.replyMessage : (typeof aiResponseText === 'string' ? aiResponseText.trim() : ''));
+            const replyDirective = parseCoupleInviteDecisionDirective(reply);
+            const stringAccepted = /^(true|accept|accepted|agree|yes|同意|接受|愿意)$/.test(String(payload.is_accepted || payload.isAccepted || payload.accepted || '').trim().toLowerCase());
+            const accepted = baseAccepted || stringAccepted || !!(replyDirective && replyDirective.is_accepted === true);
 
-            const cleanReply = String(reply || '').trim() || '我收到了你的邀请。';
+            const cleanReply = stripCoupleInviteDecisionDirectives(String(reply || '').trim()) || '我收到了你的邀请。';
             let textSegments = [];
             try {
                 if (typeof normalizeStructuredReplySegments === 'function') {
@@ -302,6 +347,7 @@ function requestCoupleInviteDecision(roleId, inviteId) {
             }
 
             if (accepted) {
+                updateCoupleInviteStatusInData(id, inviteId, 'accepted');
                 markCoupleRoleLinked(id);
                 setTimeout(function () {
                     openCoupleSpaceFromChat();
