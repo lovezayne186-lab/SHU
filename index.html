@@ -97,6 +97,174 @@
             };
         })();
     </script>
+    <script>
+        (function () {
+            function shouldShowIosDebug() {
+                try {
+                    if (/(?:\?|&)iosDebug=1(?:&|$)/i.test(location.search || '')) return true;
+                    return localStorage.getItem('ios_pwa_debug') === '1';
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function readSafeArea() {
+                var probe = document.getElementById('__ios-safe-area-probe');
+                if (!probe) {
+                    probe = document.createElement('div');
+                    probe.id = '__ios-safe-area-probe';
+                    probe.style.cssText = [
+                        'position:fixed',
+                        'left:-9999px',
+                        'top:-9999px',
+                        'width:1px',
+                        'height:1px',
+                        'padding-top:env(safe-area-inset-top, 0px)',
+                        'padding-bottom:env(safe-area-inset-bottom, 0px)',
+                        'pointer-events:none'
+                    ].join(';');
+                    document.documentElement.appendChild(probe);
+                }
+                var cs = getComputedStyle(probe);
+                return {
+                    top: parseFloat(cs.paddingTop) || 0,
+                    bottom: parseFloat(cs.paddingBottom) || 0
+                };
+            }
+
+            function rectInfo(selector, label) {
+                var el = document.querySelector(selector);
+                if (!el) return label + ': missing';
+                var r = el.getBoundingClientRect();
+                var ih = Math.round(window.innerHeight || 0);
+                return label + ': top=' + Math.round(r.top) +
+                    ' bottom=' + Math.round(r.bottom) +
+                    ' h=' + Math.round(r.height) +
+                    ' gap=' + Math.round(ih - r.bottom);
+            }
+
+            function collectIosDebugText() {
+                var vv = window.visualViewport;
+                var safe = readSafeArea();
+                var root = getComputedStyle(document.documentElement);
+                var viewportMeta = document.querySelector('meta[name="viewport"]');
+                var appleStatus = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+                var standalone = false;
+                var displayStandalone = false;
+                var displayFullscreen = false;
+                try { standalone = window.navigator.standalone === true; } catch (e0) { }
+                try { displayStandalone = window.matchMedia('(display-mode: standalone)').matches; } catch (e1) { }
+                try { displayFullscreen = window.matchMedia('(display-mode: fullscreen)').matches; } catch (e2) { }
+
+                return [
+                    'iOS PWA DEBUG',
+                    'time: ' + new Date().toLocaleTimeString(),
+                    'standalone: nav=' + standalone + ' media=' + displayStandalone + ' fullscreen=' + displayFullscreen,
+                    'ua iOS: ' + (/iPad|iPhone|iPod/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)),
+                    'inner: ' + Math.round(window.innerWidth || 0) + 'x' + Math.round(window.innerHeight || 0),
+                    'client: ' + Math.round(document.documentElement.clientWidth || 0) + 'x' + Math.round(document.documentElement.clientHeight || 0),
+                    'screen: ' + Math.round((screen && screen.width) || 0) + 'x' + Math.round((screen && screen.height) || 0),
+                    'visualViewport: ' + (vv ? Math.round(vv.width || 0) + 'x' + Math.round(vv.height || 0) + ' offset=' + Math.round(vv.offsetTop || 0) + ',' + Math.round(vv.offsetLeft || 0) + ' scale=' + vv.scale : 'none'),
+                    'safeArea: top=' + safe.top + ' bottom=' + safe.bottom,
+                    '--app-vh: ' + root.getPropertyValue('--app-vh').trim(),
+                    '--safe-bottom-compact: ' + root.getPropertyValue('--safe-bottom-compact').trim(),
+                    'viewport meta: ' + (viewportMeta ? viewportMeta.getAttribute('content') : 'missing'),
+                    'apple status: ' + (appleStatus ? appleStatus.getAttribute('content') : 'missing'),
+                    rectInfo('html', 'html'),
+                    rectInfo('body', 'body'),
+                    rectInfo('.phone-frame', 'phone'),
+                    rectInfo('.screen', 'screen'),
+                    rectInfo('#desktop-view', 'desktop'),
+                    rectInfo('#app-window', 'appWindow'),
+                    rectInfo('#app-content-area', 'appContent'),
+                    rectInfo('.dock', 'dock'),
+                    'body class: ' + document.body.className
+                ].join('\n');
+            }
+
+            function installIosDebugPanel() {
+                if (!shouldShowIosDebug() || document.getElementById('ios-pwa-debug-panel')) return;
+
+                var panel = document.createElement('div');
+                panel.id = 'ios-pwa-debug-panel';
+                panel.style.cssText = [
+                    'position:fixed',
+                    'left:8px',
+                    'top:8px',
+                    'z-index:2147483647',
+                    'max-width:calc(100vw - 16px)',
+                    'width:360px',
+                    'max-height:72vh',
+                    'overflow:auto',
+                    'background:rgba(0,0,0,.84)',
+                    'color:#fff',
+                    'font:11px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif',
+                    'padding:10px',
+                    'border-radius:10px',
+                    'box-shadow:0 8px 30px rgba(0,0,0,.35)',
+                    '-webkit-user-select:text',
+                    'user-select:text',
+                    'white-space:pre-wrap'
+                ].join(';');
+
+                var bar = document.createElement('div');
+                bar.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;position:sticky;top:0;background:rgba(0,0,0,.9);padding-bottom:6px;';
+
+                function makeButton(text, fn) {
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = text;
+                    btn.style.cssText = 'border:0;border-radius:8px;padding:5px 8px;background:#fff;color:#111;font:12px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;';
+                    btn.onclick = fn;
+                    return btn;
+                }
+
+                var pre = document.createElement('pre');
+                pre.style.cssText = 'margin:0;white-space:pre-wrap;word-break:break-word;font:inherit;';
+
+                function refresh() {
+                    pre.textContent = collectIosDebugText();
+                }
+
+                bar.appendChild(makeButton('刷新', refresh));
+                bar.appendChild(makeButton('复制', function () {
+                    var text = collectIosDebugText();
+                    pre.textContent = text + '\n\ncopied at ' + new Date().toLocaleTimeString();
+                    try {
+                        navigator.clipboard && navigator.clipboard.writeText(text);
+                    } catch (e) { }
+                }));
+                bar.appendChild(makeButton('关闭', function () {
+                    try { localStorage.removeItem('ios_pwa_debug'); } catch (e) { }
+                    panel.remove();
+                }));
+                bar.appendChild(makeButton('常开', function () {
+                    try { localStorage.setItem('ios_pwa_debug', '1'); } catch (e) { }
+                    refresh();
+                }));
+
+                panel.appendChild(bar);
+                panel.appendChild(pre);
+                document.body.appendChild(panel);
+                refresh();
+                window.addEventListener('resize', refresh, { passive: true });
+                window.addEventListener('orientationchange', function () { setTimeout(refresh, 250); }, { passive: true });
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener('resize', refresh, { passive: true });
+                    window.visualViewport.addEventListener('scroll', refresh, { passive: true });
+                }
+                setInterval(function () {
+                    if (document.body.contains(panel)) refresh();
+                }, 1500);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', installIosDebugPanel, { once: true });
+            } else {
+                installIosDebugPanel();
+            }
+        })();
+    </script>
     <!-- 3. 聊天室专用样式 (新增这个) -->
     <link rel="stylesheet" href="CSS/chat-page.css">
     <link rel="stylesheet" href="CSS/wallet.css">
