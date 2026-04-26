@@ -2047,7 +2047,13 @@ function openChatSettings() {
     const menu = document.getElementById('settings-menu-modal');
     if (!menu) return;
     if (menu.dataset) {
-        menu.dataset.roleId = String(roleId || '').trim();
+        // 绑定 roleId 到设置菜单模态框，供后续读取
+        const roleIdStr = String(roleId || '').trim();
+        menu.dataset.roleId = roleIdStr;
+        const modal = document.getElementById('settings-menu-modal');
+        if (modal) {
+            modal.dataset.roleId = roleIdStr;
+        }
     }
     menu.style.display = 'flex';
     if (typeof window.initChatSettingsUI === 'function') {
