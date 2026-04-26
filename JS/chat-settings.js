@@ -8,99 +8,7 @@ function resolveChatSettingsRoleId(roleId) {
     } catch (e) { }
     const current = String(window.currentChatRole || '').trim();
     if (current) return current;
-    try {
-        const storedCurrent = String(localStorage.getItem('currentChatId') || '').trim();
-        if (storedCurrent) return storedCurrent;
-    } catch (e1) { }
-    try {
-        const remembered = String(window.__lastChatSettingsRoleId || localStorage.getItem('lastChatSettingsRoleId') || '').trim();
-        if (remembered) return remembered;
-    } catch (e2) { }
-    try {
-        const title = String((document.getElementById('current-chat-name') || {}).textContent || '').trim();
-        const profiles = window.charProfiles && typeof window.charProfiles === 'object' ? window.charProfiles : {};
-        const matches = Object.keys(profiles).filter(function (key) {
-            const p = profiles[key] || {};
-            return title && (String(p.remark || '').trim() === title || String(p.nickName || '').trim() === title || String(p.name || '').trim() === title);
-        });
-        if (matches.length === 1) return matches[0];
-    } catch (e3) { }
-    return '';
-}
-
-function rememberChatSettingsRoleId(roleId) {
-    const id = String(roleId || '').trim();
-    if (!id) return '';
-    try { window.__lastChatSettingsRoleId = id; } catch (e0) { }
-    try { localStorage.setItem('lastChatSettingsRoleId', id); } catch (e1) { }
-    return id;
-}
-
-const CHAT_BUBBLE_CSS_BY_ROLE_KEY = 'chat_bubble_css_by_role';
-const CHAT_BUBBLE_PRESETS_BY_ROLE_KEY = 'chat_bubble_presets_by_role';
-
-function readChatBubbleCssByRole() {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(CHAT_BUBBLE_CSS_BY_ROLE_KEY) || '{}');
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (e) {
-        return {};
-    }
-}
-
-function getChatBubbleCssFallback(roleId) {
-    const id = resolveChatSettingsRoleId(roleId);
-    if (!id) return '';
-    const all = readChatBubbleCssByRole();
-    return typeof all[id] === 'string' ? all[id] : '';
-}
-
-function saveChatBubbleCssFallback(roleId, cssText) {
-    const id = resolveChatSettingsRoleId(roleId);
-    if (!id) return;
-    try {
-        const all = readChatBubbleCssByRole();
-        const text = String(cssText || '');
-        if (text) {
-            all[id] = text;
-        } else {
-            delete all[id];
-        }
-        localStorage.setItem(CHAT_BUBBLE_CSS_BY_ROLE_KEY, JSON.stringify(all));
-    } catch (e) { }
-}
-
-function readChatBubblePresetsByRole() {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(CHAT_BUBBLE_PRESETS_BY_ROLE_KEY) || '{}');
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (e) {
-        return {};
-    }
-}
-
-function getChatBubblePresets(roleId) {
-    const id = resolveChatSettingsRoleId(roleId);
-    if (!id) return [];
-    const all = readChatBubblePresetsByRole();
-    return Array.isArray(all[id]) ? all[id].filter(function (item) {
-        return item && typeof item === 'object' && typeof item.css === 'string';
-    }) : [];
-}
-
-function saveChatBubblePresets(roleId, presets) {
-    const id = resolveChatSettingsRoleId(roleId);
-    if (!id) return;
-    try {
-        const all = readChatBubblePresetsByRole();
-        all[id] = Array.isArray(presets) ? presets : [];
-        localStorage.setItem(CHAT_BUBBLE_PRESETS_BY_ROLE_KEY, JSON.stringify(all));
-    } catch (e) { }
-}
-
-function resolveChatSettingsInputRoleId(inputEl) {
-    const fromInput = inputEl && inputEl.dataset ? String(inputEl.dataset.roleId || '').trim() : '';
-    return resolveChatSettingsRoleId(fromInput);
+    return String(localStorage.getItem('currentChatId') || '').trim();
 }
 
 function getCurrentChatSettings(roleId) {
@@ -112,14 +20,7 @@ function getCurrentChatSettings(roleId) {
         allSettings = {};
     }
     const id = resolveChatSettingsRoleId(roleId);
-    const settings = allSettings[id] || {};
-    if (settings && typeof settings === 'object' && (!Object.prototype.hasOwnProperty.call(settings, 'bubbleCss') || !String(settings.bubbleCss || '').trim())) {
-        const fallbackCss = getChatBubbleCssFallback(id);
-        if (fallbackCss) {
-            return Object.assign({}, settings, { bubbleCss: fallbackCss });
-        }
-    }
-    return settings;
+    return allSettings[id] || {};
 }
 
 function saveCurrentChatSettings(roleId, settings) {
@@ -133,103 +34,15 @@ function saveCurrentChatSettings(roleId, settings) {
     const id = resolveChatSettingsRoleId(roleId);
     if (!id) return;
     allSettings[id] = Object.assign({}, allSettings[id] || {}, settings || {});
-    if (settings && Object.prototype.hasOwnProperty.call(settings, 'bubbleCss')) {
-        saveChatBubbleCssFallback(id, settings.bubbleCss || '');
-    }
     localStorage.setItem('chat_settings_by_role', JSON.stringify(allSettings));
 }
-
-function persistVisibleChatBubbleCss() {
-    const input = document.getElementById('setting-bubble-css');
-    if (!input) return false;
-    const id = resolveChatSettingsInputRoleId(input);
-    if (!id) return false;
-    saveCurrentChatSettings(id, { bubbleCss: input.value || '' });
-    if (typeof applyChatBubbleCssFromSettings === 'function') {
-        applyChatBubbleCssFromSettings(id);
-    }
-    return true;
-}
-
-function notifyChatBubbleAction(text) {
-    const message = String(text || '').trim();
-    if (!message) return;
-    try {
-        console.log('[chat-bubble-save]', message);
-    } catch (e0) { }
-    const status = document.getElementById('chat-bubble-save-status');
-    if (status) {
-        status.textContent = message;
-        status.hidden = false;
-        clearTimeout(status.__chatBubbleStatusTimer || 0);
-        status.__chatBubbleStatusTimer = setTimeout(function () {
-            status.hidden = true;
-        }, 1800);
-    }
-    try {
-        if (typeof showTopNotification === 'function') {
-            showTopNotification(message);
-        }
-    } catch (e) { }
-}
-
-function getChatBubbleSaveDebugInfo() {
-    const input = document.getElementById('setting-bubble-css');
-    const menu = document.getElementById('settings-menu-modal');
-    const roleId = resolveChatSettingsInputRoleId(input);
-    let savedLen = 0;
-    let fallbackLen = 0;
-    try {
-        const settings = roleId ? getCurrentChatSettings(roleId) : {};
-        savedLen = settings && typeof settings.bubbleCss === 'string' ? settings.bubbleCss.length : 0;
-    } catch (e0) { }
-    try {
-        fallbackLen = roleId ? String(getChatBubbleCssFallback(roleId) || '').length : 0;
-    } catch (e1) { }
-    return {
-        codeVersion: 'bubble-save-debug-20260426-1',
-        hasTextarea: !!input,
-        textareaLength: input ? String(input.value || '').length : 0,
-        textareaRoleId: input && input.dataset ? String(input.dataset.roleId || '') : '',
-        resolvedRoleId: roleId || '',
-        currentChatRole: String(window.currentChatRole || ''),
-        currentChatId: String(localStorage.getItem('currentChatId') || ''),
-        lastChatSettingsRoleId: String(window.__lastChatSettingsRoleId || localStorage.getItem('lastChatSettingsRoleId') || ''),
-        modalRoleId: menu && menu.dataset ? String(menu.dataset.roleId || '') : '',
-        saveButtonCount: document.querySelectorAll('[data-chat-bubble-action="save"]').length,
-        presetButtonCount: document.querySelectorAll('[data-chat-bubble-action="save-preset"]').length,
-        savedCssLength: savedLen,
-        fallbackCssLength: fallbackLen
-    };
-}
-
-window.debugChatBubbleSave = function () {
-    const info = getChatBubbleSaveDebugInfo();
-    try {
-        console.table(info);
-    } catch (e0) {
-        console.log('[chat-bubble-save-debug]', info);
-    }
-    notifyChatBubbleAction('调试信息已输出到控制台');
-    return info;
-};
 
 function applyChatBubbleCssFromSettings(roleId) {
     const id = resolveChatSettingsRoleId(roleId);
     if (!id) return;
     const settings = getCurrentChatSettings(id);
     const cssText = settings.bubbleCss || '';
-    const styleId = `chat-bubble-css-style-${id}`;
-    
-    const prevActiveId = window._activeChatBubbleStyleId;
-    if (prevActiveId && prevActiveId !== styleId) {
-        const prevStyleEl = document.getElementById(prevActiveId);
-        if (prevStyleEl && prevStyleEl.parentNode) {
-            prevStyleEl.parentNode.removeChild(prevStyleEl);
-        }
-    }
-    window._activeChatBubbleStyleId = styleId;
-
+    const styleId = 'chat-bubble-css-style';
     let styleEl = document.getElementById(styleId);
     const trimmed = String(cssText || '').trim();
     if (!trimmed) {
@@ -241,64 +54,16 @@ function applyChatBubbleCssFromSettings(roleId) {
     if (!styleEl) {
         styleEl = document.createElement('style');
         styleEl.id = styleId;
+        document.head.appendChild(styleEl);
     }
-    document.head.appendChild(styleEl);
     const looksLikeFullCss = /[{}]/.test(trimmed);
     if (looksLikeFullCss) {
         styleEl.textContent = trimmed;
-        syncChatBubbleRuntimeFlags(trimmed);
         return;
     }
-    styleEl.textContent = `#chat-room-layer .msg-row.msg-plain-bubble .msg-content-wrapper .msg-bubble,
-#chat-room-layer .msg-row.msg-plain-bubble .msg-bubble,
-.msg-bubble { ${trimmed} }
-#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-content-wrapper .msg-bubble,
-#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-bubble,
+    styleEl.textContent = `.msg-bubble { ${trimmed} }
 .msg-left .msg-bubble { ${trimmed} }
-#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-content-wrapper .msg-bubble,
-#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-bubble,
 .msg-right .msg-bubble { ${trimmed} }`;
-    syncChatBubbleRuntimeFlags(trimmed);
-}
-
-function syncChatBubbleRuntimeFlags(cssText) {
-    const chatRoom = document.getElementById('chat-room-layer');
-    if (!chatRoom) return;
-    const css = String(cssText || '');
-    if (!css.trim()) return;
-    const isThemeStudioCss = css.indexOf('--chat-') >= 0 || css.indexOf('msg-plain-bubble') >= 0;
-    if (!isThemeStudioCss) return;
-
-    try {
-        if (/\.msg-avatar\s*,\s*[\s\S]*?\.msg-avatar-wrap\s*\{[\s\S]*?display\s*:\s*none/i.test(css)) {
-            chatRoom.setAttribute('data-chat-avatar', '0');
-        } else if (css.indexOf('--chat-avatar-size') >= 0 || css.indexOf('msg-avatar') >= 0) {
-            chatRoom.setAttribute('data-chat-avatar', '1');
-        }
-
-        if (css.indexOf('[data-chat-ts]') >= 0 || css.indexOf('msg-bubble-time') >= 0) {
-            const timestampDisabled = /data-chat-ts[\s\S]*?msg-bubble-time\s*\{[\s\S]*?display\s*:\s*none/i.test(css)
-                && css.indexOf('display: block !important') < 0;
-            chatRoom.setAttribute('data-chat-ts', timestampDisabled ? '0' : '1');
-            if (css.indexOf('right: calc(-46px') >= 0 || css.indexOf('data-chat-tspos') >= 0) {
-                chatRoom.setAttribute('data-chat-tspos', 'bubbleRight');
-            } else if (css.indexOf('msg-bubble-time') >= 0 && !timestampDisabled) {
-                chatRoom.setAttribute('data-chat-tspos', 'bubble');
-            } else {
-                chatRoom.setAttribute('data-chat-tspos', 'avatar');
-            }
-        }
-
-        if (css.indexOf('content: "";') >= 0 && css.indexOf('--chat-tail-width') >= 0) {
-            chatRoom.setAttribute('data-chat-tail', '1');
-        } else if (css.indexOf('--chat-tail-width') >= 0) {
-            chatRoom.setAttribute('data-chat-tail', '0');
-        }
-
-        if (css.indexOf('data-kkt-head') >= 0 || css.indexOf('data-kkt-not-last') >= 0 || css.indexOf('msg-left + .msg-row.msg-left') >= 0) {
-            chatRoom.setAttribute('data-chat-kkt', css.indexOf('data-kkt-head') >= 0 ? 'last' : 'first');
-        }
-    } catch (e) { }
 }
 
 function updateBubblePreview() {
@@ -319,7 +84,6 @@ function updateBubblePreview() {
         return;
     }
     if (/[{}]/.test(trimmed)) {
-        updateFullBubbleCssPreview(preview, trimmed);
         return;
     }
     const temp = document.createElement('div');
@@ -333,186 +97,8 @@ function updateBubblePreview() {
     if (right) right.setAttribute('style', applied);
 }
 
-function readCssVarValue(cssText, name) {
-    const escaped = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = String(cssText || '').match(new RegExp(escaped + '\\s*:\\s*([^;]+);', 'i'));
-    return match ? match[1].trim() : '';
-}
-
-function updateFullBubbleCssPreview(preview, cssText) {
-    const left = preview ? preview.querySelector('.preview-bubble-left') : null;
-    const right = preview ? preview.querySelector('.preview-bubble-right') : null;
-    if (!left || !right) return;
-
-    const aiBg = readCssVarValue(cssText, '--chat-ai-bubble-bg') || '#ffffff';
-    const aiColor = readCssVarValue(cssText, '--chat-ai-bubble-color') || '#000';
-    const aiBorder = readCssVarValue(cssText, '--chat-ai-bubble-border') || '1px solid rgba(0,0,0,0.06)';
-    const userBg = readCssVarValue(cssText, '--chat-user-bubble-bg') || '#95ec69';
-    const userColor = readCssVarValue(cssText, '--chat-user-bubble-color') || '#000';
-    const userBorder = readCssVarValue(cssText, '--chat-user-bubble-border') || 'none';
-    const padY = readCssVarValue(cssText, '--chat-bubble-pad-y') || '8px';
-    const lineHeight = readCssVarValue(cssText, '--chat-bubble-line-height') || '1.4';
-    const aiRadius = [
-        readCssVarValue(cssText, '--chat-ai-radius-tl') || '12px',
-        readCssVarValue(cssText, '--chat-ai-radius-tr') || '12px',
-        readCssVarValue(cssText, '--chat-ai-radius-br') || '12px',
-        readCssVarValue(cssText, '--chat-ai-radius-bl') || '6px'
-    ].join(' ');
-    const userRadius = [
-        readCssVarValue(cssText, '--chat-user-radius-tl') || '12px',
-        readCssVarValue(cssText, '--chat-user-radius-tr') || '12px',
-        readCssVarValue(cssText, '--chat-user-radius-br') || '6px',
-        readCssVarValue(cssText, '--chat-user-radius-bl') || '12px'
-    ].join(' ');
-
-    left.setAttribute('style', 'background: ' + aiBg + '; color: ' + aiColor + '; border: ' + aiBorder + '; padding: ' + padY + ' 12px; border-radius: ' + aiRadius + '; font-size: 14px; max-width: 70%; line-height: ' + lineHeight + '; box-shadow: 0 6px 16px rgba(0,0,0,0.08);');
-    right.setAttribute('style', 'background: ' + userBg + '; color: ' + userColor + '; border: ' + userBorder + '; padding: ' + padY + ' 12px; border-radius: ' + userRadius + '; font-size: 14px; max-width: 70%; line-height: ' + lineHeight + '; margin-right:8px; box-shadow: 0 6px 16px rgba(0,0,0,0.08);');
-}
-
-function applySavedChatBubbleCss(roleId) {
-    const id = resolveChatSettingsRoleId(roleId);
-    if (!id) return;
-    if (window.ThemeStudio && typeof window.ThemeStudio.applyThemeToChat === 'function') {
-        const chatRoom = document.getElementById('chat-room-layer');
-        if (chatRoom) {
-            window.ThemeStudio.applyThemeToChat(id, chatRoom);
-        }
-    }
-    applyChatBubbleCssFromSettings(id);
-    if (typeof applyChatFontSizeFromSettings === 'function') {
-        applyChatFontSizeFromSettings(id);
-    }
-}
-
-window.saveChatBubbleStyleFromButton = function () {
-    try { console.log('[chat-bubble-save] click save', getChatBubbleSaveDebugInfo()); } catch (e0) { }
-    const input = document.getElementById('setting-bubble-css');
-    const id = resolveChatSettingsInputRoleId(input);
-    if (!input) {
-        notifyChatBubbleAction('没有找到气泡 CSS 输入框');
-        return;
-    }
-    if (!id) {
-        notifyChatBubbleAction('没有识别到当前角色，请从聊天页重新打开聊天设置');
-        return;
-    }
-    rememberChatSettingsRoleId(id);
-    saveCurrentChatSettings(id, { bubbleCss: input.value || '' });
-    applySavedChatBubbleCss(id);
-    updateBubblePreview();
-    renderChatBubblePresetList(id);
-    notifyChatBubbleAction('气泡样式已保存');
-};
-
-window.saveChatBubblePresetFromButton = function () {
-    try { console.log('[chat-bubble-save] click save preset', getChatBubbleSaveDebugInfo()); } catch (e0) { }
-    const input = document.getElementById('setting-bubble-css');
-    const id = resolveChatSettingsInputRoleId(input);
-    if (!input) {
-        notifyChatBubbleAction('没有找到气泡 CSS 输入框');
-        return;
-    }
-    if (!id) {
-        notifyChatBubbleAction('没有识别到当前角色，请从聊天页重新打开聊天设置');
-        return;
-    }
-    rememberChatSettingsRoleId(id);
-    const cssText = String(input.value || '').trim();
-    if (!cssText) {
-        notifyChatBubbleAction('先粘贴或编辑一段气泡 CSS');
-        return;
-    }
-    let name = '';
-    try {
-        name = window.prompt('给这个气泡预设取个名字', '气泡预设');
-    } catch (e) {
-        name = '气泡预设';
-    }
-    if (name === null) return;
-    const presetName = String(name || '').trim() || '气泡预设';
-    const presets = getChatBubblePresets(id);
-    presets.unshift({
-        id: 'bubble_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
-        name: presetName,
-        css: cssText,
-        updatedAt: Date.now()
-    });
-    saveChatBubblePresets(id, presets.slice(0, 30));
-    saveCurrentChatSettings(id, { bubbleCss: input.value || '' });
-    applySavedChatBubbleCss(id);
-    renderChatBubblePresetList(id);
-    notifyChatBubbleAction('已保存为预设');
-};
-
-window.applyChatBubblePreset = function (presetId) {
-    const input = document.getElementById('setting-bubble-css');
-    const id = resolveChatSettingsInputRoleId(input);
-    if (!input) {
-        notifyChatBubbleAction('没有找到气泡 CSS 输入框');
-        return;
-    }
-    if (!id) {
-        notifyChatBubbleAction('没有识别到当前角色，请从聊天页重新打开聊天设置');
-        return;
-    }
-    rememberChatSettingsRoleId(id);
-    const targetId = String(presetId || '').trim();
-    const presets = getChatBubblePresets(id);
-    const preset = presets.find(function (item) {
-        return String(item && item.id || '') === targetId;
-    });
-    if (!preset) return;
-    input.value = preset.css || '';
-    saveCurrentChatSettings(id, { bubbleCss: input.value || '' });
-    updateBubblePreview();
-    applySavedChatBubbleCss(id);
-    renderChatBubblePresetList(id);
-};
-
-function bindChatBubbleActionButtonsOnce() {
-    if (window.__chatBubbleActionButtonsBound) return;
-    window.__chatBubbleActionButtonsBound = true;
-    document.addEventListener('click', function (event) {
-        const target = event.target && event.target.closest ? event.target.closest('[data-chat-bubble-action]') : null;
-        if (!target) return;
-        const action = String(target.getAttribute('data-chat-bubble-action') || '').trim();
-        if (!action) return;
-        event.preventDefault();
-        if (action === 'save' && typeof window.saveChatBubbleStyleFromButton === 'function') {
-            window.saveChatBubbleStyleFromButton();
-            return;
-        }
-        if (action === 'save-preset' && typeof window.saveChatBubblePresetFromButton === 'function') {
-            window.saveChatBubblePresetFromButton();
-            return;
-        }
-        if (action === 'apply-preset' && typeof window.applyChatBubblePreset === 'function') {
-            window.applyChatBubblePreset(target.getAttribute('data-preset-id') || '');
-        }
-    });
-}
-
-bindChatBubbleActionButtonsOnce();
-
-function renderChatBubblePresetList(roleId) {
-    const box = document.getElementById('chat-bubble-preset-list');
-    if (!box) return;
-    const id = resolveChatSettingsRoleId(roleId);
-    const presets = getChatBubblePresets(id);
-    if (!presets.length) {
-        box.innerHTML = '<div class="text-[12px] text-gray-400 leading-relaxed">还没有气泡预设。</div>';
-        return;
-    }
-    box.innerHTML = ''
-        + '<div class="text-[12px] text-gray-500 mb-2">气泡预设</div>'
-        + '<div class="flex flex-wrap gap-2">'
-        + presets.map(function (preset) {
-            return '<button type="button" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-800 text-[12px] active:bg-gray-200" data-chat-bubble-action="apply-preset" data-preset-id="' + escapeChatSettingsHtml(String(preset.id || '')) + '">' + escapeChatSettingsHtml(preset.name || '气泡预设') + '</button>';
-        }).join('')
-        + '</div>';
-}
-
 function saveChatSettings() {
+    const roleId = resolveChatSettingsRoleId('');
     const memoryLimitInput = document.getElementById('setting-memory-limit');
     const momentsPostingSwitch = document.getElementById('setting-moments-posting-enabled');
     const allowOfflineInviteSwitch = document.getElementById('setting-allow-offline-invite');
@@ -526,7 +112,6 @@ function saveChatSettings() {
     const summaryFreqInput = document.getElementById('setting-summary-freq');
     const fontSizeInput = document.getElementById('setting-font-size');
     const bubbleCssInput = document.getElementById('setting-bubble-css');
-    const roleId = resolveChatSettingsInputRoleId(bubbleCssInput);
     const settings = {};
     if (memoryLimitInput) {
         settings.memoryLimit = parseInt(memoryLimitInput.value, 10) || 0;
@@ -585,16 +170,8 @@ function saveChatSettings() {
     if (typeof settings.autoTranslate === 'boolean') {
         localStorage.setItem('chat_auto_translate', settings.autoTranslate ? 'true' : 'false');
     }
-    // 先应用基础主题，再注入角色自定义气泡 CSS，避免主题重置清掉导出 CSS 依赖的运行时标记。
-    if (window.ThemeStudio && typeof window.ThemeStudio.applyThemeToChat === 'function') {
-        const chatRoom = document.getElementById('chat-room-layer');
-        if (chatRoom) {
-            window.ThemeStudio.applyThemeToChat(roleId, chatRoom);
-        }
-    }
     applyChatBubbleCssFromSettings(roleId);
     applyChatFontSizeFromSettings(roleId);
-
     toggleBusyReplyModeBox();
     renderBusyReplyAutoLibraryPanel(roleId);
 }
@@ -2219,7 +1796,6 @@ function renderRoleApiPresetList() {
 function initChatSettingsUI(roleId) {
     const id = resolveChatSettingsRoleId(roleId);
     if (!id) return;
-    rememberChatSettingsRoleId(id);
     try {
         const modal = document.getElementById('settings-menu-modal');
         if (modal && modal.dataset) modal.dataset.roleId = id;
@@ -2284,9 +1860,8 @@ function initChatSettingsUI(roleId) {
         const raw = typeof settings.fontSize === 'number' ? settings.fontSize : 15;
         fontSizeInput.value = String(clampChatFontSize(raw));
     }
-    if (bubbleCssInput) {
-        if (bubbleCssInput.dataset) bubbleCssInput.dataset.roleId = id;
-        bubbleCssInput.value = typeof settings.bubbleCss === 'string' ? settings.bubbleCss : '';
+    if (bubbleCssInput && typeof settings.bubbleCss === 'string') {
+        bubbleCssInput.value = settings.bubbleCss;
     }
     toggleSummaryInput();
     if (busyReplyModeBox) {
@@ -2296,7 +1871,6 @@ function initChatSettingsUI(roleId) {
     updateChatFontSizePreview();
     applyChatFontSizeFromSettings(id);
     updateBubblePreview();
-    renderChatBubblePresetList(id);
     updateRoleApiPresetValueUI(id);
 }
 
@@ -3466,7 +3040,6 @@ window.renderChatSettingsGroupPersonalizationPage = function () {
     const rid = String(window.currentChatRole || '').trim();
     const body = document.getElementById('chat-settings-body');
     if (!body || !rid) return;
-    rememberChatSettingsRoleId(rid);
     const profile = getChatSettingsProfile(rid);
     const groupAvatar = escapeChatSettingsHtml(profile.avatar || 'assets/chushitouxiang.jpg');
     const meDisplay = getGroupSelfDisplay(rid);
@@ -3496,14 +3069,7 @@ window.renderChatSettingsGroupPersonalizationPage = function () {
         + '        <img src="' + myAvatar + '" class="w-7 h-7 rounded-lg object-cover bg-gray-200">'
         + '      </div>'
         + '    </div>'
-        + '    <textarea id="setting-bubble-css" class="w-full h-24 rounded-xl border border-gray-200 px-3 py-2 text-[13px] text-gray-900 outline-none" placeholder="输入 CSS（例如：background: #111827; color: #fff; border-radius: 18px;）" oninput="updateBubblePreview();"></textarea>'
-        + '    <div class="flex gap-2 mt-3">'
-        + '      <button type="button" class="flex-1 h-9 rounded-xl bg-black text-white text-[13px] font-semibold active:opacity-80" data-chat-bubble-action="save">保存</button>'
-        + '      <button type="button" class="flex-1 h-9 rounded-xl bg-gray-100 text-gray-800 text-[13px] font-semibold active:bg-gray-200" data-chat-bubble-action="save-preset">保存为预设</button>'
-        + '    </div>'
-        + '    <button type="button" class="mt-2 text-[12px] text-gray-500 underline" onclick="debugChatBubbleSave()">查看保存诊断</button>'
-        + '    <div id="chat-bubble-save-status" class="mt-2 text-[12px] text-[#34C759]" hidden></div>'
-        + '    <div id="chat-bubble-preset-list" class="mt-3"></div>'
+        + '    <textarea id="setting-bubble-css" class="w-full h-24 rounded-xl border border-gray-200 px-3 py-2 text-[13px] text-gray-900 outline-none" placeholder="输入 CSS（例如：background: #111827; color: #fff; border-radius: 18px;）" oninput="updateBubblePreview(); saveChatSettings();"></textarea>'
         + '  </div>'
         + '</div>';
     if (typeof window.initChatSettingsUI === 'function') window.initChatSettingsUI(rid);
@@ -3514,7 +3080,6 @@ window.renderChatSettingsPanel = function (roleId) {
     const rid = String(roleId || window.currentChatRole || '').trim();
     const body = document.getElementById('chat-settings-body');
     if (!body || !rid) return;
-    rememberChatSettingsRoleId(rid);
     const isGroup = isGroupChatRoleId(rid);
     const profile = getChatSettingsProfile(rid);
     setChatSettingsHeaderTitle('聊天信息');
@@ -3636,14 +3201,7 @@ window.renderChatSettingsPanel = function (roleId) {
             + '      <img src="assets/chushitouxiang.jpg" class="w-7 h-7 rounded-lg object-cover bg-gray-200">'
             + '    </div>'
             + '  </div>'
-            + '  <textarea id="setting-bubble-css" class="w-full h-20 rounded-xl border border-gray-200 px-3 py-2 text-[13px] text-gray-900 outline-none" placeholder="输入 CSS（例如：background: pink; color: white;）" oninput="updateBubblePreview();"></textarea>'
-            + '  <div class="flex gap-2 mt-3">'
-            + '    <button type="button" class="flex-1 h-9 rounded-xl bg-black text-white text-[13px] font-semibold active:opacity-80" data-chat-bubble-action="save">保存</button>'
-            + '    <button type="button" class="flex-1 h-9 rounded-xl bg-gray-100 text-gray-800 text-[13px] font-semibold active:bg-gray-200" data-chat-bubble-action="save-preset">保存为预设</button>'
-            + '  </div>'
-            + '  <button type="button" class="mt-2 text-[12px] text-gray-500 underline" onclick="debugChatBubbleSave()">查看保存诊断</button>'
-            + '  <div id="chat-bubble-save-status" class="mt-2 text-[12px] text-[#34C759]" hidden></div>'
-            + '  <div id="chat-bubble-preset-list" class="mt-3"></div>'
+            + '  <textarea id="setting-bubble-css" class="w-full h-20 rounded-xl border border-gray-200 px-3 py-2 text-[13px] text-gray-900 outline-none" placeholder="输入 CSS（例如：background: pink; color: white;）" oninput="updateBubblePreview(); saveChatSettings();"></textarea>'
             + '</div>'
             + sectionWrapEnd;
 
@@ -3836,7 +3394,6 @@ window.openChatSettings = function () {
     const roleId = String(window.currentChatRole || '').trim();
     const menu = document.getElementById('settings-menu-modal');
     if (!menu || !roleId) return;
-    rememberChatSettingsRoleId(roleId);
     if (menu.dataset) menu.dataset.roleId = roleId;
     chatSettingsPageState.stack = [
         function () {

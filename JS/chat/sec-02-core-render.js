@@ -625,11 +625,11 @@ function enterChat(roleId) {
         if (oldHeaderAvatar) oldHeaderAvatar.remove();
 
         applyChatBackground(roleId);
-        if (window.ThemeStudio && typeof window.ThemeStudio.applyThemeToChat === 'function') {
-            window.ThemeStudio.applyThemeToChat(roleId, chatRoom);
-        }
         if (typeof window.applyChatBubbleCssFromSettings === 'function') {
             window.applyChatBubbleCssFromSettings(roleId);
+        }
+        if (window.ThemeStudio && typeof window.ThemeStudio.applyThemeToChat === 'function') {
+            window.ThemeStudio.applyThemeToChat(roleId, chatRoom);
         }
         if (typeof window.applyChatFontSizeFromSettings === 'function') {
             window.applyChatFontSizeFromSettings(roleId);
@@ -723,12 +723,6 @@ function enterChat(roleId) {
 
         if (typeof window.updateMsgRowGroupClasses === 'function') {
             window.updateMsgRowGroupClasses();
-        }
-        if (typeof window.applyChatBubbleCssFromSettings === 'function') {
-            window.applyChatBubbleCssFromSettings(roleId);
-        }
-        if (typeof window.applyChatFontSizeFromSettings === 'function') {
-            window.applyChatFontSizeFromSettings(roleId);
         }
 
         try {

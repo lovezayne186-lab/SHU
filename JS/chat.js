@@ -581,7 +581,6 @@ async function maybeSyncOfflineAIStatusOnInit() {
             timestampPos: 'avatar',
             readEnabled: true,
             kktMerge: false,
-            kktMergeMode: 'first',
             shadow: 8,
             aiRadius: { tl: 12, tr: 12, bl: 6, br: 12 },
             userRadius: { tl: 12, tr: 12, bl: 12, br: 6 },
@@ -616,13 +615,11 @@ async function maybeSyncOfflineAIStatusOnInit() {
 
         base.timestampEnabled = c.timestampEnabled !== false;
         base.timestampPos = String(c.timestampPos || base.timestampPos);
-        if (base.timestampPos !== 'avatar' && base.timestampPos !== 'bubble' && base.timestampPos !== 'bubbleRight') base.timestampPos = 'avatar';
+        if (base.timestampPos !== 'avatar' && base.timestampPos !== 'bubble') base.timestampPos = 'avatar';
 
         base.readEnabled = c.readEnabled !== false;
 
         base.kktMerge = !!c.kktMerge;
-        base.kktMergeMode = String(c.kktMergeMode || base.kktMergeMode);
-        if (base.kktMergeMode !== 'first' && base.kktMergeMode !== 'last') base.kktMergeMode = 'first';
         base.shadow = clampNumber(c.shadow, 0, 24, base.shadow);
 
         base.avatarVisible = c.avatarVisible !== false;
@@ -711,14 +708,6 @@ async function maybeSyncOfflineAIStatusOnInit() {
         var all = safeParseJson(raw, {});
         var item = all && typeof all === 'object' ? all[id] : null;
         var css = item && typeof item === 'object' ? (item.bubbleCss || '') : '';
-        if (!String(css || '').trim()) {
-            try {
-                var fallback = safeParseJson(localStorage.getItem('chat_bubble_css_by_role') || '{}', {});
-                if (fallback && typeof fallback === 'object' && typeof fallback[id] === 'string') {
-                    css = fallback[id];
-                }
-            } catch (e) { }
-        }
         return String(css || '');
     }
 
@@ -738,8 +727,7 @@ async function maybeSyncOfflineAIStatusOnInit() {
         } catch (e1) { }
 
         try {
-            var activeId = window._activeChatBubbleStyleId || 'chat-bubble-css-style';
-            var el1 = document.getElementById(activeId);
+            var el1 = document.getElementById('chat-bubble-css-style');
             if (el1 && el1.textContent) parts.push(String(el1.textContent));
         } catch (e2) { }
 
@@ -765,10 +753,7 @@ async function maybeSyncOfflineAIStatusOnInit() {
 
     function setVarIfAllowed(style, name, value, overrides) {
         if (!style) return;
-        if (overrides && overrides[name]) {
-            style.removeProperty(name);
-            return;
-        }
+        if (overrides && overrides[name]) return;
         style.setProperty(name, value);
     }
 
@@ -868,7 +853,11 @@ async function maybeSyncOfflineAIStatusOnInit() {
                 try { row.removeAttribute('data-kkt-head'); } catch (e1) { }
                 continue;
             }
-            // 始终计算并设置 kkt 标记，以便自定义 CSS 可以使用这些属性
+            if (!kktEnabled) {
+                try { row.removeAttribute('data-kkt-not-last'); } catch (e2) { }
+                try { row.removeAttribute('data-kkt-head'); } catch (e3) { }
+                continue;
+            }
             var prev = list[i - 1];
             var next = list[i + 1];
             var prevSame = !!(prev && prev.classList && ((isLeft && prev.classList.contains('msg-left')) || (isRight && prev.classList.contains('msg-right'))));
@@ -884,9 +873,9 @@ async function maybeSyncOfflineAIStatusOnInit() {
             var pending = 0;
             var run = function () {
                 pending = 0;
-                var kktVal = '';
-                try { kktVal = el.getAttribute('data-chat-kkt'); } catch (e0) { }
-                refreshKktMarkers(el, kktVal === 'first' || kktVal === 'last' || kktVal === '1');
+                var kkt = false;
+                try { kkt = el.getAttribute('data-chat-kkt') === '1'; } catch (e0) { }
+                refreshKktMarkers(el, kkt);
             };
             var obs = new MutationObserver(function () {
                 if (pending) return;
@@ -910,7 +899,7 @@ async function maybeSyncOfflineAIStatusOnInit() {
         applyConfigToStyle(el.style, config, overrides);
         try {
             el.setAttribute('data-chat-avatar', config.avatarVisible ? '1' : '0');
-            el.setAttribute('data-chat-kkt', config.kktMerge ? String(config.kktMergeMode || 'first') : '0');
+            el.setAttribute('data-chat-kkt', config.kktMerge ? '1' : '0');
             el.setAttribute('data-chat-tail', config.tailEnabled ? '1' : '0');
             el.setAttribute('data-chat-ts', config.timestampEnabled ? '1' : '0');
             el.setAttribute('data-chat-tspos', String(config.timestampPos || 'avatar'));
