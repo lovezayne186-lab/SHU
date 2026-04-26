@@ -18,12 +18,20 @@
     --theme-label: #333333;
     --dock-bg: #aeb0b2;
     --top-safe-inset: max(env(safe-area-inset-top), 44px);
+    --desktop-page-padding-top: calc(15px + 44px + 5px);
     --app-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 @supports (height: 100dvh) {
     :root {
         --app-vh: 100dvh;
+    }
+}
+
+@media (display-mode: standalone) {
+    :root {
+        --top-safe-inset: var(--safe-top-raw);
+        --desktop-page-padding-top: 24px;
     }
 }
 
