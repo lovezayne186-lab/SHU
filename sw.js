@@ -1,6 +1,6 @@
 // sw.js - 开发友好版：网络优先 (Network First)
 // 修改后：每次刷新都会尝试获取最新代码，没网时才用缓存
-const APP_SHELL_VERSION = '2026.04.26-ios-root-lvh';
+const APP_SHELL_VERSION = '2026.04.26-ios-no-viewport-fit';
 const CACHE_NAME = 'shubao-phone-dev-' + APP_SHELL_VERSION;
 const urlsToCache = [
   './',

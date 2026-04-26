@@ -27,20 +27,6 @@
     }
 }
 
-@media (display-mode: standalone) {
-    :root {
-        --app-vh: 100vh;
-    }
-}
-
-@media (display-mode: standalone) {
-    @supports (height: 100lvh) {
-        :root {
-            --app-vh: 100lvh;
-        }
-    }
-}
-
 * {
     box-sizing: border-box;
     user-select: none;
@@ -70,14 +56,6 @@ body {
     font-family: var(--app-font-family);
     overflow: hidden;
     overscroll-behavior: none;
-}
-
-@media (display-mode: standalone) {
-    html,
-    body {
-        height: var(--app-vh, 100vh);
-        min-height: var(--app-vh, 100vh);
-    }
 }
 
 button,
