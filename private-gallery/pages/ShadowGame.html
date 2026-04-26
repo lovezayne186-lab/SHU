@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏记录 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #121212; color: #E0E0E0; font-family: -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+        .app-container { max-width: 420px; margin: 0 auto; padding: 60px 20px 20px; }
+
+        .header { margin-bottom: 25px; }
+        .header h1 { font-size: 24px; color: #FFF; font-weight: 700; letter-spacing: 1px; }
+        .header p { font-size: 12px; color: #888; margin-top: 5px; }
+
+        .game-card { background: #1E1E1E; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #2A2A2A; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+        .game-header { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px; }
+        .game-icon { font-size: 36px; width: 60px; height: 60px; background: #2D2D2D; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .game-info { flex: 1; }
+        .game-title { font-size: 18px; font-weight: bold; color: #FFF; margin-bottom: 4px; }
+
+        .platform-tag { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-bottom: 8px; }
+        .tag-Steam { background: #171A21; color: #66C0F4; border: 1px solid #66C0F4; }
+        .tag-Switch { background: #E60012; color: #FFF; border: 1px solid #E60012; }
+        .tag-PS5 { background: #003791; color: #FFF; border: 1px solid #003791; }
+        .tag-Mobile { background: #4CAF50; color: #FFF; border: 1px solid #4CAF50; }
+
+        .overall-stats { display: flex; gap: 15px; font-size: 12px; color: #AAA; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed #333; }
+        .overall-stats span { display: block; color: #FFF; font-size: 14px; font-weight: 600; margin-top: 2px; }
+
+        .session-title { font-size: 12px; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .session-list { display: flex; flex-direction: column; gap: 10px; }
+        .session-item { background: #252525; border-left: 3px solid #555; padding: 10px 12px; border-radius: 0 6px 6px 0; }
+        .session-item.win { border-left-color: #4CAF50; } /* 如果战绩好可以稍微透点绿 */
+        .session-item.loss { border-left-color: #F44336; } /* 如果战绩差透点红 */
+
+        .session-top { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-bottom: 4px; }
+        .session-result { font-size: 13px; color: #E0E0E0; font-weight: 500; }
+
+        .back-btn { position: fixed; top: 20px; left: 20px; font-size: 24px; color: #FFF; text-decoration: none; z-index: 10; }
+        .generate-btn { position: fixed; top: 20px; right: 20px; z-index: 10; border: none; background: transparent; color: #FFF; font-size: 20px; line-height: 1; padding: 6px; cursor: pointer; }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+    <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+    <div class="app-container">
+        <div class="header">
+            <h1>Game Activity</h1>
+            <p>跨平台游玩记录同步</p>
+        </div>
+
+        <div id="gameList">
+            <!-- Loading... -->
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的游戏记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '游戏记录');
+                return;
+            }
+            alert(reason);
+        }
+
+        async function loadGames(force) {
+            const container = document.getElementById('gameList');
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowGameContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成。');
+                return;
+            }
+
+            const roleId = window.SecretCenterCore.getSelectedRoleId();
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再查看游戏记录。');
+                return;
+            }
+            container.innerHTML = '<p style="text-align:center; color:#666; margin-top:50px;">正在同步游戏数据...</p>';
+
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowGameContent({ roleId: roleId, force: force === true });
+
+                if (res && res.ok && res.data && Array.isArray(res.data.games) && res.data.games.length) {
+                    container.innerHTML = res.data.games.map(g => {
+                        let tagClass = "tag-Mobile";
+                        if (asString(g.platform).toLowerCase().includes('steam')) tagClass = 'tag-Steam';
+                        if (asString(g.platform).toLowerCase().includes('switch')) tagClass = 'tag-Switch';
+                        if (asString(g.platform).toLowerCase().includes('ps')) tagClass = 'tag-PS5';
+
+                        const sessions = Array.isArray(g.recentSessions) ? g.recentSessions : [];
+                        const sessionsHtml = sessions.map(s => {
+                            let itemClass = "";
+                            if (asString(s.result).includes('胜') || asString(s.result).includes('晋级') || asString(s.result).includes('击败')) itemClass = "win";
+                            if (asString(s.result).includes('败') || asString(s.result).includes('连跪') || asString(s.result).includes('掉段')) itemClass = "loss";
+
+                            return `
+                                <div class="session-item ${itemClass}">
+                                    <div class="session-top">
+                                        <span>${escapeHtml(s.time)}</span>
+                                        <span>🕒 ${escapeHtml(s.duration)}</span>
+                                    </div>
+                                    <div class="session-result">${escapeHtml(s.result)}</div>
+                                </div>
+                            `;
+                        }).join('');
+
+                        return `
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon">${escapeHtml(g.icon || '🎮')}</div>
+                                    <div class="game-info">
+                                        <div class="platform-tag ${tagClass}">${escapeHtml(g.platform)}</div>
+                                        <div class="game-title">${escapeHtml(g.name)}</div>
+                                    </div>
+                                </div>
+
+                                <div class="overall-stats">
+                                    <div>总时长<span>${escapeHtml(g.totalHours)}</span></div>
+                                    <div>最后上线<span>${escapeHtml(g.lastOnline)}</span></div>
+                                </div>
+
+                                <div class="session-title">最近游玩</div>
+                                <div class="session-list">
+                                    ${sessionsHtml || '<div style="font-size:12px;color:#666;">近期无记录</div>'}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    return;
+                }
+
+                container.innerHTML = '';
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                container.innerHTML = '';
+                console.error('ShadowGame generate failed:', error);
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadGames(true);
+        });
+        window.onload = function () {
+            loadGames(false);
+        };
+    </script>
+</body>
+</html>

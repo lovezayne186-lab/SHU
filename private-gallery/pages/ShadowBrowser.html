@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>浏览器历史 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #F7F6F2; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #33312E; padding-bottom: 40px; }
+
+        .back-btn { position: fixed; top: 20px; left: 20px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #8C8881; font-size: 24px; font-weight: 300; z-index: 100; -webkit-tap-highlight-color: transparent; }
+        .generate-btn {
+            position: fixed; top: 20px; right: 20px; z-index: 100;
+            border: none; background: transparent; color: #111;
+            font-size: 20px; line-height: 1; padding: 6px; cursor: pointer;
+            font-weight: 600;
+        }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+
+        .app-container { max-width: 420px; margin: 0 auto; padding: 70px 24px 20px; }
+
+        .header { font-size: 28px; font-weight: 600; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: baseline; }
+        .header-action { font-size: 15px; color: #8C8881; font-weight: normal; cursor: pointer; }
+
+        .search-bar { background: rgba(213, 209, 200, 0.3); border-radius: 12px; padding: 12px 16px; font-size: 15px; color: #8C8881; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+
+        .history-group-title { font-size: 13px; color: #A3A09A; font-weight: 500; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .history-list { display: flex; flex-direction: column; margin-bottom: 24px; }
+        .history-item { padding: 14px 0; border-bottom: 1px solid rgba(213, 209, 200, 0.5); display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+        .history-item:last-child { border-bottom: none; }
+        .history-item:active { opacity: 0.72; }
+
+        .item-icon { font-size: 18px; color: #8C8881; margin-top: 2px; }
+        .item-content { flex: 1; }
+        .item-query { font-size: 16px; color: #33312E; line-height: 1.4; margin-bottom: 4px; }
+        .item-time { font-size: 12px; color: #A3A09A; }
+
+        /* 无痕浏览特殊样式 */
+        .incognito-item .item-icon { color: #5A5752; }
+        .incognito-item .item-query { color: #5A5752; font-style: italic; }
+        .incognito-tag { display: inline-block; font-size: 10px; background: #33312E; color: #F7F6F2; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-style: normal; vertical-align: middle; }
+
+        .detail-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.36); display: none; align-items: flex-end; z-index: 600; }
+        .detail-overlay.show { display: flex; }
+        .detail-sheet { width: 100%; max-width: 420px; margin: 0 auto; background: #FDFCF9; border-radius: 18px 18px 0 0; padding: 14px 16px 18px; max-height: 76vh; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18); display: flex; flex-direction: column; }
+        .detail-handle { width: 44px; height: 5px; border-radius: 4px; background: #D8D4CB; margin: 0 auto 10px; }
+        .detail-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+        .detail-title { font-size: 16px; font-weight: 600; color: #33312E; flex: 1; line-height: 1.4; }
+        .detail-close { border: none; background: transparent; color: #8C8881; font-size: 22px; line-height: 1; cursor: pointer; }
+        .detail-meta { font-size: 12px; color: #A3A09A; margin-bottom: 12px; }
+        .detail-text { font-size: 14px; line-height: 1.72; color: #4B4842; overflow-y: auto; padding-right: 4px; }
+
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+    <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+
+    <div class="app-container">
+        <div class="header">
+            历史记录
+            <span class="header-action">清除</span>
+        </div>
+
+        <div class="search-bar">
+            <span>🔍</span> 搜索或输入网站名称
+        </div>
+
+        <div id="browserList">
+            <p style="text-align:center; color:#A3A09A; margin-top: 40px;">正在提取浏览记录...</p>
+        </div>
+    </div>
+    <div class="detail-overlay" id="detailOverlay">
+        <div class="detail-sheet">
+            <div class="detail-handle"></div>
+            <div class="detail-top">
+                <div class="detail-title" id="detailTitle">详情</div>
+                <button type="button" class="detail-close" id="detailCloseBtn">×</button>
+            </div>
+            <div class="detail-meta" id="detailMeta">--</div>
+            <div class="detail-text" id="detailText"></div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        let browserHistory = [];
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的浏览器记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '浏览器记录');
+                return;
+            }
+            alert(reason);
+        }
+
+        function renderHistory(history) {
+            const list = Array.isArray(history) ? history : [];
+            browserHistory = list;
+            document.getElementById('browserList').innerHTML = `
+                <div class="history-group-title">最近访问</div>
+                <div class="history-list">
+                    ${list.map((h, index) => `
+                        <div class="history-item ${h.isIncognito ? 'incognito-item' : ''}" data-history-index="${index}">
+                            <div class="item-icon">${h.isIncognito ? '🎭' : '📄'}</div>
+                            <div class="item-content">
+                                <div class="item-query">
+                                    ${escapeHtml(h.query)}
+                                    ${h.isIncognito ? '<span class="incognito-tag">无痕</span>' : ''}
+                                </div>
+                                <div class="item-time">${escapeHtml(h.time)}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function showDetail(index) {
+            const row = browserHistory[index] || null;
+            if (!row) return;
+            const detailText = asString(row.detail) || '未读取到详细内容。';
+            document.getElementById('detailTitle').textContent = asString(row.query) || '浏览详情';
+            document.getElementById('detailMeta').textContent = (asString(row.time) || '最近') + (row.isIncognito ? ' · 无痕浏览' : '');
+            document.getElementById('detailText').textContent = detailText;
+            document.getElementById('detailOverlay').classList.add('show');
+        }
+
+        function hideDetail() {
+            document.getElementById('detailOverlay').classList.remove('show');
+        }
+
+        async function loadBrowser(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowBrowserContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成浏览器记录。');
+                return;
+            }
+            const roleId = window.SecretCenterCore.getSelectedRoleId();
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再生成浏览器记录。');
+                return;
+            }
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowBrowserContent({ roleId: roleId, force: force === true });
+                if (res && res.ok && res.data && Array.isArray(res.data.history)) {
+                    renderHistory(res.data.history);
+                    return;
+                }
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                console.error('ShadowBrowser generate failed:', error);
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+        document.getElementById('browserList').addEventListener('click', function (event) {
+            const row = event.target.closest('[data-history-index]');
+            if (!row) return;
+            showDetail(Number(row.getAttribute('data-history-index')) || 0);
+        });
+        document.getElementById('detailCloseBtn').addEventListener('click', hideDetail);
+        document.getElementById('detailOverlay').addEventListener('click', function (event) {
+            if (event.target && event.target.id === 'detailOverlay') hideDetail();
+        });
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadBrowser(true);
+        });
+        window.onload = function () {
+            loadBrowser(false);
+        };
+    </script>
+</body>
+</html>

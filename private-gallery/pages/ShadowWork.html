@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作档案 - FangCun OS</title>
+    <style>
+        :root {
+            --bg: #F7F6F2;
+            --panel: rgba(255, 255, 255, 0.52);
+            --panel-strong: #ffffff;
+            --text-main: #33312E;
+            --text-soft: #8C8881;
+            --text-faint: #A3A09A;
+            --line: #D5D1C8;
+            --line-soft: rgba(255, 255, 255, 0.7);
+            --shadow-soft: 0 10px 30px rgba(51, 49, 46, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background:
+                radial-gradient(circle at top right, rgba(255, 255, 255, 0.9), transparent 24%),
+                linear-gradient(180deg, #FBFAF7 0%, var(--bg) 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            color: var(--text-main);
+            overflow: hidden;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        .back-btn {
+            position: fixed;
+            top: max(20px, env(safe-area-inset-top));
+            left: 20px;
+            width: 44px;
+            height: 44px;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: var(--text-soft);
+            font-size: 24px;
+            font-weight: 300;
+            transition: transform 0.3s ease;
+            z-index: 20;
+        }
+
+        .back-btn:active {
+            transform: translateX(-4px);
+        }
+
+        .phone-screen {
+            width: 100%;
+            max-width: 420px;
+            height: 100%;
+            padding: max(60px, env(safe-area-inset-top)) 24px calc(32px + env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .app-header {
+            margin-bottom: 24px;
+            padding-left: 8px;
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .sys-name {
+            font-family: "Georgia", "Noto Serif SC", serif;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .sys-subtitle {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--text-faint);
+            text-transform: uppercase;
+        }
+
+        .generate-btn {
+            width: 44px;
+            height: 44px;
+            border: none;
+            background: transparent;
+            color: var(--text-main);
+            font-size: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.55;
+            cursor: default;
+        }
+
+        .generate-btn:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        .status-line {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-soft);
+            line-height: 1.5;
+            min-height: 18px;
+        }
+
+        .tab-nav {
+            display: flex;
+            background: rgba(255, 255, 255, 0.42);
+            border-radius: 100px;
+            padding: 4px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.82);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            flex-shrink: 0;
+        }
+
+        .tab-btn {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 10px 0;
+            font-size: 13px;
+            color: var(--text-soft);
+            border-radius: 100px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .tab-btn.active {
+            background: var(--panel-strong);
+            color: var(--text-main);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            font-weight: 500;
+        }
+
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            padding-bottom: 28px;
+        }
+
+        .content-area::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .empty-state {
+            padding: 18px 16px;
+            border-radius: 18px;
+            background: var(--panel);
+            border: 1px solid var(--line-soft);
+            color: var(--text-soft);
+            line-height: 1.7;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .timeline {
+            padding-left: 12px;
+            border-left: 1px solid var(--line);
+            margin-left: 8px;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 28px;
+            padding-left: 20px;
+        }
+
+        .timeline-item::before {
+            content: "";
+            position: absolute;
+            left: -15px;
+            top: 6px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--bg);
+            border: 1px solid var(--text-soft);
+        }
+
+        .tl-time {
+            font-family: "Georgia", serif;
+            font-size: 16px;
+            color: var(--text-main);
+            margin-bottom: 6px;
+            letter-spacing: 0.02em;
+        }
+
+        .tl-content {
+            font-size: 14px;
+            color: #5A5752;
+            line-height: 1.7;
+            background: var(--panel);
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--line-soft);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .achievement-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .achieve-card {
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, 0.82);
+            border-radius: 20px;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 124px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .achieve-card.full-width {
+            grid-column: span 2;
+        }
+
+        .ach-title {
+            font-size: 11px;
+            color: var(--text-soft);
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .ach-value {
+            font-family: "Georgia", "Noto Serif SC", serif;
+            font-size: 28px;
+            color: var(--text-main);
+            line-height: 1.2;
+            word-break: break-word;
+        }
+
+        .plan-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .plan-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding-bottom: 20px;
+            border-bottom: 1px dashed var(--line);
+        }
+
+        .plan-item:last-child {
+            border-bottom: none;
+        }
+
+        .plan-icon {
+            font-size: 16px;
+            color: var(--text-faint);
+            margin-top: 2px;
+        }
+
+        .plan-details {
+            flex: 1;
+        }
+
+        .plan-date {
+            font-size: 12px;
+            color: var(--text-soft);
+            margin-bottom: 4px;
+            font-family: "Georgia", serif;
+        }
+
+        .plan-text {
+            font-size: 15px;
+            color: var(--text-main);
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        @media (max-width: 480px) {
+            .phone-screen {
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+
+            .back-btn {
+                left: 12px;
+            }
+
+            .ach-value {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" id="back-btn">‹</a>
+
+    <div class="phone-screen">
+        <div class="app-header">
+            <div class="header-top">
+                <div>
+                    <div class="sys-name" id="sysName">PRIVATE ARCHIVE</div>
+                    <div class="sys-subtitle" id="sysSubtitle">Authorized Access Only</div>
+                </div>
+                <button class="generate-btn" id="refreshBtn" type="button" aria-label="生成">✦</button>
+            </div>
+            <div class="status-line" id="statusLine"></div>
+        </div>
+
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="records" type="button">记录</button>
+            <button class="tab-btn" data-tab="achievements" type="button">成就</button>
+            <button class="tab-btn" data-tab="plans" type="button">计划</button>
+        </div>
+
+        <div class="content-area">
+            <div class="tab-pane active" id="tab-records">
+                <div class="timeline" id="recordsList"></div>
+            </div>
+
+            <div class="tab-pane" id="tab-achievements">
+                <div class="achievement-grid" id="achievementsList"></div>
+            </div>
+
+            <div class="tab-pane" id="tab-plans">
+                <div class="plan-list" id="plansList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        (function () {
+            var SCENE_KEY = 'shadow_work';
+            var currentContext = null;
+            var isGenerating = false;
+
+            function asString(value) {
+                return String(value == null ? '' : value).trim();
+            }
+
+            function escapeHtml(text) {
+                return asString(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function inferMode(context) {
+                var source = [
+                    asString(context && context.roleName),
+                    asString(context && context.personaText),
+                    asString(context && context.worldbookText),
+                    asString(context && context.worldBookText)
+                ].join('\n');
+                if (/(黑拳|拳手|格斗|擂台|赛事|地下拳|战损|陪练|盘口)/.test(source)) return 'fighter';
+                if (/(学生|校园|学院|论文|导师|选课|宿舍|辅导员|课题)/.test(source)) return 'student';
+                if (/(歌手|明星|艺人|偶像|演员|录音棚|巡演|彩排|通告|热搜)/.test(source)) return 'idol';
+                if (/(总裁|总监|集团|董事会|商务|供应商|预算|并购|审批)/.test(source)) return 'executive';
+                return 'default';
+            }
+
+            function buildLocalFallback(context) {
+                var roleName = asString(context && context.roleName) || '角色';
+                var mode = inferMode(context);
+                if (mode === 'fighter') {
+                    return {
+                        tabs: {
+                            records: [
+                                { time: '06:40', content: '体能记录：完成晨跑与减重称重，数值同步到训练表' },
+                                { time: '11:15', content: '赛事排期：确认下周擂台顺序与陪练窗口，调整恢复时段' },
+                                { time: '16:30', content: '医疗归档：上传冰敷照片、伤情评估和本次止痛用量' },
+                                { time: '23:20', content: '转账流水：核对奖金分成与场馆尾款，锁定异常备注' }
+                            ],
+                            achievements: [
+                                { title: '当前连胜记录', value: '14 场' },
+                                { title: '本月有效击中率', value: '63%' },
+                                { title: '赛事奖金入账', value: '¥128,000' },
+                                { title: '最近体重控制误差', value: '0.4 kg' }
+                            ],
+                            plans: [
+                                { date: '明晚 20:00', content: '和新陪练做三回合实战，重点修正左侧防守漏洞' },
+                                { date: '下周二 09:30', content: '复查旧伤恢复情况，决定是否压缩下一场出场时间' },
+                                { date: '周末待办', content: '把手机关静音，补足睡眠，再去买新的绷带和冰袋' }
+                            ]
+                        }
+                    };
+                }
+                if (mode === 'student') {
+                    return {
+                        tabs: {
+                            records: [
+                                { time: '08:10', content: '校园卡刷卡：进入阶梯教室并签到本日第一节课' },
+                                { time: '11:45', content: '导师反馈：领取批注版论文初稿，补记三处修改方向' },
+                                { time: '15:20', content: '教务系统：调整选课顺序，提交一门公共课候补申请' },
+                                { time: '22:35', content: '学习记录：整理课堂录音与复习提纲，标出明早要背的部分' }
+                            ],
+                            achievements: [
+                                { title: '期中高数测验排名', value: '专业第 3 名' },
+                                { title: '论文周进度', value: '78%' },
+                                { title: '本学期累计绩点', value: '3.86 / 4.0' },
+                                { title: '连续到馆自习', value: '17 天' }
+                            ],
+                            plans: [
+                                { date: '明天 14:00', content: '去导师办公室确认论文大纲最后一轮删改意见' },
+                                { date: '下周四 18:30', content: '参加社团迎新破冰，顺便把宣传稿交给负责人' },
+                                { date: '周末待办', content: '把洗好的床单收回来，再给自己留两个小时彻底放空' }
+                            ]
+                        }
+                    };
+                }
+                if (mode === 'idol') {
+                    return {
+                        tabs: {
+                            records: [
+                                { time: '09:30', content: '抵达录音棚：完成开嗓、麦克风测试和歌词版本确认' },
+                                { time: '13:15', content: '通告调整：协调品牌拍摄与晚间采访档期，压缩转场时间' },
+                                { time: '18:50', content: '彩排记录：重走舞台走位并修改一段副歌动作衔接' },
+                                { time: '23:40', content: '舆情复盘：查看热搜曲线与评论关键词，留下经纪组备注' }
+                            ],
+                            achievements: [
+                                { title: '新歌试听收藏量', value: '28.4 万' },
+                                { title: '本周热搜最高位', value: 'TOP 7' },
+                                { title: '舞台直拍单日播放', value: '312 万' },
+                                { title: '本月通告准点完成率', value: '100%' }
+                            ],
+                            plans: [
+                                { date: '明天 11:00', content: '补录一版副歌和声，确认正式上线母带版本' },
+                                { date: '周五 19:30', content: '参加品牌活动红毯与媒体群访，提前试两套造型' },
+                                { date: '周末待办', content: '推掉无效饭局，在家睡一整天，再把嗓子养回来' }
+                            ]
+                        }
+                    };
+                }
+                if (mode === 'executive') {
+                    return {
+                        tabs: {
+                            records: [
+                                { time: '07:55', content: '门禁打卡：从地下车库进入大厦，路上完成晨间简报批示' },
+                                { time: '10:30', content: '预算审批：退回第三季度投放方案并要求重算边际收益' },
+                                { time: '15:05', content: '闭门会议：和核心供应商确认交付节点及违约补偿条款' },
+                                { time: '21:40', content: '内网批注：整理项目风险摘要，交代法务跟进两项异议' }
+                            ],
+                            achievements: [
+                                { title: '本月项目达成率', value: '134.5%' },
+                                { title: '年度业绩排名', value: 'TOP 1' },
+                                { title: '季度利润提升', value: '+18.2%' },
+                                { title: '本周审批完成单量', value: '37 项' }
+                            ],
+                            plans: [
+                                { date: '明天 10:00', content: '与核心供应商进行闭门谈判，压下最后一轮报价' },
+                                { date: '周五 19:30', content: '出席商会晚宴，顺便敲定下一季度合作名单' },
+                                { date: '周末待办', content: '推掉不必要应酬，去花店买束洋桔梗再回家休息' }
+                            ]
+                        }
+                    };
+                }
+                return {
+                    tabs: {
+                        records: [
+                            { time: '07:20', content: '门禁打卡：进入办公区前完成今日任务清单初筛' },
+                            { time: '09:10', content: '系统更新：退回一份信息不完整的流程单并补写审核意见' },
+                            { time: '13:40', content: '文档归档：重命名旧文件夹，补齐索引与标签映射' },
+                            { time: '18:55', content: '复盘记录：整理当天异常节点，标注需要明早复核的条目' }
+                        ],
+                        achievements: [
+                            { title: roleName + ' 当前核心指标', value: '96%' },
+                            { title: '重点项目推进排名', value: '第 1 名 / 12' },
+                            { title: '连续稳定输出周期', value: '21 天' },
+                            { title: '本月归档文档总数', value: '48 份' }
+                        ],
+                        plans: [
+                            { date: '明天 09:30', content: '参加关键流程复盘会，确认上一轮延误原因' },
+                            { date: '周五 14:00', content: '补完本阶段资料索引，清理失效附件与重复版本' },
+                            { date: '周末待办', content: '把所有提醒关掉，留半天只做必要的整理和休息' }
+                        ]
+                    }
+                };
+            }
+
+            function normalizeData(payload) {
+                var data = payload && typeof payload === 'object' ? payload : {};
+                var tabs = data.tabs && typeof data.tabs === 'object' ? data.tabs : {};
+                return {
+                    tabs: {
+                        records: Array.isArray(tabs.records) ? tabs.records : [],
+                        achievements: Array.isArray(tabs.achievements) ? tabs.achievements : [],
+                        plans: Array.isArray(tabs.plans) ? tabs.plans : []
+                    }
+                };
+            }
+
+            function isValidPayload(payload) {
+                var data = normalizeData(payload);
+                return data.tabs.records.length >= 4 && data.tabs.achievements.length >= 3 && data.tabs.plans.length >= 3;
+            }
+
+            function setHeader(roleName) {
+                var name = asString(roleName);
+                document.getElementById('sysName').textContent = name ? (name + ' 档案') : 'PRIVATE ARCHIVE';
+                document.getElementById('sysSubtitle').textContent = 'Authorized Access Only';
+            }
+
+            function setStatus(text) {
+                document.getElementById('statusLine').textContent = asString(text);
+            }
+
+            function setGeneratingState(active) {
+                isGenerating = !!active;
+                var btn = document.getElementById('refreshBtn');
+                if (!btn) return;
+                btn.disabled = isGenerating;
+                btn.textContent = '✦';
+            }
+
+            function renderRecords(items) {
+                var mount = document.getElementById('recordsList');
+                if (!items.length) {
+                    mount.innerHTML = '';
+                    return;
+                }
+                mount.innerHTML = items.map(function (item) {
+                    return ''
+                        + '<div class="timeline-item">'
+                        + '  <div class="tl-time">' + escapeHtml(item.time) + '</div>'
+                        + '  <div class="tl-content">' + escapeHtml(item.content) + '</div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            function renderAchievements(items) {
+                var mount = document.getElementById('achievementsList');
+                if (!items.length) {
+                    mount.innerHTML = '';
+                    return;
+                }
+                mount.innerHTML = items.map(function (item, index) {
+                    var fullWidth = index === 0 || (items.length % 2 === 1 && index === items.length - 1);
+                    return ''
+                        + '<div class="achieve-card' + (fullWidth ? ' full-width' : '') + '">'
+                        + '  <div class="ach-title">' + escapeHtml(item.title) + '</div>'
+                        + '  <div class="ach-value">' + escapeHtml(item.value) + '</div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            function renderPlans(items) {
+                var mount = document.getElementById('plansList');
+                if (!items.length) {
+                    mount.innerHTML = '';
+                    return;
+                }
+                mount.innerHTML = items.map(function (item) {
+                    return ''
+                        + '<div class="plan-item">'
+                        + '  <div class="plan-icon">○</div>'
+                        + '  <div class="plan-details">'
+                        + '    <div class="plan-date">' + escapeHtml(item.date) + '</div>'
+                        + '    <div class="plan-text">' + escapeHtml(item.content) + '</div>'
+                        + '  </div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            function applyData(payload) {
+                var data = normalizeData(payload);
+                renderRecords(data.tabs.records);
+                renderAchievements(data.tabs.achievements);
+                renderPlans(data.tabs.plans);
+            }
+
+            function switchTab(tabId) {
+                var buttons = document.querySelectorAll('.tab-btn');
+                var panes = document.querySelectorAll('.tab-pane');
+                buttons.forEach(function (button) {
+                    button.classList.toggle('active', button.getAttribute('data-tab') === tabId);
+                });
+                panes.forEach(function (pane) {
+                    pane.classList.toggle('active', pane.id === 'tab-' + tabId);
+                });
+            }
+
+            function resolveRoleContext() {
+                if (window.SecretCenterCore && typeof window.SecretCenterCore.resolveRoleContext === 'function') {
+                    var resolved = window.SecretCenterCore.resolveRoleContext();
+                    if (resolved && resolved.ok) {
+                        return {
+                            roleId: resolved.roleId,
+                            roleName: resolved.roleName,
+                            personaText: resolved.personaText || '',
+                            worldbookText: resolved.worldBookText || ''
+                        };
+                    }
+                }
+                return {
+                    roleId: localStorage.getItem('SecretCenter_CurrentRoleId') || '',
+                    roleName: localStorage.getItem('SecretCenter_CurrentRoleName') || localStorage.getItem('FangCun_CurrentRole') || '',
+                    personaText: '',
+                    worldbookText: ''
+                };
+            }
+
+            function readCachedPayload() {
+                if (!window.SecretCenterCore || typeof window.SecretCenterCore.readSceneCache !== 'function' || !currentContext.roleId) {
+                    return null;
+                }
+                var cached = window.SecretCenterCore.readSceneCache(SCENE_KEY, currentContext.roleId);
+                if (!cached || !cached.data || !isValidPayload(cached.data)) return null;
+                return cached.data;
+            }
+
+            function showGenerationFailure(message) {
+                var reason = asString(message) || '本次没有生成出可展示的工作档案。';
+                if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                    window.SecretCenterCore.showGenerationErrorDialog(reason, '工作档案');
+                    return;
+                }
+                alert(reason);
+            }
+
+            async function runGenerate(force) {
+                if (isGenerating) return;
+                if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateSceneContent !== 'function') {
+                    showGenerationFailure('核心模块未加载，暂时无法生成。');
+                    return;
+                }
+                if (!currentContext || !currentContext.roleId) {
+                    showGenerationFailure('请先选择角色，再生成工作档案。');
+                    return;
+                }
+
+                setGeneratingState(true);
+                setStatus('');
+                try {
+                    var result = await window.SecretCenterCore.generateSceneContent(SCENE_KEY, {
+                        roleId: currentContext.roleId,
+                        force: force === true,
+                        requestOptions: {
+                            temperature: 0.46,
+                            maxTokens: 1800
+                        }
+                    });
+                    if (result && result.ok && isValidPayload(result.data)) {
+                        applyData(result.data);
+                        setStatus('');
+                        return;
+                    }
+                    showGenerationFailure(result && result.error);
+                } catch (error) {
+                    console.error('ShadowWork generate failed:', error);
+                    showGenerationFailure(error && error.message);
+                } finally {
+                    setGeneratingState(false);
+                }
+            }
+
+            function bindEvents() {
+                document.getElementById('back-btn').addEventListener('click', function (event) {
+                    event.preventDefault();
+                    if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToFangCun === 'function') {
+                        window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });
+                    } else {
+                        window.location.replace('FangCun.html');
+                    }
+                });
+
+                document.getElementById('refreshBtn').addEventListener('click', function () {
+                    runGenerate(true);
+                });
+
+                document.querySelectorAll('.tab-btn').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        switchTab(button.getAttribute('data-tab'));
+                    });
+                });
+            }
+
+            function init() {
+                currentContext = resolveRoleContext();
+                setHeader(currentContext.roleName);
+                bindEvents();
+                var cached = readCachedPayload();
+                applyData(cached || { tabs: { records: [], achievements: [], plans: [] } });
+                setStatus('');
+            }
+
+            window.addEventListener('DOMContentLoaded', init);
+        })();
+    </script>
+</body>
+</html>

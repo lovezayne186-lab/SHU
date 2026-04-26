@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #F2F2F7; color: #1C1C1E; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+        .app-shell { max-width: 420px; margin: 0 auto; min-height: 100vh; }
+        .nav { height: 52px; display: grid; grid-template-columns: 88px 1fr 88px; align-items: center; padding: 0 10px; position: sticky; top: 0; z-index: 20; background: rgba(242, 242, 247, 0.94); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0, 0, 0, 0.04); }
+        .nav-btn { border: none; background: transparent; color: #007AFF; font-size: 16px; text-align: left; cursor: pointer; }
+        .nav-btn.right { text-align: right; }
+        .nav-btn:disabled { opacity: 0.45; cursor: default; }
+        .nav-title { text-align: center; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .screen { padding: 12px 16px 36px; }
+        .hidden { display: none !important; }
+        .hero-title { font-size: 34px; font-weight: 700; letter-spacing: 0.2px; margin: 10px 4px 14px; }
+        .user-card { background: #FFF; border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 10px rgba(16, 16, 16, 0.03); margin-bottom: 16px; }
+        .avatar { width: 54px; height: 54px; border-radius: 27px; background: linear-gradient(145deg, #86A7FF, #6C77FF); color: #FFF; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5); flex-shrink: 0; }
+        .user-name { font-size: 19px; font-weight: 600; }
+        .user-id { font-size: 12px; color: #8E8E93; margin-top: 2px; }
+        .group { margin-bottom: 16px; }
+        .group-card { background: #FFF; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 10px rgba(16, 16, 16, 0.03); }
+        .row { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid #ECECF1; }
+        .row:last-child { border-bottom: none; }
+        .row.clickable { cursor: pointer; }
+        .row.clickable:active { background: #F7F7FA; }
+        .icon-wrap { width: 28px; height: 28px; border-radius: 7px; margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .icon-wrap svg { width: 16px; height: 16px; stroke: #FFF; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .i-blue { background: #007AFF; }
+        .i-indigo { background: #5856D6; }
+        .i-red { background: #FF3B30; }
+        .i-green { background: #34C759; }
+        .i-orange { background: #FF9500; }
+        .i-teal { background: #00A7B5; }
+        .row-label { flex: 1; font-size: 16px; color: #1C1C1E; }
+        .row-value { max-width: 48%; text-align: right; color: #8E8E93; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chevron { margin-left: 8px; color: #C7C7CC; font-size: 18px; }
+        .detail-wrap { padding-top: 8px; }
+        .panel { background: #FFF; border-radius: 16px; box-shadow: 0 2px 10px rgba(16, 16, 16, 0.03); padding: 16px; margin-bottom: 14px; }
+        .detail-headline { font-size: 42px; font-weight: 700; line-height: 1; letter-spacing: -0.5px; }
+        .detail-total { font-size: 24px; color: #4B4B50; }
+        .detail-sub { color: #8E8E93; font-size: 13px; margin-top: 6px; line-height: 1.5; }
+        .seg-bar { width: 100%; height: 28px; border-radius: 8px; overflow: hidden; background: #E8E8EE; display: flex; margin-top: 14px; }
+        .seg { height: 100%; }
+        .list-card { background: #FFF; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 10px rgba(16, 16, 16, 0.03); margin-top: 14px; }
+        .list-row { display: flex; align-items: center; padding: 13px 14px; border-bottom: 1px solid #ECECF1; }
+        .list-row:last-child { border-bottom: none; }
+        .list-row.clickable { cursor: pointer; }
+        .list-row.clickable:active { background: #F7F7FA; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 12px; flex-shrink: 0; }
+        .list-name { flex: 1; font-size: 16px; }
+        .list-sub { color: #8E8E93; font-size: 12px; margin-top: 3px; }
+        .list-value { color: #5A5A62; font-size: 16px; margin-right: 8px; }
+        .seg-switch { width: 150px; background: #E9E9ED; border-radius: 999px; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; margin-bottom: 14px; }
+        .seg-item { border: none; border-radius: 999px; font-size: 13px; height: 30px; cursor: pointer; background: transparent; color: #55555A; font-weight: 600; }
+        .seg-item.active { background: #FFFFFF; color: #1C1C1E; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+        .bars { height: 124px; display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 4px; align-items: end; margin-top: 12px; padding-bottom: 8px; border-bottom: 1px solid #F1F1F5; }
+        .bars.weekly { grid-template-columns: repeat(7, minmax(0, 1fr)); height: 138px; gap: 10px; }
+        .bar { width: 100%; background: #E1E1E8; border-radius: 5px; min-height: 4px; }
+        .bar.blue { background: #3187FF; }
+        .bar.purple { background: #9C4EFF; }
+        .bar.orange { background: #F59A2A; }
+        .axis { display: flex; justify-content: space-between; color: #9A9AA0; font-size: 11px; margin-top: 8px; }
+        .axis.weekly span { width: calc(100% / 7); text-align: center; }
+        .cat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+        .cat-item { background: #F8F8FC; border-radius: 10px; padding: 10px 8px; min-height: 66px; }
+        .cat-title { font-size: 12px; margin-bottom: 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cat-time { font-size: 14px; color: #1C1C1E; font-weight: 700; }
+        .device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .device-card { background: #FFF; border-radius: 20px; padding: 18px 16px; box-shadow: 0 2px 10px rgba(16, 16, 16, 0.03); min-height: 176px; display: flex; flex-direction: column; justify-content: space-between; }
+        .device-icon { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+        .device-icon svg { width: 30px; height: 30px; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+        .device-title { font-size: 15px; font-weight: 700; line-height: 1.35; margin-bottom: 8px; }
+        .device-brand { font-size: 16px; font-weight: 600; line-height: 1.4; color: #1C1C1E; margin-bottom: 8px; }
+        .device-desc { font-size: 12px; color: #7B7B82; line-height: 1.6; }
+        .mini-title { color: #8E8E93; font-size: 12px; font-weight: 600; margin-bottom: 8px; letter-spacing: 0.3px; }
+        .clean-btn { width: 100%; border: none; border-radius: 24px; background: #B8D3C1; color: #F7FFFA; font-size: 16px; font-weight: 600; padding: 12px 0; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <div class="nav">
+            <button class="nav-btn" id="navBackBtn">‹ 返回</button>
+            <div class="nav-title" id="navTitle">设置</div>
+            <button class="nav-btn right" id="generateBtn" type="button">生成</button>
+        </div>
+        <div class="screen" id="mainView">
+            <div class="hero-title">设置</div>
+            <div class="user-card" id="userCard"></div>
+            <div id="mainRows"></div>
+        </div>
+        <div class="screen hidden" id="detailView">
+            <div class="detail-wrap" id="detailContent"></div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        let settingsData = null;
+        let viewState = { detail: '', subdetail: '', screenMode: 'day' };
+
+        function asString(value) { return String(value == null ? '' : value).trim(); }
+        function escapeHtml(text) {
+            return asString(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的设置页信息。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '设置页');
+                return;
+            }
+            alert(reason);
+        }
+        function initialsFromName(name) {
+            const text = asString(name);
+            if (!text) return 'A';
+            const latin = text.match(/[A-Za-z]/g);
+            if (latin && latin.length >= 2) return (latin[0] + latin[1]).toUpperCase();
+            if (latin && latin.length === 1) return latin[0].toUpperCase();
+            return text.slice(0, 1);
+        }
+        function iconSvg(type) {
+            if (type === 'wifi') return '<svg viewBox="0 0 24 24"><path d="M2 8c5-4 15-4 20 0"/><path d="M5 12c4-3 10-3 14 0"/><path d="M8.5 16c2-1.5 5-1.5 7 0"/><circle cx="12" cy="19" r="1.5" fill="#fff" stroke="none"/></svg>';
+            if (type === 'bluetooth') return '<svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 4V3l5 4L7 17"/></svg>';
+            if (type === 'devices') return '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="10" height="14" rx="2"/><rect x="15" y="8" width="6" height="10" rx="1.5"/></svg>';
+            if (type === 'screen') return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 8v5l3 2"/></svg>';
+            if (type === 'focus') return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></svg>';
+            if (type === 'battery') return '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><path d="M6 10h8"/></svg>';
+            if (type === 'storage') return '<svg viewBox="0 0 24 24"><path d="M3 7h18"/><path d="M3 12h18"/><path d="M3 17h18"/></svg>';
+            return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>';
+        }
+        function deviceCardIcon(type, color) {
+            const stroke = escapeHtml(color);
+            if (type === 'phone') return '<svg viewBox="0 0 24 24" style="stroke:' + stroke + ';"><rect x="7" y="3" width="10" height="18" rx="2"></rect><path d="M10 17h4"></path></svg>';
+            if (type === 'computer') return '<svg viewBox="0 0 24 24" style="stroke:' + stroke + ';"><rect x="4" y="5" width="16" height="11" rx="1.5"></rect><path d="M9 19h6"></path><path d="M12 16v3"></path></svg>';
+            if (type === 'earphones') return '<svg viewBox="0 0 24 24" style="stroke:' + stroke + ';"><path d="M6 14a3 3 0 0 0 3 3h1v-6H9a3 3 0 0 0-3 3Z"></path><path d="M18 14a3 3 0 0 1-3 3h-1v-6h1a3 3 0 0 1 3 3Z"></path><path d="M6 11a6 6 0 0 1 12 0"></path></svg>';
+            if (type === 'tv') return '<svg viewBox="0 0 24 24" style="stroke:' + stroke + ';"><rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>';
+            return '<svg viewBox="0 0 24 24" style="stroke:' + stroke + ';"><circle cx="12" cy="12" r="7"></circle></svg>';
+        }
+        function parseSizeToGB(sizeText) {
+            const text = asString(sizeText).toUpperCase();
+            const match = text.match(/(\d+(\.\d+)?)/);
+            if (!match) return 0;
+            const num = Number(match[1]) || 0;
+            if (text.indexOf('TB') !== -1) return num * 1024;
+            if (text.indexOf('GB') !== -1) return num;
+            if (text.indexOf('MB') !== -1) return num / 1024;
+            if (text.indexOf('KB') !== -1) return num / (1024 * 1024);
+            return num;
+        }
+        function isSettingsDataComplete(data) {
+            const s = data || {};
+            const breakdown = s.storage && Array.isArray(s.storage.breakdown) ? s.storage.breakdown : [];
+            return !!asString(s.account && s.account.name) && !!asString(s.connectivity && s.connectivity.wifi) && breakdown.length > 0;
+        }
+        function isValidDeviceName(value) {
+            const text = asString(value);
+            if (!text) return false;
+            if (text === '未记录' || text === '未知' || text === '暂无' || text === 'N/A') return false;
+            return true;
+        }
+        function getPrimaryDeviceBrand(devices) {
+            const source = devices || {};
+            const ordered = [source.phone, source.computer, source.earphones, source.tv];
+            for (let i = 0; i < ordered.length; i++) {
+                if (isValidDeviceName(ordered[i])) return asString(ordered[i]);
+            }
+            return '暂无已登记设备';
+        }
+        function getDeviceItems(devices) {
+            const source = devices || {};
+            const candidates = [
+                { type: 'phone', brand: source.phone, desc: '主力通信设备，承担通知、定位与常用应用登录。', color: '#212121' },
+                { type: 'computer', brand: source.computer, desc: '同步文件与工作内容，通常用于长时间创作和处理任务。', color: '#34C759' },
+                { type: 'earphones', brand: source.earphones, desc: '通勤和独处时高频使用，兼顾降噪与语音通话。', color: '#00BCD4' },
+                { type: 'tv', brand: source.tv, desc: '用于投屏与影音观看，多出现在休息或陪伴场景。', color: '#FFB300' }
+            ];
+            return candidates.filter(function (item) {
+                return isValidDeviceName(item.brand);
+            }).map(function (item) {
+                return Object.assign({}, item, { brand: asString(item.brand) });
+            });
+        }
+        function renderMain() {
+            const s = settingsData || {};
+            const account = s.account || {};
+            const conn = s.connectivity || {};
+            const devices = conn.devices || {};
+            const battery = s.battery || {};
+            const storage = s.storage || {};
+            const screenTime = s.screenTime || {};
+            const bt = Array.isArray(conn.bluetooth) ? conn.bluetooth : [];
+            const btText = bt.length ? bt.join('、') : '未连接';
+            document.getElementById('userCard').innerHTML = '<div class="avatar">' + escapeHtml(initialsFromName(account.name)) + '</div><div><div class="user-name">' + escapeHtml(account.name) + '</div><div class="user-id">' + escapeHtml(account.id) + '</div></div>';
+            const groups = [
+                { rows: [
+                    { iconClass: 'i-blue', icon: 'wifi', label: '无线局域网', value: conn.wifi || '', detail: '' },
+                    { iconClass: 'i-blue', icon: 'bluetooth', label: '蓝牙', value: btText, detail: '' },
+                    { iconClass: 'i-teal', icon: 'devices', label: '设备', value: getPrimaryDeviceBrand(devices), detail: 'devices' }
+                ]},
+                { rows: [
+                    { iconClass: 'i-indigo', icon: 'screen', label: '屏幕使用时间', value: screenTime.total || '', detail: 'screen_time' },
+                    { iconClass: 'i-red', icon: 'focus', label: '专注模式', value: s.focusMode || '', detail: '' }
+                ]},
+                { rows: [
+                    { iconClass: 'i-green', icon: 'battery', label: '电池', value: (battery.level || '') + (battery.state ? (' · ' + battery.state) : ''), detail: '' },
+                    { iconClass: 'i-orange', icon: 'storage', label: 'iPhone 储存空间', value: (storage.used || '') + (storage.total ? (' / ' + storage.total) : ''), detail: 'storage' }
+                ]}
+            ];
+            document.getElementById('mainRows').innerHTML = groups.map(function (group) {
+                return '<div class="group"><div class="group-card">' + group.rows.map(function (row) {
+                    const clickable = !!row.detail;
+                    return '<div class="row' + (clickable ? ' clickable' : '') + '"' + (clickable ? (' data-detail="' + row.detail + '"') : '') + '><div class="icon-wrap ' + row.iconClass + '">' + iconSvg(row.icon) + '</div><div class="row-label">' + escapeHtml(row.label) + '</div><div class="row-value">' + escapeHtml(row.value) + '</div>' + (clickable ? '<div class="chevron">›</div>' : '') + '</div>';
+                }).join('') + '</div></div>';
+            }).join('');
+        }
+        function renderDevicesDetail() {
+            const devices = (settingsData && settingsData.connectivity && settingsData.connectivity.devices) || {};
+            const items = getDeviceItems(devices);
+            if (!items.length) {
+                return '<div class="panel"><div class="mini-title">设备</div><div class="detail-sub">当前没有可展示的设备记录。</div></div>';
+            }
+            return '<div class="device-grid">' + items.map(function (item) {
+                return '<div class="device-card"><div class="device-icon">' + deviceCardIcon(item.type, item.color) + '</div><div><div class="device-brand">' + escapeHtml(item.brand) + '</div><div class="device-desc">' + escapeHtml(item.desc) + '</div></div></div>';
+            }).join('') + '</div>';
+        }
+        function renderScreenTimeBars(hourly) {
+            const values = Array.isArray(hourly) ? hourly : [];
+            const filled = [];
+            for (let i = 0; i < 24; i++) filled.push(Math.max(0, Math.min(60, Number(values[i]) || 0)));
+            return filled.map(function (v, i) {
+                const h = Math.max(4, Math.round((v / 60) * 100));
+                const cls = i % 3 === 0 ? 'blue' : (i % 3 === 1 ? 'purple' : 'orange');
+                return '<div class="bar ' + cls + '" style="height:' + String(h) + '%;"></div>';
+            }).join('');
+        }
+        function renderWeeklyBars(weekly) {
+            const values = Array.isArray(weekly) ? weekly : [];
+            const maxValue = values.reduce(function (max, item) { return Math.max(max, Number(item.minutes) || 0); }, 1) || 1;
+            return values.slice(0, 7).map(function (item, index) {
+                const minutes = Math.max(0, Number(item.minutes) || 0);
+                const h = Math.max(6, Math.round((minutes / maxValue) * 100));
+                const cls = index % 3 === 0 ? 'blue' : (index % 3 === 1 ? 'purple' : 'orange');
+                return '<div class="bar ' + cls + '" style="height:' + String(h) + '%;"></div>';
+            }).join('');
+        }
+        function renderScreenTimeDetail() {
+            const st = settingsData && settingsData.screenTime ? settingsData.screenTime : {};
+            const categories = Array.isArray(st.categories) ? st.categories : [];
+            const topApps = Array.isArray(st.topApps) ? st.topApps : [];
+            const weekly = Array.isArray(st.weekly) ? st.weekly : [];
+            const isWeekly = viewState.screenMode === 'week';
+            const headline = isWeekly ? (st.weeklyTotal || st.total || '0小时0分钟') : (st.total || '0小时0分钟');
+            const compare = isWeekly ? (st.weeklyCompare || '与上周持平') : (st.compare || '与昨日持平');
+            const bars = isWeekly ? renderWeeklyBars(weekly) : renderScreenTimeBars(st.hourly);
+            const axis = isWeekly ? '<div class="axis weekly">' + weekly.slice(0, 7).map(function (item) { return '<span>' + escapeHtml(item.day || '') + '</span>'; }).join('') + '</div>' : '<div class="axis"><span>0:00</span><span>12:00</span><span>24:00</span></div>';
+            return '<div class="seg-switch"><button type="button" class="seg-item' + (isWeekly ? '' : ' active') + '" data-screen-mode="day">每天</button><button type="button" class="seg-item' + (isWeekly ? ' active' : '') + '" data-screen-mode="week">每周</button></div><div class="panel"><div class="detail-headline">' + escapeHtml(headline) + '</div><div class="detail-sub">' + escapeHtml(compare) + '</div><div class="bars' + (isWeekly ? ' weekly' : '') + '">' + bars + '</div>' + axis + '<div class="cat-row">' + categories.slice(0, 3).map(function (c) { return '<div class="cat-item"><div class="cat-title" style="color:' + escapeHtml(c.color || '#4D8EFF') + ';">' + escapeHtml(c.name || '分类') + '</div><div class="cat-time">' + escapeHtml(c.time || '0分钟') + '</div></div>'; }).join('') + '</div></div><div class="list-card">' + topApps.map(function (app) { return '<div class="list-row"><div class="list-name">' + escapeHtml(app.name || '应用') + '</div><div class="list-value">' + escapeHtml(app.time || '0分钟') + '</div><div class="chevron">›</div></div>'; }).join('') + '</div>';
+        }
+        function renderStorageOverview() {
+            const storage = settingsData && settingsData.storage ? settingsData.storage : {};
+            const breakdown = Array.isArray(storage.breakdown) ? storage.breakdown : [];
+            const used = escapeHtml(storage.used || '0GB');
+            const total = escapeHtml(storage.total || '0GB');
+            const totalGB = parseSizeToGB(storage.total);
+            const fallbackTotal = totalGB > 0 ? totalGB : breakdown.reduce(function (sum, item) { return sum + parseSizeToGB(item.size); }, 0);
+            const base = fallbackTotal > 0 ? fallbackTotal : 1;
+            const segHtml = breakdown.map(function (item) {
+                const gb = parseSizeToGB(item.size);
+                const width = Math.max(2, (gb / base) * 100);
+                return '<div class="seg" style="width:' + String(width) + '%;background:' + escapeHtml(item.color || '#7A7A85') + ';"></div>';
+            }).join('');
+            const listHtml = breakdown.map(function (item) {
+                const name = asString(item.name);
+                const isApps = name.indexOf('应用') !== -1;
+                const isDocs = name.indexOf('文档') !== -1;
+                const clickable = isApps || isDocs;
+                const detailKey = isApps ? 'storage_apps' : (isDocs ? 'storage_documents' : '');
+                return '<div class="list-row' + (clickable ? ' clickable' : '') + '"' + (clickable ? (' data-subdetail="' + detailKey + '"') : '') + '><span class="dot" style="background:' + escapeHtml(item.color || '#7A7A85') + ';"></span><div class="list-name">' + escapeHtml(name || '项目') + '</div><div class="list-value">' + escapeHtml(item.size || '0GB') + '</div>' + (clickable ? '<div class="chevron">›</div>' : '') + '</div>';
+            }).join('');
+            return '<div class="panel"><div><span class="detail-headline">' + used + '</span> <span class="detail-total">/ ' + total + '</span></div><div class="seg-bar">' + segHtml + '</div><div class="detail-sub">用户数据</div></div><div class="list-card">' + listHtml + '</div><button type="button" class="clean-btn">清理</button>';
+        }
+        function renderStorageAppsDetail() {
+            const apps = settingsData && settingsData.storage && Array.isArray(settingsData.storage.apps) ? settingsData.storage.apps : [];
+            return '<div class="panel"><div class="mini-title">占用空间最多的应用</div><div class="detail-sub">这些内容会随着缓存、下载和聊天附件逐步增加。</div></div><div class="list-card">' + apps.map(function (item) {
+                return '<div class="list-row"><div style="flex:1;"><div class="list-name">' + escapeHtml(item.name || '应用') + '</div></div><div class="list-value">' + escapeHtml(item.size || '0GB') + '</div></div>';
+            }).join('') + '</div>';
+        }
+        function renderStorageDocumentsDetail() {
+            const documents = settingsData && settingsData.storage && Array.isArray(settingsData.storage.documents) ? settingsData.storage.documents : [];
+            return '<div class="panel"><div class="mini-title">文档与文件</div><div class="detail-sub">只展示角色设备里留下的部分文件痕迹。</div></div><div class="list-card">' + documents.map(function (item) {
+                return '<div class="list-row"><div style="flex:1;"><div class="list-name">' + escapeHtml(item.name || '文档') + '</div><div class="list-sub">' + escapeHtml(item.updatedAt || '最近') + '</div></div><div class="list-value">' + escapeHtml(item.size || '0MB') + '</div></div>';
+            }).join('') + '</div>';
+        }
+        function renderDetail() {
+            let title = '详情';
+            let html = '';
+            if (viewState.detail === 'devices') { title = '设备'; html = renderDevicesDetail(); }
+            else if (viewState.detail === 'screen_time') { title = '屏幕使用时间'; html = renderScreenTimeDetail(); }
+            else if (viewState.detail === 'storage') {
+                if (viewState.subdetail === 'storage_apps') { title = '应用'; html = renderStorageAppsDetail(); }
+                else if (viewState.subdetail === 'storage_documents') { title = '文档'; html = renderStorageDocumentsDetail(); }
+                else { title = '存储空间'; html = renderStorageOverview(); }
+            }
+            document.getElementById('navTitle').textContent = title;
+            document.getElementById('detailContent').innerHTML = html;
+            document.getElementById('navBackBtn').textContent = viewState.detail ? '‹ 设置' : '‹ 返回';
+        }
+        function openDetail(type) {
+            viewState.detail = type;
+            viewState.subdetail = '';
+            viewState.screenMode = 'day';
+            document.getElementById('mainView').classList.add('hidden');
+            document.getElementById('detailView').classList.remove('hidden');
+            renderDetail();
+        }
+        function openSubdetail(type) { viewState.subdetail = type; renderDetail(); }
+        function closeDetail() {
+            viewState.detail = '';
+            viewState.subdetail = '';
+            viewState.screenMode = 'day';
+            document.getElementById('detailView').classList.add('hidden');
+            document.getElementById('mainView').classList.remove('hidden');
+            document.getElementById('navTitle').textContent = '设置';
+            document.getElementById('navBackBtn').textContent = '‹ 返回';
+        }
+        async function loadSettings(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowSettingsContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成设置页信息。');
+                return;
+            }
+            const roleId = typeof window.SecretCenterCore.getSelectedRoleId === 'function' ? asString(window.SecretCenterCore.getSelectedRoleId()) : '';
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再生成设置页信息。');
+                return;
+            }
+            try {
+                if (btn) btn.disabled = true;
+                let res = null;
+                if (force === true) {
+                    res = await window.SecretCenterCore.generateShadowSettingsContent({ roleId: roleId, force: true });
+                } else {
+                    res = await window.SecretCenterCore.generateShadowSettingsContent({ roleId: roleId, force: false });
+                    if (!(res && res.ok && isSettingsDataComplete(res.data))) {
+                        res = await window.SecretCenterCore.generateShadowSettingsContent({ roleId: roleId, force: true });
+                    }
+                }
+                if (res && res.ok && res.data) {
+                    settingsData = res.data;
+                    renderMain();
+                    return;
+                }
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+        document.getElementById('mainRows').addEventListener('click', function (event) {
+            const row = event.target.closest('[data-detail]');
+            if (!row) return;
+            openDetail(asString(row.getAttribute('data-detail')));
+        });
+        document.getElementById('detailContent').addEventListener('click', function (event) {
+            const modeBtn = event.target.closest('[data-screen-mode]');
+            if (modeBtn) {
+                viewState.screenMode = asString(modeBtn.getAttribute('data-screen-mode')) || 'day';
+                renderDetail();
+                return;
+            }
+            const subRow = event.target.closest('[data-subdetail]');
+            if (subRow) openSubdetail(asString(subRow.getAttribute('data-subdetail')));
+        });
+        document.getElementById('navBackBtn').addEventListener('click', function () {
+            if (viewState.subdetail) { viewState.subdetail = ''; renderDetail(); return; }
+            if (viewState.detail) { closeDetail(); return; }
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToFangCun === 'function') {
+                window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });
+            } else {
+                window.location.replace('FangCun.html');
+            }
+        });
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadSettings(true);
+        });
+        window.onload = function () {
+            loadSettings(false);
+        };
+    </script>
+</body>
+</html>

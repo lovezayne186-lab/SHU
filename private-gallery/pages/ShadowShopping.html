@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>购物记录 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #F8F8F8; font-family: -apple-system, "PingFang SC", sans-serif; color: #333; }
+
+        .back-btn {
+            position: fixed; top: 20px; left: 20px; font-size: 24px; color: #333;
+            text-decoration: none; z-index: 20; width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .generate-btn {
+            position: fixed; top: 20px; right: 20px; z-index: 20;
+            border: none; background: transparent; color: #111;
+            font-size: 20px; line-height: 1; cursor: pointer;
+            padding: 6px; font-weight: 600;
+        }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+
+        .app-container {
+            max-width: 420px; margin: 0 auto;
+            padding: 64px 20px 120px;
+            min-height: 100vh;
+        }
+
+        .header { margin-bottom: 24px; }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header p { font-size: 13px; color: #999; margin-top: 6px; }
+
+        .record-list { display: flex; flex-direction: column; gap: 12px; }
+        .record-card {
+            background: #FFF;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+        }
+        .record-card.secret { border-left: 3px solid #333; background: #FAFAFA; cursor: pointer; }
+        .record-card.secret:active { transform: scale(0.995); }
+
+        .record-info { min-width: 0; flex: 1; }
+        .record-date { font-size: 11px; color: #BBB; margin-bottom: 4px; font-family: Georgia, serif; }
+        .record-name { font-size: 15px; font-weight: 500; color: #333; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .record-meta { font-size: 11px; color: #8C8881; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .record-note { font-size: 11px; color: #A3A09A; margin-top: 4px; line-height: 1.4; }
+        .record-thought { font-size: 11px; color: #7A7671; margin-top: 5px; line-height: 1.45; }
+        .record-price { margin-left: 14px; text-align: right; font-family: "Helvetica Neue", sans-serif; font-weight: 600; font-size: 15px; color: #333; }
+
+        .tag {
+            display: inline-block; font-size: 10px; border-radius: 4px; padding: 1px 6px;
+            margin-left: 6px; vertical-align: middle;
+        }
+        .tag-secret { background: #333; color: #FFF; }
+        .tag-unlocked { background: #EEF4EC; color: #467245; }
+
+        .empty-text { text-align: center; color: #A3A09A; font-size: 13px; padding: 30px 0; }
+
+        .bottom-tabs {
+            position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+            width: 100%; max-width: 420px; height: 72px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+            display: grid; grid-template-columns: repeat(3, 1fr); z-index: 15;
+        }
+        .tab-btn {
+            border: none; background: transparent; cursor: pointer;
+            font-size: 13px; color: #9A9691; font-weight: 500;
+        }
+        .tab-btn.active { color: #333; }
+
+        .modal-mask {
+            position: fixed; inset: 0; background: rgba(17, 17, 17, 0.35);
+            display: none; align-items: center; justify-content: center;
+            padding: 20px; z-index: 40;
+        }
+        .modal-mask.show { display: flex; }
+        .modal {
+            width: min(100%, 340px);
+            background: #FFF;
+            border-radius: 14px;
+            padding: 20px 18px 16px;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.15);
+        }
+        .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #333; }
+        .modal-input {
+            width: 100%; border: 1px solid #E5E5E5; border-radius: 10px;
+            padding: 10px 12px; font-size: 14px; outline: none;
+        }
+        .modal-input:focus { border-color: #333; }
+        .modal-error { min-height: 18px; color: #B94A48; font-size: 12px; margin-top: 8px; }
+        .modal-actions { margin-top: 14px; display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-btn {
+            border: none; border-radius: 999px; font-size: 12px; padding: 8px 14px; cursor: pointer;
+        }
+        .modal-btn.cancel { background: #F0F0F0; color: #555; }
+        .modal-btn.unlock { background: #333; color: #FFF; }
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+    <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+
+    <div class="app-container">
+        <div class="header">
+            <h1 id="headerTitle">最近订单</h1>
+            <p id="headerCount">0 条记录</p>
+        </div>
+        <div class="record-list" id="recordList"></div>
+    </div>
+
+    <div class="bottom-tabs">
+        <button class="tab-btn" data-tab="cart">购物车</button>
+        <button class="tab-btn" data-tab="footprints">足迹</button>
+        <button class="tab-btn active" data-tab="orders">最近订单</button>
+    </div>
+
+    <div class="modal-mask" id="unlockModal">
+        <div class="modal">
+            <div class="modal-title">输入我在意的人的名字</div>
+            <input id="unlockInput" class="modal-input" type="text" placeholder="请输入你的名字" autocomplete="off">
+            <div class="modal-error" id="unlockError"></div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" id="cancelUnlockBtn" type="button">取消</button>
+                <button class="modal-btn unlock" id="confirmUnlockBtn" type="button">解锁</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        let currentTab = 'orders';
+        let shoppingData = { cart: [], footprints: [], orders: [] };
+        let unlockTargetIndex = -1;
+        const unlockedMap = {};
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(value) {
+            return asString(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function resolveExpectedName() {
+            const byStorage = asString(localStorage.getItem('user_name') || localStorage.getItem('UserName') || localStorage.getItem('FangCun_UserName'));
+            if (byStorage) return byStorage;
+            try {
+                if (window.parent && window.parent.momentsData && asString(window.parent.momentsData.userName)) {
+                    return asString(window.parent.momentsData.userName);
+                }
+            } catch (e) {}
+            return '你';
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的购物记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '购物记录');
+                return;
+            }
+            alert(reason);
+        }
+
+        function getCurrentList() {
+            if (currentTab === 'cart') return Array.isArray(shoppingData.cart) ? shoppingData.cart : [];
+            if (currentTab === 'footprints') return Array.isArray(shoppingData.footprints) ? shoppingData.footprints : [];
+            return Array.isArray(shoppingData.orders) ? shoppingData.orders : [];
+        }
+
+        function renderTabs() {
+            document.querySelectorAll('.tab-btn').forEach(function (btn) {
+                const tab = btn.getAttribute('data-tab');
+                btn.classList.toggle('active', tab === currentTab);
+            });
+        }
+
+        function renderHeader() {
+            const titleMap = {
+                cart: '购物车',
+                footprints: '足迹',
+                orders: '最近订单'
+            };
+            const list = getCurrentList();
+            document.getElementById('headerTitle').textContent = titleMap[currentTab] || '购物记录';
+            document.getElementById('headerCount').textContent = list.length + ' 条记录';
+        }
+
+        function renderList() {
+            renderTabs();
+            renderHeader();
+            const container = document.getElementById('recordList');
+            const list = getCurrentList();
+            if (!list.length) {
+                container.innerHTML = '<div class="empty-text">暂无记录</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(function (item, index) {
+                const row = item || {};
+                const isOrderTab = currentTab === 'orders';
+                const isSecret = !!row.isSecret;
+                const isUnlocked = !!unlockedMap[index];
+                const shouldMask = isOrderTab && isSecret && !isUnlocked;
+                const displayName = shouldMask
+                    ? (asString(row.maskedName) || asString(row.name) || '评价极高的私人订制')
+                    : (asString(row.realName) || asString(row.name) || '未命名商品');
+                const meta = isOrderTab
+                    ? [asString(row.status || '已签收'), asString(row.category || '日常')].filter(Boolean).join(' · ')
+                    : [asString(row.category || '日常'), asString(row.status || (currentTab === 'cart' ? '待下单' : '已浏览'))].filter(Boolean).join(' · ');
+                const note = asString(row.note || '');
+                const thought = asString(row.thought || (isOrderTab ? row.note : ''));
+                const dateText = isOrderTab ? asString(row.date || '--/--') : '';
+                const cardClass = shouldMask ? 'record-card secret' : 'record-card';
+                const secretHint = shouldMask ? '<span class="tag tag-secret">私密</span>' : (isOrderTab && isSecret ? '<span class="tag tag-unlocked">已解锁</span>' : '');
+                const unlockAttr = shouldMask ? ('data-unlock-index="' + String(index) + '"') : '';
+                const price = asString(row.price || '0');
+
+                return (
+                    '<div class="' + cardClass + '" ' + unlockAttr + '>' +
+                        '<div class="record-info">' +
+                            (dateText ? '<div class="record-date">' + escapeHtml(dateText) + '</div>' : '') +
+                            '<div class="record-name">' + escapeHtml(displayName) + secretHint + '</div>' +
+                            '<div class="record-meta">' + escapeHtml(meta) + '</div>' +
+                            (isOrderTab && thought ? '<div class="record-thought">想法：' + escapeHtml(thought) + '</div>' : '') +
+                            ((!isOrderTab && note) ? '<div class="record-note">' + escapeHtml(note) + '</div>' : '') +
+                        '</div>' +
+                        '<div class="record-price">¥' + escapeHtml(price) + '</div>' +
+                    '</div>'
+                );
+            }).join('');
+        }
+
+        function openUnlockModal(index) {
+            unlockTargetIndex = Number(index);
+            document.getElementById('unlockInput').value = '';
+            document.getElementById('unlockError').textContent = '';
+            document.getElementById('unlockModal').classList.add('show');
+            setTimeout(function () {
+                const input = document.getElementById('unlockInput');
+                if (input) input.focus();
+            }, 0);
+        }
+
+        function closeUnlockModal() {
+            unlockTargetIndex = -1;
+            document.getElementById('unlockModal').classList.remove('show');
+        }
+
+        function tryUnlockSecretOrder() {
+            const inputName = asString(document.getElementById('unlockInput').value);
+            const expectedName = resolveExpectedName();
+            if (!inputName) {
+                document.getElementById('unlockError').textContent = '请先输入名字';
+                return;
+            }
+            const canFallbackUnlock = expectedName === '你';
+            if (!canFallbackUnlock && inputName !== expectedName) {
+                document.getElementById('unlockError').textContent = '名字不匹配，请重试';
+                return;
+            }
+            if (unlockTargetIndex >= 0) {
+                unlockedMap[unlockTargetIndex] = true;
+            }
+            closeUnlockModal();
+            renderList();
+        }
+
+        async function loadShopping(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowShoppingContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成购物记录。');
+                return;
+            }
+            const roleId = typeof window.SecretCenterCore.getSelectedRoleId === 'function'
+                ? asString(window.SecretCenterCore.getSelectedRoleId())
+                : '';
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再生成购物记录。');
+                return;
+            }
+
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowShoppingContent({ roleId: roleId, force: force === true });
+                if (res && res.ok && res.data) {
+                    shoppingData = {
+                        cart: Array.isArray(res.data.cart) ? res.data.cart : [],
+                        footprints: Array.isArray(res.data.footprints) ? res.data.footprints : [],
+                        orders: Array.isArray(res.data.orders) ? res.data.orders : []
+                    };
+                    renderList();
+                    return;
+                }
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        document.querySelectorAll('.tab-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                currentTab = asString(btn.getAttribute('data-tab') || 'orders') || 'orders';
+                renderList();
+            });
+        });
+
+        document.getElementById('recordList').addEventListener('click', function (event) {
+            const target = event.target.closest('[data-unlock-index]');
+            if (!target) return;
+            openUnlockModal(target.getAttribute('data-unlock-index'));
+        });
+
+        document.getElementById('cancelUnlockBtn').addEventListener('click', closeUnlockModal);
+        document.getElementById('confirmUnlockBtn').addEventListener('click', tryUnlockSecretOrder);
+        document.getElementById('unlockInput').addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                tryUnlockSecretOrder();
+            }
+        });
+        document.getElementById('unlockModal').addEventListener('click', function (event) {
+            if (event.target && event.target.id === 'unlockModal') {
+                closeUnlockModal();
+            }
+        });
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadShopping(true);
+        });
+
+        window.onload = function () {
+            renderList();
+            loadShopping(false);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>赴约 - FangCun</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: #F7F6F2;
+            font-family: -apple-system, BlinkMacSystemFont, "Noto Serif SC", "Songti SC", serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            color: #33312E;
+            overflow: hidden;
+        }
+
+        /* 极简返回按钮 */
+        .back-btn {
+            position: absolute;
+            top: max(20px, env(safe-area-inset-top));
+            left: 20px;
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            text-decoration: none; color: #8C8881;
+            font-size: 24px; font-weight: 300;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+            z-index: 100;
+        }
+        .back-btn:active { transform: translateX(-4px); }
+
+        /* 主容器 */
+        .select-screen {
+            width: 100%;
+            max-width: 420px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* 顶部标题区 */
+        .header {
+            margin-top: max(80px, env(safe-area-inset-top) + 60px);
+            padding: 0 32px;
+            text-align: left;
+        }
+        .title {
+            font-family: "Noto Serif SC", "Songti SC", serif;
+            font-size: 28px;
+            font-weight: 400;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-family: "Georgia", serif;
+            font-size: 12px;
+            color: #8C8881;
+            letter-spacing: 1px;
+            font-style: italic;
+        }
+
+        /* 角色卡片画廊容器 */
+        .gallery-container {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            padding: 40px 32px;
+            gap: 20px;
+            flex: 1;
+            align-items: center; /* 垂直居中 */
+            touch-action: pan-x;
+        }
+        .gallery-container::-webkit-scrollbar { display: none; }
+
+        /* 角色卡片 */
+        .role-card {
+            min-width: calc(100vw - 64px); /* 屏幕宽度减去两边padding */
+            max-width: 320px;
+            height: 460px;
+            scroll-snap-align: center;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 24px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        /* 卡片背景文字（增加氛围感） */
+        .bg-char {
+            position: absolute;
+            font-size: 180px;
+            color: rgba(213, 209, 200, 0.15);
+            font-family: "Noto Serif SC", "Songti SC", serif;
+            z-index: -1;
+            user-select: none;
+        }
+
+        /* 角色单字图标（代替传统头像） */
+        .role-avatar {
+            width: 88px; height: 88px;
+            border-radius: 50%;
+            background: #33312E;
+            color: #F7F6F2;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px;
+            font-family: "Noto Serif SC", "Songti SC", serif;
+            box-shadow: 0 8px 24px rgba(51, 49, 46, 0.15);
+            margin-bottom: 24px;
+        }
+        .role-avatar.has-img {
+            color: transparent;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        /* 角色信息 */
+        .role-name {
+            font-size: 20px;
+            letter-spacing: 4px;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+        .role-desc {
+            font-size: 13px;
+            color: #8C8881;
+            text-align: center;
+            line-height: 1.8;
+            letter-spacing: 1px;
+            margin-bottom: 40px;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+        }
+
+        /* 进入按钮 */
+        .enter-btn {
+            padding: 12px 32px;
+            border-radius: 20px;
+            border: 1px solid #D5D1C8;
+            background: transparent;
+            color: #5A5752;
+            font-size: 13px;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .enter-btn:active {
+            background: #33312E;
+            color: #F7F6F2;
+            border-color: #33312E;
+            transform: scale(0.95);
+        }
+
+        /* 分页指示器 */
+        .indicator {
+            display: flex; justify-content: center; gap: 8px;
+            padding-bottom: max(40px, env(safe-area-inset-bottom));
+        }
+        .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #D5D1C8; transition: all 0.3s ease;
+        }
+        .dot.active { background: #33312E; width: 12px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <a href="../private.html" class="back-btn" onclick="try{if(window.parent&&typeof window.parent.closeApp==='function'){window.parent.closeApp();return false;}}catch(e){}">‹</a>
+
+    <div class="select-screen">
+
+        <div class="header">
+            <div class="title">叩门</div>
+            <div class="subtitle">Choose your companion.</div>
+        </div>
+
+        <div class="gallery-container" id="gallery"></div>
+
+        <div class="indicator" id="indicator"></div>
+
+    </div>
+
+    <script>
+        const gallery = document.getElementById('gallery');
+        const indicator = document.getElementById('indicator');
+
+        function safeParse(text) {
+            try { return JSON.parse(text); } catch (e) { return null; }
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function resolveName(profile, fallbackId) {
+            const p = profile && typeof profile === 'object' ? profile : {};
+            return String(p.remark || p.nickName || p.name || fallbackId || '').trim() || String(fallbackId || '').trim() || '未知';
+        }
+
+        function resolveDesc(profile) {
+            const p = profile && typeof profile === 'object' ? profile : {};
+            const raw = String(p.desc || p.persona || p.description || '').trim();
+            return raw || '已创建角色';
+        }
+
+        function resolveAvatar(profile) {
+            const p = profile && typeof profile === 'object' ? profile : {};
+            const a = String(p.avatar || p.avatarUrl || '').trim();
+            return a;
+        }
+
+        function readWechatProfiles() {
+            try {
+                const parentProfiles = window.parent && window.parent.charProfiles && typeof window.parent.charProfiles === 'object'
+                    ? window.parent.charProfiles
+                    : null;
+                if (parentProfiles) return parentProfiles;
+            } catch (e) { }
+            const raw = localStorage.getItem('wechat_charProfiles') || '{}';
+            const parsed = safeParse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        }
+
+        function buildRoleList() {
+            const profiles = readWechatProfiles();
+            const ids = Object.keys(profiles || {});
+            const list = [];
+            for (let i = 0; i < ids.length; i++) {
+                const id = ids[i];
+                const p = profiles[id];
+                if (!p || typeof p !== 'object') continue;
+                if (p.isGroup === true) continue;
+                const name = resolveName(p, id);
+                list.push({
+                    id: String(id),
+                    name,
+                    desc: resolveDesc(p),
+                    avatar: resolveAvatar(p)
+                });
+            }
+            list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+            return list;
+        }
+
+        function roleCardHtml(role) {
+            const name = role && role.name ? String(role.name) : '未知';
+            const id = role && role.id ? String(role.id) : '';
+            const desc = role && role.desc ? String(role.desc) : '';
+            const avatar = role && role.avatar ? String(role.avatar) : '';
+
+            const ch = name.trim().slice(0, 1) || '·';
+            const safeName = escapeHtml(name);
+            const safeDesc = escapeHtml(desc).replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+            const safeId = escapeHtml(id);
+            const safeCh = escapeHtml(ch);
+            const safeAvatar = escapeHtml(avatar);
+
+            const avatarClass = avatar ? 'role-avatar has-img' : 'role-avatar';
+            const avatarStyle = avatar ? ` style="background-image:url('${safeAvatar}');"` : '';
+
+            return ''
+                + '<div class="role-card" data-role-id="' + safeId + '">'
+                + '  <div class="bg-char">' + safeCh + '</div>'
+                + '  <div class="' + avatarClass + '"' + avatarStyle + '>' + safeCh + '</div>'
+                + '  <div class="role-name">' + safeName + '</div>'
+                + '  <div class="role-desc">' + safeDesc + '</div>'
+                + '  <button class="enter-btn" type="button" data-role-id="' + safeId + '">进入</button>'
+                + '</div>';
+        }
+
+        function renderIndicator(count) {
+            indicator.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const dot = document.createElement('div');
+                dot.className = i === 0 ? 'dot active' : 'dot';
+                indicator.appendChild(dot);
+            }
+        }
+
+        function bindScrollIndicator() {
+            const dots = indicator.querySelectorAll('.dot');
+            if (!dots.length) return;
+
+            gallery.addEventListener('scroll', () => {
+                const cardWidth = gallery.clientWidth || 1;
+                const index = Math.max(0, Math.min(dots.length - 1, Math.round(gallery.scrollLeft / cardWidth)));
+                dots.forEach((dot, i) => {
+                    if (i === index) dot.classList.add('active');
+                    else dot.classList.remove('active');
+                });
+            });
+        }
+
+        function renderRoles() {
+            const roles = buildRoleList();
+            if (!roles.length) {
+                gallery.innerHTML = ''
+                    + '<div class="role-card">'
+                    + '  <div class="bg-char">空</div>'
+                    + '  <div class="role-avatar" style="background:#8C8881;">空</div>'
+                    + '  <div class="role-name">暂无角色</div>'
+                    + '  <div class="role-desc">请先在微信里创建角色<br>再回到这里选择</div>'
+                    + '  <button class="enter-btn" type="button" onclick="goSecretHome()">返回</button>'
+                    + '</div>';
+                renderIndicator(1);
+                bindScrollIndicator();
+                return;
+            }
+            gallery.innerHTML = roles.map(roleCardHtml).join('');
+            renderIndicator(roles.length);
+            bindScrollIndicator();
+        }
+
+        function getRoleDisplayName(roleId) {
+            const profiles = readWechatProfiles();
+            const p = profiles && profiles[roleId] ? profiles[roleId] : null;
+            return resolveName(p, roleId);
+        }
+
+        function goSecretHome() {
+            try {
+                if (window.parent && window.parent !== window) {
+                    const doc = window.parent.document;
+                    const appContent = doc && doc.getElementById ? doc.getElementById('app-content-area') : null;
+                    const iframe = appContent && appContent.querySelector ? appContent.querySelector('iframe') : null;
+                    if (iframe) {
+                        iframe.setAttribute('src', 'private-gallery/private.html');
+                        return;
+                    }
+                }
+            } catch (e) { }
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ type: 'SECRET_CENTER_NAVIGATE', target: 'home', at: Date.now() }, '*');
+                }
+            } catch (e) { }
+            setTimeout(() => {
+                try {
+                    window.location.replace('../private.html');
+                } catch (e) {
+                    try {
+                        window.location.href = '../private.html';
+                    } catch (e2) {
+                        window.location.href = '/private-gallery/private.html';
+                    }
+                }
+            }, 120);
+        }
+
+        window.selectRole = function (roleId) {
+            const id = String(roleId || '').trim();
+            if (!id) return;
+            const name = getRoleDisplayName(id);
+            localStorage.setItem('SecretCenter_CurrentRoleId', id);
+            localStorage.setItem('SecretCenter_CurrentRoleName', name);
+            localStorage.setItem('FangCun_CurrentRoleId', id);
+            localStorage.setItem('FangCun_CurrentRole', name);
+            goSecretHome();
+        };
+
+        window.goSecretHome = goSecretHome;
+
+        let __lastRoleSelectAt = 0;
+        function trySelectRoleFromEvent(event) {
+            const target = event && event.target;
+            const btn = target && target.closest ? target.closest('button.enter-btn[data-role-id]') : null;
+            const id = btn && btn.dataset ? String(btn.dataset.roleId || '').trim() : '';
+            if (!id) return;
+            const now = Date.now();
+            if (now - __lastRoleSelectAt < 500) return;
+            __lastRoleSelectAt = now;
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+            window.selectRole(id);
+        }
+
+        function bindRoleActions() {
+            gallery.addEventListener('click', trySelectRoleFromEvent, { passive: false });
+            gallery.addEventListener('pointerup', trySelectRoleFromEvent, { passive: false });
+            gallery.addEventListener('touchend', trySelectRoleFromEvent, { passive: false });
+        }
+
+        renderRoles();
+        bindRoleActions();
+    </script>
+</body>
+</html>

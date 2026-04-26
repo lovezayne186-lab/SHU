@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #0F0F0F; color: #FFF; font-family: "Roboto", "PingFang SC", sans-serif; }
+        .app-container { max-width: 420px; margin: 0 auto; padding: 20px 20px 36px; }
+
+        .nav-header { display: flex; align-items: center; gap: 10px; margin-bottom: 25px; margin-top: 20px; }
+        .logo { color: #FF0000; font-size: 20px; font-weight: bold; letter-spacing: -1px; }
+        .back-btn { color: #FFF; text-decoration: none; font-size: 24px; }
+        .generate-btn {
+            margin-left: auto;
+            border: none;
+            background: transparent;
+            color: #FFF;
+            font-size: 20px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 4px;
+        }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+
+        .section-title {
+            font-size: 16px; font-weight: 600; margin: 20px 0 14px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .section-title::before { content: ''; width: 3px; height: 16px; background: #FF0000; display: inline-block; }
+
+        .video-card { margin-bottom: 20px; position: relative; }
+        .thumbnail {
+            width: 100%; aspect-ratio: 16 / 9; background: #222; border-radius: 8px;
+            margin-bottom: 10px; position: relative; overflow: hidden;
+        }
+        .play-btn {
+            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            border: none; color: #8B8B8B;
+            background: transparent; font-size: 25px; cursor: pointer;
+            line-height: 1;
+        }
+        .play-btn:active { transform: translate(-50%, -50%) scale(0.96); color: #A4A4A4; }
+        .progress-bar { position: absolute; bottom: 0; left: 0; height: 3px; background: #FF0000; }
+
+        .v-title {
+            font-size: 14px; font-weight: 500; line-height: 1.4; margin-bottom: 4px;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .v-translation { font-size: 12px; color: #B7B7B7; line-height: 1.4; margin-bottom: 4px; }
+        .v-meta { font-size: 11px; color: #AAA; }
+
+        .video-detail {
+            margin-top: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: max-height 0.28s ease, opacity 0.28s ease;
+        }
+        .video-detail.open { max-height: 210px; opacity: 1; }
+        .detail-head {
+            font-size: 11px; color: #D1D1D1; letter-spacing: 1px; text-transform: uppercase;
+            padding: 10px 12px 6px;
+        }
+        .detail-content {
+            font-size: 12px; color: #E5E5E5; line-height: 1.7;
+            max-height: 150px; overflow-y: auto; padding: 0 12px 12px; white-space: pre-wrap;
+        }
+
+        .empty { color: #858585; text-align: center; font-size: 13px; padding: 26px 0; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="nav-header">
+            <a href="FangCun.html" class="back-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+            <span class="logo">YouTube</span>
+            <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+        </div>
+        <div id="videoContent"></div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        let videoData = [];
+        const expandedMap = {};
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(value) {
+            return asString(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function isEnglishTitle(text) {
+            const title = asString(text);
+            if (!title) return false;
+            if (!/[A-Za-z]/.test(title)) return false;
+            return !/[\u4e00-\u9fa5]/.test(title);
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的 YouTube 记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, 'YouTube');
+                return;
+            }
+            alert(reason);
+        }
+
+        function renderCard(item, index, sectionKey) {
+            const row = item || {};
+            const key = sectionKey + '-' + String(index);
+            const opened = !!expandedMap[key];
+            const type = asString(row.type || sectionKey);
+            const progress = asString(row.progress || (type === 'history' ? '0%' : '0%'));
+            const translation = asString(row.titleZh || row.translation || '');
+            const showTranslation = isEnglishTitle(row.title) && !!translation;
+            const detailText = asString(row.description || row.summary || '暂无文字版内容。');
+            const meta = type === 'history'
+                ? [asString(row.channel || '未知频道'), asString(row.time || '最近')].filter(Boolean).join(' · ')
+                : [asString(row.channel || '未知频道'), asString(row.time || '为你推荐')].filter(Boolean).join(' · ');
+
+            return (
+                '<div class="video-card">' +
+                    '<div class="thumbnail">' +
+                        (type === 'history' ? '<div class="progress-bar" style="width:' + escapeHtml(progress) + ';"></div>' : '') +
+                        '<button class="play-btn" type="button" data-video-key="' + escapeHtml(key) + '">▶</button>' +
+                    '</div>' +
+                    '<div class="v-title">' + escapeHtml(row.title || '未命名视频') + '</div>' +
+                    (showTranslation ? '<div class="v-translation">' + escapeHtml(translation) + '</div>' : '') +
+                    '<div class="v-meta">' + escapeHtml(meta) + '</div>' +
+                    '<div class="video-detail' + (opened ? ' open' : '') + '">' +
+                        '<div class="detail-head">视频内容文字版</div>' +
+                        '<div class="detail-content">' + escapeHtml(detailText) + '</div>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
+
+        function renderYoutube() {
+            const container = document.getElementById('videoContent');
+            if (!videoData.length) {
+                container.innerHTML = '<div class="empty">暂无记录</div>';
+                return;
+            }
+            const history = videoData.filter(function (item) { return asString(item.type) === 'history'; });
+            const recommend = videoData.filter(function (item) { return asString(item.type) === 'recommend'; });
+
+            let html = '';
+            if (history.length) {
+                html += '<div class="section-title">最近播放</div>';
+                html += history.map(function (item, index) {
+                    return renderCard(item, index, 'history');
+                }).join('');
+            }
+            if (recommend.length) {
+                html += '<div class="section-title">为您推荐</div>';
+                html += recommend.map(function (item, index) {
+                    return renderCard(item, index, 'recommend');
+                }).join('');
+            }
+            container.innerHTML = html || '<div class="empty">暂无记录</div>';
+        }
+
+        async function loadYoutube(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowYoutubeContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成 YouTube 记录。');
+                return;
+            }
+            const roleId = typeof window.SecretCenterCore.getSelectedRoleId === 'function'
+                ? asString(window.SecretCenterCore.getSelectedRoleId())
+                : '';
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再生成 YouTube 记录。');
+                return;
+            }
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowYoutubeContent({ roleId: roleId, force: force === true });
+                if (res && res.ok && res.data && Array.isArray(res.data.videos) && res.data.videos.length) {
+                    videoData = res.data.videos.slice(0);
+                    renderYoutube();
+                    return;
+                }
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        document.getElementById('videoContent').addEventListener('click', function (event) {
+            const trigger = event.target.closest('[data-video-key]');
+            if (!trigger) return;
+            const key = asString(trigger.getAttribute('data-video-key'));
+            if (!key) return;
+            expandedMap[key] = !expandedMap[key];
+            renderYoutube();
+        });
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadYoutube(true);
+        });
+
+        window.onload = function () {
+            renderYoutube();
+            loadYoutube(false);
+        };
+    </script>
+</body>
+</html>

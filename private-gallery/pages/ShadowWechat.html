@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>侧影 - 微信</title>
+    <style>
+        :root {
+            --bg-color: #F7F6F2;
+            --text-main: #33312E;
+            --text-dim: #8C8881;
+            --accent: #5A5752;
+            --border-color: rgba(0, 0, 0, 0.08);
+            --me-bubble: #E2E8D8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, "Noto Serif SC", "PingFang SC", serif;
+            line-height: 1.6;
+            overflow: hidden; /* 防止 body 滚动，交给容器 */
+            height: 100vh;
+        }
+
+        /* 顶部导航容器 */
+        .topbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            background: rgba(247, 246, 242, 0.9);
+            backdrop-filter: blur(15px);
+            border-bottom: 0.5px solid var(--border-color);
+            z-index: 1000;
+        }
+
+        /* 统一按钮样式 */
+        .nav-btn {
+            width: 50px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-main);
+            font-size: 24px;
+            z-index: 1001;
+        }
+        .sync-text-btn {
+            font-size: 14px;
+            color: var(--accent);
+            font-weight: 500;
+            width: auto;
+            padding: 0 12px;
+        }
+
+        .title-area {
+            flex: 1;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .title-area h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; margin: 0; }
+        .title-area p { font-size: 10px; color: var(--text-dim); margin-top: -2px; }
+
+        /* 内容承载容器 */
+        .page-container {
+            height: 100vh;
+            overflow-y: auto;
+            padding-top: 64px; /* 留出TopBar空间 */
+            padding-bottom: 90px; /* 留出Footer空间 */
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* 聊天列表列表项 */
+        .chat-item {
+            display: flex; padding: 14px 18px; align-items: center;
+            background: transparent; border-bottom: 0.5px solid rgba(0,0,0,0.03);
+        }
+        .chat-item:active { background: rgba(0,0,0,0.04); }
+
+        .avatar-circle {
+            width: 46px; height: 46px; border-radius: 10px;
+            background: #DDD; display: flex; align-items: center; justify-content: center;
+            font-size: 18px; color: #fff; margin-right: 14px; flex-shrink: 0;
+            overflow: hidden;
+        }
+        .avatar-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .chat-info { flex: 1; min-width: 0; }
+        .chat-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .chat-name { font-size: 15px; font-weight: 500; color: var(--text-main); }
+        .chat-time { font-size: 11px; color: var(--text-dim); }
+        .chat-preview {
+            font-size: 13px; color: var(--text-dim);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .section-title {
+            padding: 12px 18px 6px;
+            color: var(--text-dim);
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+        .favorite-section {
+            padding: 8px 14px 0;
+        }
+        .favorite-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 14px 6px;
+        }
+        .favorite-card {
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.84);
+            border: 0.5px solid rgba(0, 0, 0, 0.06);
+            border-radius: 18px;
+            box-shadow: 0 10px 24px rgba(62, 52, 41, 0.04);
+        }
+        .favorite-card.favorite-tweet {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 243, 237, 0.96));
+        }
+        .favorite-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .favorite-title-wrap {
+            flex: 1;
+            min-width: 0;
+        }
+        .favorite-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            line-height: 1.4;
+        }
+        .favorite-meta {
+            margin-top: 4px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+        .favorite-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 48px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            letter-spacing: 0.4px;
+            color: #5f554b;
+            background: rgba(90, 87, 82, 0.1);
+        }
+        .favorite-excerpt {
+            margin-top: 10px;
+            font-size: 13px;
+            line-height: 1.75;
+            color: #3d3833;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .favorite-annotation {
+            margin-top: 12px;
+            padding: 11px 12px;
+            border-radius: 14px;
+            background: rgba(90, 87, 82, 0.06);
+            color: #5b534b;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+        .favorite-empty {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 13px;
+            padding: 24px 14px 10px;
+        }
+
+        /* 置顶标记 */
+        .pinned-tag {
+            width: 7px; height: 7px; background: #A8A49C;
+            border-radius: 50%; display: inline-block; margin-right: 5px;
+        }
+
+        /* 详情页侧滑层 */
+        .chat-detail-layer {
+            position: fixed; top: 0; right: -100%;
+            width: 100%; height: 100%; background: var(--bg-color);
+            transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 2000; display: flex; flex-direction: column;
+        }
+        .chat-detail-layer.active { right: 0; }
+        .detail-body {
+            flex: 1; overflow-y: auto; padding: 15px;
+            display: flex; flex-direction: column; gap: 12px;
+            background: var(--bg-color);
+        }
+
+        /* 气泡样式 */
+        .msg-bubble {
+            max-width: 82%; padding: 10px 14px; font-size: 14px; border-radius: 12px;
+            line-height: 1.5; word-wrap: break-word; position: relative;
+        }
+        .msg-remote { align-self: flex-start; background: #FFF; color: #222; border-top-left-radius: 2px; border: 0.5px solid rgba(0,0,0,0.05); }
+        .msg-me { align-self: flex-end; background: var(--me-bubble); color: #222; border-top-right-radius: 2px; }
+        .msg-time { font-size: 11px; color: var(--text-dim); text-align: center; margin: 10px 0; opacity: 0.7; }
+        .article-title {
+            font-size: 18px;
+            line-height: 1.45;
+            color: var(--text-main);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .article-source {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 14px;
+        }
+        .article-text {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #3d3833;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* 底部导航 */
+        .footer-nav {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 380px; height: 54px;
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px);
+            border-radius: 18px; display: flex; align-items: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06); z-index: 1000;
+            border: 0.5px solid rgba(0,0,0,0.04);
+        }
+        .nav-item {
+            flex: 1; text-align: center; font-size: 12px; color: var(--text-dim);
+            cursor: pointer; transition: 0.2s; padding: 12px 0;
+        }
+        .nav-item.active { color: var(--text-main); font-weight: 600; }
+
+        /* 全屏加载 */
+        .loading-overlay {
+            position: fixed; inset: 0; background: rgba(247, 246, 242, 0.95);
+            display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
+        }
+        .empty-state { text-align: center; color: var(--text-dim); font-size: 13px; padding-top: 100px; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部导航 -->
+    <header class="topbar">
+        <!-- 返回按钮使用显式的 id 和监听 -->
+        <button class="nav-btn" id="btn-global-back">‹</button>
+        <div class="title-area">
+            <h1 id="top-title">联系人</h1>
+            <p id="role-name-display">Loading...</p>
+        </div>
+        <!-- 同步按钮 -->
+        <button class="nav-btn sync-text-btn" id="btn-sync">生成</button>
+    </header>
+
+    <!-- 内容区域 -->
+    <main class="page-container">
+        <!-- Tab 1 -->
+        <div class="tab-content active" id="tab-messages">
+            <div id="session-list">
+                <div class="empty-state">点击右上角“生成”加载数据</div>
+            </div>
+        </div>
+        <!-- Tab 2 -->
+        <div class="tab-content" id="tab-moments">
+            <div class="empty-state">暂无订阅号动态</div>
+        </div>
+        <!-- Tab 3 -->
+        <div class="tab-content" id="tab-favorites">
+            <div class="empty-state">收藏夹为空</div>
+        </div>
+    </main>
+
+    <!-- 详情页层 (Slide In) -->
+    <div class="chat-detail-layer" id="chat-detail">
+        <header class="topbar" style="position: relative;">
+            <button class="nav-btn" id="btn-close-chat">‹</button>
+            <div class="title-area">
+                <h1 id="detail-contact-name">联系人</h1>
+            </div>
+            <div style="width: 50px;"></div>
+        </header>
+        <div class="detail-body" id="detail-body">
+            <!-- 聊天记录 -->
+        </div>
+    </div>
+
+    <!-- 订阅号详情层 -->
+    <div class="chat-detail-layer" id="article-detail">
+        <header class="topbar" style="position: relative;">
+            <button class="nav-btn" id="btn-close-article">‹</button>
+            <div class="title-area">
+                <h1>订阅号</h1>
+            </div>
+            <div style="width: 50px;"></div>
+        </header>
+        <div class="detail-body" id="article-body"></div>
+    </div>
+
+    <!-- 底部 Tab 栏 -->
+    <nav class="footer-nav">
+        <div class="nav-item active" data-target="tab-messages">联系人</div>
+        <div class="nav-item" data-target="tab-moments">订阅号</div>
+        <div class="nav-item" data-target="tab-favorites">收藏夹</div>
+    </nav>
+
+    <!-- 加载层 -->
+    <div class="loading-overlay" id="loading-ui">
+        <div style="font-size: 14px; letter-spacing: 2px; color: var(--accent);">正在同步社交网络...</div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        const SHADOW_SCENE_KEY = 'shadow_wechat';
+        let currentRoleData = null;
+        let currentRoleContext = null;
+        let isGenerating = false;
+
+        function esc(text) {
+            return String(text == null ? '' : text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatTimeByTimestamp(ts) {
+            const n = Number(ts) || 0;
+            if (!n) return '';
+            try {
+                return new Date(n).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function getUserAvatarUrl() {
+            try {
+                const fromStorage = localStorage.getItem('user_avatar');
+                if (fromStorage) return String(fromStorage);
+            } catch (e) { }
+            try {
+                if (window.parent && window.parent.momentsData && window.parent.momentsData.userAvatar) {
+                    return String(window.parent.momentsData.userAvatar);
+                }
+            } catch (e) { }
+            return '';
+        }
+
+        function setSyncButtonState() {
+            const btn = document.getElementById('btn-sync');
+            if (!btn) return;
+            btn.disabled = isGenerating;
+            btn.textContent = isGenerating ? '生成中' : '生成';
+            btn.style.opacity = isGenerating ? '0.65' : '1';
+        }
+
+        function resolveRoleContext() {
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.resolveRoleContext !== 'function') {
+                return { ok: false, error: '核心未加载' };
+            }
+            return window.SecretCenterCore.resolveRoleContext();
+        }
+
+        function refreshRoleContext() {
+            const roleDisplay = document.getElementById('role-name-display');
+            const context = resolveRoleContext();
+            if (!context.ok) {
+                currentRoleContext = null;
+                roleDisplay.textContent = '未选择角色';
+                return false;
+            }
+            currentRoleContext = context;
+            roleDisplay.textContent = context.roleName;
+            return true;
+        }
+
+        function mapPinnedMessages(messages, roleName, userName) {
+            const src = Array.isArray(messages) ? messages : [];
+            return src.slice(-10).map(function (m) {
+                const row = m && typeof m === 'object' ? m : {};
+                const speaker = String(row.speaker || '');
+                const text = String(row.text || row.content || '');
+                if (!text) return null;
+                let sender = 'other';
+                if (speaker === '我' || speaker === userName || speaker === '用户') {
+                    sender = 'user';
+                } else if (!speaker || speaker === roleName || speaker === 'TA') {
+                    sender = 'role';
+                } else {
+                    sender = 'role';
+                }
+                return {
+                    sender: sender,
+                    content: text,
+                    time: formatTimeByTimestamp(row.timestamp)
+                };
+            }).filter(Boolean);
+        }
+
+        function mapGeneratedMessages(messages, roleName) {
+            const src = Array.isArray(messages) ? messages : [];
+            return src.slice(-10).map(function (m) {
+                const row = m && typeof m === 'object' ? m : {};
+                const speaker = String(row.speaker || '');
+                const text = String(row.text || row.content || '');
+                if (!text) return null;
+                const sender = (speaker === '我' || speaker === roleName) ? 'role' : 'other';
+                return {
+                    sender: sender,
+                    content: text,
+                    time: formatTimeByTimestamp(row.timestamp)
+                };
+            }).filter(Boolean);
+        }
+
+        function buildSessionViewModelFromShadowData(data) {
+            const d = data && typeof data === 'object' ? data : {};
+            const contacts = d.contacts && typeof d.contacts === 'object' ? d.contacts : {};
+            const sessions = [];
+
+            const roleName = String((d.meta && d.meta.roleName) || (currentRoleContext && currentRoleContext.roleName) || '角色');
+            const pinned = contacts.pinnedUser && typeof contacts.pinnedUser === 'object' ? contacts.pinnedUser : null;
+            const userAvatar = getUserAvatarUrl();
+
+            if (pinned) {
+                sessions.push({
+                    contactName: String(pinned.name || '用户'),
+                    isPinned: true,
+                    isUserPinned: true,
+                    avatarUrl: userAvatar,
+                    remark: String(pinned.remark || ''),
+                    lastTime: '',
+                    messages: mapPinnedMessages(pinned.recentMessages, roleName, String(pinned.name || '用户'))
+                });
+            }
+
+            const generated = Array.isArray(contacts.generatedContacts) ? contacts.generatedContacts : [];
+            generated.forEach(function (c) {
+                const row = c && typeof c === 'object' ? c : {};
+                sessions.push({
+                    contactName: String(row.name || '联系人'),
+                    isPinned: false,
+                    isUserPinned: false,
+                    avatarUrl: '',
+                    remark: String(row.remark || ''),
+                    category: String(row.category || ''),
+                    lastTime: '',
+                    messages: mapGeneratedMessages(row.recentMessages, roleName)
+                });
+            });
+
+            return {
+                sessions: sessions,
+                drafts: Array.isArray(contacts.drafts) ? contacts.drafts : [],
+                subscriptions: (d.subscriptions && Array.isArray(d.subscriptions.items)) ? d.subscriptions.items : [],
+                favorites: (d.favorites && Array.isArray(d.favorites.items)) ? d.favorites.items : []
+            };
+        }
+
+        function renderSessionList(sessions) {
+            const container = document.getElementById('session-list');
+            const list = Array.isArray(sessions) ? sessions : [];
+            if (!list.length) {
+                container.innerHTML = '<div class="empty-state">暂无联系人聊天记录</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(function (s, idx) {
+                const msgs = Array.isArray(s.messages) ? s.messages : [];
+                const lastMsg = msgs.length ? String(msgs[msgs.length - 1].content || '') : '暂无记录';
+                const avatarHtml = s.avatarUrl
+                    ? ('<img class="avatar-image" src="' + esc(s.avatarUrl) + '" alt="avatar">')
+                    : esc(String(s.contactName || '?').slice(0, 1));
+                return ''
+                    + '<div class="chat-item" onclick="openChatDetail(' + idx + ')">'
+                    + '  <div class="avatar-circle" style="background-color:' + getAvatarColor(s.contactName) + ';">' + avatarHtml + '</div>'
+                    + '  <div class="chat-info">'
+                    + '    <div class="chat-top">'
+                    + '      <span class="chat-name">' + (s.isPinned ? '<span class="pinned-tag"></span>' : '') + esc(s.contactName) + '</span>'
+                    + '      <span class="chat-time">' + esc(s.lastTime || '') + '</span>'
+                    + '    </div>'
+                    + '    <div class="chat-preview">' + esc(s.remark || lastMsg) + '</div>'
+                    + '  </div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function renderSubscriptions(items) {
+            const tab = document.getElementById('tab-moments');
+            const list = Array.isArray(items) ? items : [];
+            if (!list.length) {
+                tab.innerHTML = '<div class="empty-state">暂无订阅号内容</div>';
+                return;
+            }
+            tab.innerHTML = list.map(function (item, idx) {
+                const row = item && typeof item === 'object' ? item : {};
+                const title = String(row.title || '订阅内容');
+                const summary = String(row.summary || row.fullText || '');
+                const source = String(row.source || '订阅号');
+                return ''
+                    + '<div class="chat-item" onclick="openArticleDetail(' + idx + ')">'
+                    + '  <div class="avatar-circle" style="background-color:#b7aea2;">订</div>'
+                    + '  <div class="chat-info">'
+                    + '    <div class="chat-top">'
+                    + '      <span class="chat-name">' + esc(title) + '</span>'
+                    + '      <span class="chat-time">' + esc(source) + '</span>'
+                    + '    </div>'
+                    + '    <div class="chat-preview">' + esc(summary) + '</div>'
+                    + '  </div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function renderFavorites(items, drafts) {
+            const tab = document.getElementById('tab-favorites');
+            const favList = Array.isArray(items) ? items : [];
+            const draftList = Array.isArray(drafts) ? drafts : [];
+            const pinnedRemark = currentRoleData && Array.isArray(currentRoleData.sessions) && currentRoleData.sessions[0]
+                ? String(currentRoleData.sessions[0].remark || '').trim()
+                : '';
+            const roleDisplayName = currentRoleContext ? String(currentRoleContext.roleName || '').trim() : '';
+            const favoriteOwnerName = pinnedRemark || roleDisplayName || 'TA';
+            const chatFavorites = favList.filter(function (item) {
+                const row = item && typeof item === 'object' ? item : {};
+                return String(row.source || '') === 'real_chat';
+            });
+            const tweetFavorites = favList.filter(function (item) {
+                const row = item && typeof item === 'object' ? item : {};
+                return String(row.source || '') === 'saved_tweet' || String(row.kind || '') === 'tweet';
+            });
+
+            function getFavoriteBadge(kind) {
+                const map = {
+                    quote: '对话',
+                    voice: '语音',
+                    photo: '照片',
+                    tweet: '推文'
+                };
+                return map[String(kind || 'quote')] || '收藏';
+            }
+
+            function renderFavoriteCards(list, emptyText) {
+                if (!list.length) {
+                    return '<div class="favorite-empty">' + esc(emptyText) + '</div>';
+                }
+                return '<div class="favorite-list">' + list.map(function (item) {
+                    const row = item && typeof item === 'object' ? item : {};
+                    const title = String(row.title || '收藏片段');
+                    const excerpt = String(row.excerpt || row.content || '');
+                    const annotation = String(row.annotation || row.reason || '');
+                    const kind = String(row.kind || (row.source === 'saved_tweet' ? 'tweet' : 'quote'));
+                    const meta = kind === 'tweet'
+                        ? String(row.sourceName || row.source || '订阅号')
+                        : ('来自真实聊天 · ' + String(row.speakerName || '你'));
+                    return ''
+                        + '<div class="favorite-card ' + (kind === 'tweet' ? 'favorite-tweet' : '') + '">'
+                        + '  <div class="favorite-top">'
+                        + '    <div class="favorite-title-wrap">'
+                        + '      <div class="favorite-title">' + esc(title) + '</div>'
+                        + '      <div class="favorite-meta">' + esc(meta) + '</div>'
+                        + '    </div>'
+                        + '    <span class="favorite-badge">' + esc(getFavoriteBadge(kind)) + '</span>'
+                        + '  </div>'
+                        + '  <div class="favorite-excerpt">' + esc(excerpt) + '</div>'
+                        + (annotation
+                            ? ('<div class="favorite-annotation">角色批注：' + esc(annotation) + '</div>')
+                            : '')
+                        + '</div>';
+                }).join('') + '</div>';
+            }
+
+            let html = '';
+            html += '<div class="section-title">聊天收藏（真实记录筛选）</div>';
+            html += renderFavoriteCards(chatFavorites, '聊天内容较少，' + favoriteOwnerName + '还没有收藏内容');
+
+            html += '<div class="section-title">角色收藏的推文</div>';
+            html += renderFavoriteCards(tweetFavorites, '角色暂时没有额外收藏的推文');
+
+            html += '<div class="section-title">草稿箱</div>';
+            if (draftList.length) {
+                html += draftList.map(function (text) {
+                    return ''
+                        + '<div class="chat-item">'
+                        + '  <div class="avatar-circle" style="background-color:#c0b7ab;">稿</div>'
+                        + '  <div class="chat-info"><div class="chat-preview" style="white-space:normal; display:block;">' + esc(text) + '</div></div>'
+                        + '</div>';
+                }).join('');
+            } else {
+                html += '<div class="chat-item"><div class="chat-info"><div class="chat-preview">暂无草稿</div></div></div>';
+            }
+
+            tab.innerHTML = html;
+        }
+
+        function applyShadowWechatData(data) {
+            const vm = buildSessionViewModelFromShadowData(data);
+            currentRoleData = vm;
+            renderSessionList(vm.sessions);
+            renderSubscriptions(vm.subscriptions);
+            renderFavorites(vm.favorites, vm.drafts);
+        }
+
+        function showGenerationFailure(message) {
+            const reason = String(message || '').trim() || '本次没有生成出可展示的微信内容。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '微信子App');
+                return;
+            }
+            alert(reason);
+        }
+
+        async function runSync() {
+            if (isGenerating) return;
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowWechatContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成。');
+                return;
+            }
+            const context = currentRoleContext || resolveRoleContext();
+            if (!context || !context.ok) {
+                showGenerationFailure('请先选择角色，再生成微信内容。');
+                if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToRolePicker === 'function') {
+                    window.SecretCenterCore.navigateToRolePicker();
+                }
+                return;
+            }
+
+            currentRoleContext = context;
+            isGenerating = true;
+            setSyncButtonState();
+
+            try {
+                const result = await window.SecretCenterCore.generateShadowWechatContent({
+                    roleId: context.roleId,
+                    force: true
+                });
+                if (result && result.ok && result.data) {
+                    applyShadowWechatData(result.data);
+                    const firstTab = document.querySelector('.nav-item[data-target="tab-messages"]');
+                    if (firstTab) firstTab.click();
+                } else {
+                    showGenerationFailure(result && result.error);
+                }
+            } catch (e) {
+                console.error('Generate Error:', e);
+                showGenerationFailure(e && e.message);
+            } finally {
+                isGenerating = false;
+                setSyncButtonState();
+            }
+        }
+
+        function openChatDetail(idx) {
+            if (!currentRoleData || !Array.isArray(currentRoleData.sessions)) return;
+            const session = currentRoleData.sessions[idx];
+            if (!session) return;
+            document.getElementById('detail-contact-name').textContent = session.contactName;
+            const body = document.getElementById('detail-body');
+
+            const messages = Array.isArray(session.messages) ? session.messages : [];
+            if (!messages.length) {
+                body.innerHTML = '<div class="empty-state">没有最近的对话</div>';
+            } else {
+                body.innerHTML = messages.map(function (m) {
+                    const senderClass = m.sender === 'role' ? 'msg-me' : 'msg-remote';
+                    return ''
+                        + '<div class="msg-time">' + esc(m.time || '') + '</div>'
+                        + '<div class="msg-bubble ' + senderClass + '">' + esc(m.content || '') + '</div>';
+                }).join('');
+            }
+
+            document.getElementById('chat-detail').classList.add('active');
+            setTimeout(function () { body.scrollTop = body.scrollHeight; }, 100);
+        }
+
+        function openArticleDetail(idx) {
+            if (!currentRoleData || !Array.isArray(currentRoleData.subscriptions)) return;
+            const row = currentRoleData.subscriptions[idx];
+            if (!row) return;
+            const title = String(row.title || '订阅内容');
+            const source = String(row.source || '订阅号');
+            const fullText = String(row.fullText || row.content || row.article || row.summary || '暂无全文');
+            const body = document.getElementById('article-body');
+            body.innerHTML = ''
+                + '<div class="article-title">' + esc(title) + '</div>'
+                + '<div class="article-source">' + esc(source) + '</div>'
+                + '<div class="article-text">' + esc(fullText) + '</div>';
+            document.getElementById('article-detail').classList.add('active');
+            setTimeout(function () { body.scrollTop = 0; }, 20);
+        }
+
+        function bindEvents() {
+            if (bindEvents._bound) return;
+            bindEvents._bound = true;
+
+            document.getElementById('btn-global-back').onclick = function () {
+                if (window.SecretCenterCore && typeof window.SecretCenterCore.navigateToFangCun === 'function') {
+                    window.SecretCenterCore.navigateToFangCun({ fallbackUrl: './FangCun.html' });
+                } else {
+                    window.location.replace('./FangCun.html');
+                }
+            };
+            document.getElementById('btn-close-chat').onclick = function () {
+                document.getElementById('chat-detail').classList.remove('active');
+            };
+            document.getElementById('btn-close-article').onclick = function () {
+                document.getElementById('article-detail').classList.remove('active');
+            };
+            document.getElementById('btn-sync').onclick = runSync;
+
+            const navItems = document.querySelectorAll('.nav-item');
+            const tabContents = document.querySelectorAll('.tab-content');
+            const topTitle = document.getElementById('top-title');
+            navItems.forEach(function (item) {
+                item.onclick = function () {
+                    navItems.forEach(function (n) { n.classList.remove('active'); });
+                    item.classList.add('active');
+                    const target = item.getAttribute('data-target');
+                    tabContents.forEach(function (tc) {
+                        tc.classList.toggle('active', tc.id === target);
+                    });
+                    topTitle.textContent = item.textContent;
+                };
+            });
+
+            window.addEventListener('focus', function () {
+                if (currentRoleContext && window.SecretCenterCore && typeof window.SecretCenterCore.readSceneCache === 'function') {
+                    const cached = window.SecretCenterCore.readSceneCache(SHADOW_SCENE_KEY, currentRoleContext.roleId);
+                    if (cached && cached.data) applyShadowWechatData(cached.data);
+                }
+            });
+        }
+
+        function getAvatarColor(name) {
+            const colors = ['#A8A49C', '#C2B6A6', '#9FA8A3', '#B4A7A0', '#A0A4B4'];
+            let hash = 0;
+            if (!name) return colors[0];
+            for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        function init() {
+            bindEvents();
+            refreshRoleContext();
+            if (currentRoleContext && window.SecretCenterCore && typeof window.SecretCenterCore.readSceneCache === 'function') {
+                const cached = window.SecretCenterCore.readSceneCache(SHADOW_SCENE_KEY, currentRoleContext.roleId);
+                if (cached && cached.data) {
+                    applyShadowWechatData(cached.data);
+                }
+            }
+            setSyncButtonState();
+        }
+
+        window.openChatDetail = openChatDetail;
+        window.openArticleDetail = openArticleDetail;
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

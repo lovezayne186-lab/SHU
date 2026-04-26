@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>信息 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #F7F6F2; font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #33312E; overflow: hidden; }
+
+        .back-btn { position: fixed; top: 20px; left: 20px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #8C8881; font-size: 24px; font-weight: 300; z-index: 100; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+        .generate-btn {
+            position: absolute; top: 20px; right: 20px; z-index: 101;
+            border: none; background: transparent; color: #111;
+            font-size: 20px; line-height: 1; padding: 6px; cursor: pointer;
+            font-weight: 600;
+        }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+
+        /* 页面滑动切换机制 */
+        .page-container { display: flex; width: 200vw; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); height: 100vh; }
+        .page { width: 100vw; height: 100vh; overflow-y: auto; flex-shrink: 0; position: relative; }
+
+        /* === 列表视图 === */
+        .list-view { padding: 70px 24px 40px; max-width: 420px; margin: 0 auto; }
+        .header { font-size: 28px; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: baseline; }
+
+        .sms-item { display: flex; padding: 16px 0; border-bottom: 1px solid rgba(213, 209, 200, 0.5); position: relative; cursor: pointer; transition: opacity 0.2s; }
+        .sms-item:active { opacity: 0.5; }
+
+        .avatar { width: 44px; height: 44px; border-radius: 50%; background-color: #EAE8E1; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #8C8881; flex-shrink: 0; margin-right: 14px; font-weight: 500; }
+        .sms-content { flex: 1; overflow: hidden; }
+        .sms-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .sender-name { font-size: 16px; font-weight: 600; color: #33312E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sms-time { font-size: 13px; color: #A3A09A; flex-shrink: 0; margin-left: 10px; }
+        .sms-snippet { font-size: 14px; color: #8C8881; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
+        .unread-dot { position: absolute; left: -10px; top: 30px; width: 8px; height: 8px; border-radius: 50%; background-color: #33312E; }
+
+        /* === 聊天详情视图 === */
+        .chat-view { background-color: #F7F6F2; display: flex; flex-direction: column; position: relative; }
+        .chat-header { position: sticky; top: 0; background: rgba(247, 246, 242, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 30px 20px 15px; display: flex; align-items: center; z-index: 10; border-bottom: 1px solid rgba(213, 209, 200, 0.5); }
+        .chat-title { flex: 1; text-align: center; font-size: 16px; font-weight: 600; margin-right: 44px; } /* offset back btn */
+
+        .chat-history { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; max-width: 420px; margin: 0 auto; width: 100%; padding-bottom: 100px;}
+
+        .msg-row { display: flex; flex-direction: column; }
+        .msg-time { align-self: center; font-size: 11px; color: #A3A09A; margin-bottom: 8px; }
+
+        .bubble { max-width: 75%; padding: 12px 16px; font-size: 15px; line-height: 1.5; word-wrap: break-word; }
+
+        /* 对方发的消息 */
+        .msg-other { align-items: flex-start; }
+        .msg-other .bubble { background-color: #EAE8E1; color: #33312E; border-radius: 16px 16px 16px 4px; }
+
+        /* 自己发的消息 */
+        .msg-self { align-items: flex-end; }
+        .msg-self .bubble { background-color: #33312E; color: #F7F6F2; border-radius: 16px 16px 4px 16px; }
+
+        /* 底部输入框占位 */
+        .chat-input-bar { position: absolute; bottom: 0; left: 0; right: 0; width: 100%; max-width: 420px; margin: 0 auto; padding: 10px 20px 30px; background: rgba(247, 246, 242, 0.9); backdrop-filter: blur(10px); border-top: 1px solid rgba(213, 209, 200, 0.5); }
+        .fake-input { background: #EAE8E1; border-radius: 20px; padding: 10px 16px; font-size: 14px; color: #A3A09A; }
+    </style>
+</head>
+<body>
+
+    <div class="page-container" id="pageContainer">
+
+        <!-- 第一页：短信列表 -->
+        <div class="page list-view">
+            <a href="FangCun.html" class="back-btn" style="position: absolute;" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+            <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+            <div class="header">信息</div>
+            <div id="smsList">
+                <p style="text-align:center; color:#A3A09A; margin-top: 40px;">正在解密收件箱...</p>
+            </div>
+        </div>
+
+        <!-- 第二页：聊天详情 -->
+        <div class="page chat-view">
+            <div class="chat-header">
+                <div class="back-btn" style="position: relative; top:0; left:0;" onclick="goBackToList()">‹</div>
+                <div class="chat-title" id="chatTitle">发件人</div>
+            </div>
+            <div class="chat-history" id="chatHistory">
+                <!-- 对话气泡动态渲染 -->
+            </div>
+            <div class="chat-input-bar">
+                <div class="fake-input">短信/彩信</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        let threadsData = [];
+        function asString(value) { return String(value == null ? '' : value).trim(); }
+
+        function getInitial(name) {
+            if (/^[a-zA-Z]/.test(name)) return name.charAt(0).toUpperCase();
+            if (/^[\u4e00-\u9fa5]/.test(name)) return name.charAt(0);
+            return '#';
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的短信记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '短信记录');
+                return;
+            }
+            alert(reason);
+        }
+
+        async function loadSMS(force) {
+            const btn = document.getElementById('generateBtn');
+            const list = document.getElementById('smsList');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowSMSContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成。');
+                return;
+            }
+            const roleId = asString(window.SecretCenterCore.getSelectedRoleId ? window.SecretCenterCore.getSelectedRoleId() : '');
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再查看短信记录。');
+                return;
+            }
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowSMSContent({ roleId: roleId, force: force === true });
+                if (res && res.ok && res.data && Array.isArray(res.data.threads) && res.data.threads.length) {
+                    threadsData = res.data.threads;
+                    list.innerHTML = threadsData.map((t, index) => {
+                        const messages = Array.isArray(t.messages) ? t.messages : [];
+                        const lastMsg = messages[messages.length - 1];
+                        const snippet = lastMsg ? (lastMsg.from === '自己' ? `您: ${lastMsg.content}` : lastMsg.content) : '...';
+                        return `
+                            <div class="sms-item" onclick="openChat(${index})">
+                                ${t.isUnread ? '<div class="unread-dot"></div>' : ''}
+                                <div class="avatar">${getInitial(t.sender)}</div>
+                                <div class="sms-content">
+                                    <div class="sms-top">
+                                        <div class="sender-name">${t.sender}</div>
+                                        <div class="sms-time">${t.time}</div>
+                                    </div>
+                                    <div class="sms-snippet">${snippet}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    return;
+                }
+                list.innerHTML = '';
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                list.innerHTML = '';
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        // 切换到聊天视图
+        function openChat(index) {
+            const thread = threadsData[index];
+            document.getElementById('chatTitle').innerText = thread.sender;
+
+            const historyHtml = thread.messages.map(m => {
+                const isSelf = m.from === '自己';
+                const rowClass = isSelf ? 'msg-self' : 'msg-other';
+                return `
+                    <div class="msg-row ${rowClass}">
+                        ${m.time ? `<div class="msg-time">${m.time}</div>` : ''}
+                        <div class="bubble">${m.content}</div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('chatHistory').innerHTML = historyHtml;
+
+            // 滚动到最底部
+            setTimeout(() => {
+                const historyBox = document.getElementById('chatHistory');
+                historyBox.scrollTop = historyBox.scrollHeight;
+            }, 50);
+
+            // 滑动动画：容器向左平移 100vw
+            document.getElementById('pageContainer').style.transform = 'translateX(-100vw)';
+        }
+
+        // 切换回列表视图
+        function goBackToList() {
+            document.getElementById('pageContainer').style.transform = 'translateX(0)';
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadSMS(true);
+        });
+
+        window.onload = function () {
+            loadSMS(false);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Store - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #F2F2F7;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #101010;
+        }
+        .app-container { max-width: 420px; margin: 0 auto; padding: 18px 16px 36px; }
+
+        .top-nav {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .back-btn { text-decoration: none; color: #007AFF; font-size: 17px; }
+        .generate-btn {
+            border: none;
+            background: transparent;
+            color: #007AFF;
+            font-size: 17px;
+            cursor: pointer;
+            padding: 0;
+        }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+        .title { font-size: 34px; font-weight: 700; margin: 10px 0 4px; }
+        .subtitle { font-size: 12px; color: #8E8E93; margin-bottom: 16px; }
+
+        .group-title {
+            font-size: 14px; color: #8E8E93; font-weight: 600;
+            margin: 16px 4px 10px;
+        }
+
+        .list-card {
+            background: #FFF;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(16, 16, 16, 0.04);
+        }
+
+        .app-row {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 14px;
+            border-bottom: 1px solid #ECECF1;
+        }
+        .app-row:last-child { border-bottom: none; }
+
+        .ios-icon {
+            width: 52px; height: 52px; border-radius: 13px;
+            display: flex; align-items: center; justify-content: center;
+            color: #FFF; font-weight: 700; font-size: 17px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            flex-shrink: 0;
+        }
+        .ios-icon::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 45%;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.02));
+        }
+        .icon-label { z-index: 1; letter-spacing: 0.4px; }
+
+        .app-info { min-width: 0; flex: 1; }
+        .app-name {
+            font-size: 16px; font-weight: 600; color: #1C1C1E;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .app-desc {
+            font-size: 12px; color: #8E8E93; margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        .row-action {
+            border: 1px solid #D1D1D6;
+            background: #FFF;
+            color: #007AFF;
+            font-size: 12px;
+            border-radius: 999px;
+            padding: 5px 12px;
+            font-weight: 600;
+        }
+
+        .app-row.uninstalled { opacity: 0.8; }
+        .app-row.uninstalled .ios-icon { filter: grayscale(0.28); }
+        .uninstall-reason { font-size: 12px; color: #C93A3A; margin-top: 3px; line-height: 1.4; }
+
+        .empty-state {
+            text-align: center; color: #8E8E93; font-size: 13px;
+            padding: 24px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="top-nav">
+            <a href="FangCun.html" class="back-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹ 返回</a>
+            <button class="generate-btn" id="generateBtn" type="button">生成</button>
+        </div>
+
+        <div class="title">已购项目</div>
+        <div class="subtitle">App Store Purchase History</div>
+
+        <div class="group-title" id="installedTitle">已安装 (0)</div>
+        <div class="list-card" id="installedList"></div>
+
+        <div class="group-title" id="uninstalledTitle">未在此 iPhone 上 (0)</div>
+        <div class="list-card" id="uninstalledList"></div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        const gradients = [
+            ['#4A8BFF', '#7B5CFF'],
+            ['#29C0FF', '#2D7BFF'],
+            ['#FD5B7E', '#FF8A5B'],
+            ['#41C95B', '#00A88F'],
+            ['#F9BE00', '#F58D2D'],
+            ['#7E6BFF', '#4D8BFF'],
+            ['#00B6D7', '#2E88FF'],
+            ['#8F59FF', '#D15CFF']
+        ];
+
+        function asString(value) {
+            return String(value == null ? '' : value).trim();
+        }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的 App Store 记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, 'App Store');
+                return;
+            }
+            alert(reason);
+        }
+
+        function getAppMonogram(name) {
+            const text = asString(name).replace(/\s+/g, '');
+            if (!text) return 'A';
+            const latin = text.match(/[A-Za-z]/g);
+            if (latin && latin.length >= 2) {
+                return (latin[0] + latin[1]).toUpperCase();
+            }
+            if (latin && latin.length === 1) {
+                return latin[0].toUpperCase();
+            }
+            const noPunc = text.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '');
+            return noPunc.slice(0, 1) || text.slice(0, 1);
+        }
+
+        function renderIcon(name, index) {
+            const g = gradients[index % gradients.length];
+            return (
+                '<div class="ios-icon" style="background:linear-gradient(145deg,' + g[0] + ',' + g[1] + ');">' +
+                    '<span class="icon-label">' + escapeHtml(getAppMonogram(name)) + '</span>' +
+                '</div>'
+            );
+        }
+
+        function renderInstalled(list) {
+            const mount = document.getElementById('installedList');
+            document.getElementById('installedTitle').textContent = '已安装 (' + list.length + ')';
+            if (!list.length) {
+                mount.innerHTML = '<div class="empty-state">暂无安装记录</div>';
+                return;
+            }
+            mount.innerHTML = list.map(function (app, index) {
+                const name = asString(app.name || ('已购 App ' + String(index + 1)));
+                const desc = asString(app.desc || '长期使用中');
+                return (
+                    '<div class="app-row">' +
+                        renderIcon(name, index) +
+                        '<div class="app-info">' +
+                            '<div class="app-name">' + escapeHtml(name) + '</div>' +
+                            '<div class="app-desc">' + escapeHtml(desc) + '</div>' +
+                        '</div>' +
+                        '<button class="row-action" type="button">打开</button>' +
+                    '</div>'
+                );
+            }).join('');
+        }
+
+        function renderUninstalled(list) {
+            const mount = document.getElementById('uninstalledList');
+            document.getElementById('uninstalledTitle').textContent = '未在此 iPhone 上 (' + list.length + ')';
+            if (!list.length) {
+                mount.innerHTML = '<div class="empty-state">暂无卸载记录</div>';
+                return;
+            }
+            mount.innerHTML = list.map(function (app, index) {
+                const name = asString(app.name || ('已卸载 App ' + String(index + 1)));
+                const date = asString(app.date || '近期');
+                const reason = asString(app.reason || '删掉是当下最合适的选择。');
+                return (
+                    '<div class="app-row uninstalled">' +
+                        renderIcon(name, index + 3) +
+                        '<div class="app-info">' +
+                            '<div class="app-name">' + escapeHtml(name) + '</div>' +
+                            '<div class="app-desc">' + escapeHtml(date) + '</div>' +
+                            '<div class="uninstall-reason">' + escapeHtml(reason) + '</div>' +
+                        '</div>' +
+                        '<button class="row-action" type="button">重新下载</button>' +
+                    '</div>'
+                );
+            }).join('');
+        }
+
+        async function loadAppStore(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowAppStoreContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成 App Store 记录。');
+                return;
+            }
+            const roleId = typeof window.SecretCenterCore.getSelectedRoleId === 'function'
+                ? asString(window.SecretCenterCore.getSelectedRoleId())
+                : '';
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再生成 App Store 记录。');
+                return;
+            }
+
+            try {
+                if (btn) btn.disabled = true;
+                let res = null;
+                if (force === true) {
+                    res = await window.SecretCenterCore.generateShadowAppStoreContent({ roleId: roleId, force: true });
+                } else {
+                    res = await window.SecretCenterCore.generateShadowAppStoreContent({ roleId: roleId, force: false });
+                    if (!(res && res.ok && res.data && Array.isArray(res.data.installed) && res.data.installed.length >= 10)) {
+                        res = await window.SecretCenterCore.generateShadowAppStoreContent({ roleId: roleId, force: true });
+                    }
+                }
+                if (res && res.ok && res.data) {
+                    renderInstalled(Array.isArray(res.data.installed) ? res.data.installed.slice(0, 10) : []);
+                    renderUninstalled(Array.isArray(res.data.uninstalled) ? res.data.uninstalled : []);
+                    return;
+                }
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadAppStore(true);
+        });
+        window.onload = function () {
+            loadAppStore(false);
+        };
+    </script>
+</body>
+</html>

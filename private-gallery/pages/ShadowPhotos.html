@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相册 - FangCun OS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #F7F6F2; font-family: -apple-system, sans-serif; color: #33312E; padding-bottom: 40px; }
+
+        .back-btn { position: fixed; top: 20px; left: 20px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #8C8881; font-size: 24px; z-index: 100; -webkit-tap-highlight-color: transparent; }
+        .generate-btn {
+            position: fixed; top: 20px; right: 20px; z-index: 100;
+            border: none; background: transparent; color: #111;
+            font-size: 20px; line-height: 1; padding: 6px; cursor: pointer;
+            font-weight: 600;
+        }
+        .generate-btn:disabled { opacity: 0.45; cursor: default; }
+
+        .app-container { max-width: 420px; margin: 0 auto; padding: 70px 20px 20px; }
+
+        .header { font-size: 28px; font-weight: 600; margin-bottom: 24px; padding: 0 4px; }
+
+        /* 分类小标题 */
+        .section-title { font-size: 13px; color: #A3A09A; font-weight: 500; margin: 24px 0 12px 4px; letter-spacing: 1px; }
+
+        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+
+        .photo-thumbnail { aspect-ratio: 1 / 1; background-color: #EAE8E1; position: relative; cursor: pointer; transition: opacity 0.2s; overflow: hidden; }
+        .photo-thumbnail:active { opacity: 0.7; }
+
+        /* 状态图标 */
+        .hidden-icon { position: absolute; bottom: 6px; right: 6px; font-size: 14px; opacity: 0.5; }
+        .type-icon { position: absolute; bottom: 6px; left: 6px; font-size: 12px; color: #8C8881; opacity: 0.7; font-family: monospace;}
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(51, 49, 46, 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: none; align-items: center; justify-content: center; z-index: 1000; opacity: 0; transition: opacity 0.3s; padding: 20px; }
+        .modal-overlay.active { display: flex; opacity: 1; }
+
+        .modal-content { background: #F7F6F2; width: 100%; max-width: 340px; border-radius: 20px; overflow: hidden; transform: translateY(20px); transition: transform 0.3s; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+        .modal-overlay.active .modal-content { transform: translateY(0); }
+
+        .modal-photo-placeholder { width: 100%; aspect-ratio: 4 / 3; background: #D5D1C8; display: flex; align-items: center; justify-content: center; color: #A3A09A; font-family: "Georgia", serif; font-style: italic; }
+
+        .modal-info { padding: 24px; }
+        .modal-desc { font-size: 16px; line-height: 1.6; color: #33312E; margin-bottom: 16px; }
+
+        .modal-meta { font-size: 13px; color: #8C8881; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(213, 209, 200, 0.5); padding-top: 16px; }
+
+        .close-btn { position: absolute; top: -40px; right: 0; color: #FFF; font-size: 30px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <a href="FangCun.html" class="back-btn" onclick="if(window.SecretCenterCore&&typeof window.SecretCenterCore.navigateToFangCun==='function'){window.SecretCenterCore.navigateToFangCun({ fallbackUrl: 'FangCun.html' });return false;}">‹</a>
+    <button class="generate-btn" id="generateBtn" type="button" aria-label="生成">✦</button>
+
+    <div class="app-container">
+        <div class="header">最近项目</div>
+        <div id="albumContainer">
+            <p style="text-align:center; color:#A3A09A; margin-top: 40px;">正在加载影像元数据...</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="photoModal" onclick="closeModal()">
+        <div style="position: relative; width: 100%; max-width: 340px;" onclick="event.stopPropagation()">
+            <div class="close-btn" onclick="closeModal()">×</div>
+            <div class="modal-content">
+                <div class="modal-photo-placeholder" id="mPlaceholder">Image Data</div>
+                <div class="modal-info">
+                    <div class="modal-desc" id="mDesc"></div>
+                    <div class="modal-meta">
+                        <div id="mDate">⏱️ </div>
+                        <div id="mLoc">📍 </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/secret-center-core.js"></script>
+    <script>
+        let photosData = [];
+
+        function asString(value) { return String(value == null ? '' : value).trim(); }
+
+        function escapeHtml(text) {
+            return asString(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showGenerationFailure(message) {
+            const reason = asString(message) || '本次没有生成出可展示的相册记录。';
+            if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
+                window.SecretCenterCore.showGenerationErrorDialog(reason, '相册记录');
+                return;
+            }
+            alert(reason);
+        }
+
+        function normalizeType(value) {
+            const text = asString(value).toLowerCase();
+            if (/video|录像|视频/.test(text)) return 'video';
+            if (/screenshot|screen|截图/.test(text)) return 'screenshot';
+            return 'camera';
+        }
+
+        function flattenPhotos(data) {
+            const raw = data || {};
+            if (Array.isArray(raw.photos) && raw.photos.length) {
+                return raw.photos.slice(0, 18);
+            }
+            const camera = Array.isArray(raw.camera) ? raw.camera : [];
+            const videos = Array.isArray(raw.videos) ? raw.videos : [];
+            const screenshots = Array.isArray(raw.screenshots) ? raw.screenshots : [];
+            return camera.concat(videos).concat(screenshots).slice(0, 18);
+        }
+
+        function openModal(index) {
+            const p = photosData[index];
+            if (!p) return;
+            const type = normalizeType(p.type || p.kind || p.category);
+            const placeholder = type === 'video' ? 'Video Data' : (type === 'screenshot' ? 'Screen Data' : 'Image Data');
+            const prefix = type === 'video' ? '【视频影像】 ' : '';
+
+            document.getElementById('mPlaceholder').textContent = placeholder;
+            document.getElementById('mDesc').innerHTML = (p.isHidden
+                ? '<span style="color:#C95A49; font-weight:bold; font-size:12px; border:1px solid #C95A49; padding:2px 4px; border-radius:4px; margin-right:6px;">隐藏图库</span>'
+                : ''
+            ) + escapeHtml(prefix + asString(p.description));
+            document.getElementById('mDate').innerText = '⏱️ ' + asString(p.date);
+            document.getElementById('mLoc').innerText = '📍 ' + asString(p.location);
+            document.getElementById('photoModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('photoModal').classList.remove('active');
+        }
+
+        function renderCategoryGrid(items, title) {
+            if (items.length === 0) return '';
+
+            const gridHtml = items.map(p => {
+                const type = normalizeType(p.type || p.kind || p.category);
+                let typeIconHtml = '';
+                if(type === 'video') typeIconHtml = '<div class="type-icon">▷</div>';
+                if(type === 'screenshot') typeIconHtml = '<div class="type-icon">◩</div>';
+
+                return `
+                    <div class="photo-thumbnail" onclick="openModal(${p._rawIndex})">
+                        ${typeIconHtml}
+                        ${p.isHidden ? '<div class="hidden-icon">👁️‍🗨️</div>' : ''}
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="section-title">${title}</div>
+                <div class="photo-grid">${gridHtml}</div>
+            `;
+        }
+
+        async function loadPhotos(force) {
+            const btn = document.getElementById('generateBtn');
+            if (!window.SecretCenterCore || typeof window.SecretCenterCore.generateShadowPhotosContent !== 'function') {
+                showGenerationFailure('核心模块未加载，暂时无法生成相册记录。');
+                return;
+            }
+            const roleId = window.SecretCenterCore.getSelectedRoleId();
+            if (!roleId) {
+                showGenerationFailure('请先选择角色，再生成相册记录。');
+                return;
+            }
+            try {
+                if (btn) btn.disabled = true;
+                const res = await window.SecretCenterCore.generateShadowPhotosContent({ roleId: roleId, force: force === true });
+                if (res && res.ok && res.data) {
+                    photosData = flattenPhotos(res.data);
+
+                    if (photosData.length === 0) {
+                        document.getElementById('albumContainer').innerHTML = '<p style="text-align:center; color:#A3A09A; margin-top: 40px;">暂无相册内容</p>';
+                        return;
+                    }
+
+                    // 分类逻辑
+                    const cameras = [];
+                    const videos = [];
+                    const screenshots = [];
+
+                    photosData.forEach((p, index) => {
+                        p._rawIndex = index; // 记录原始索引，用于在全局数组中打开 Modal
+                        const type = normalizeType(p.type || p.kind || p.category);
+                        if (type === 'video') videos.push(p);
+                        else if (type === 'screenshot') screenshots.push(p);
+                        else cameras.push(p);
+                    });
+
+                    // 拼接并渲染
+                    const finalHtml =
+                        renderCategoryGrid(cameras, '相机 (CAMERA)') +
+                        renderCategoryGrid(videos, '视频 (VIDEO)') +
+                        renderCategoryGrid(screenshots, '屏幕截图 (SCREENSHOT)');
+
+                    document.getElementById('albumContainer').innerHTML = finalHtml;
+                    return;
+                }
+                showGenerationFailure(res && res.error);
+            } catch (error) {
+                console.error('ShadowPhotos generate failed:', error);
+                showGenerationFailure(error && error.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', function () {
+            loadPhotos(true);
+        });
+        window.onload = function () {
+            loadPhotos(false);
+        };
+    </script>
+</body>
+</html>
