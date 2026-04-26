@@ -935,8 +935,8 @@
 
 .theme-preview-dock .theme-preview-box .msg-bubble {
     max-width: 100%;
-    padding: var(--preview-bubble-pad-y, 9px) 10px;
-    line-height: var(--preview-bubble-line-height, 1.38);
+    padding: 7px 10px;
+    line-height: 1.38;
     font-size: 12px;
     word-break: break-word;
     white-space: normal;
@@ -945,13 +945,13 @@
 }
 
 .theme-preview-dock .theme-preview-box .msg-avatar-wrap {
-    width: var(--preview-avatar-size, 32px);
-    flex: 0 0 var(--preview-avatar-size, 32px);
+    width: 32px;
+    flex: 0 0 32px;
 }
 
 .theme-preview-dock .theme-preview-box .msg-avatar {
-    width: var(--preview-avatar-size, 32px);
-    height: var(--preview-avatar-size, 32px);
+    width: 32px !important;
+    height: 32px !important;
 }
 
 .theme-preview-dock .theme-preview-box .msg-avatar-time,
@@ -1043,15 +1043,12 @@
     display: block;
     position: absolute;
     top: var(--preview-tail-top);
-    left: calc(var(--preview-tail-width) / -2);
-    width: var(--preview-tail-width);
-    height: var(--preview-tail-width);
-    background: var(--preview-ai-bg);
-    border-left: var(--preview-ai-border);
-    border-bottom: var(--preview-ai-border);
-    transform: rotate(45deg);
-    clip-path: polygon(0 0, 0 100%, 100% 100%);
-    z-index: 1;
+    left: calc(-1 * var(--preview-tail-width) + 1px);
+    border-top: var(--preview-tail-height) solid transparent;
+    border-bottom: var(--preview-tail-height) solid transparent;
+    border-right: var(--preview-tail-width) solid var(--preview-ai-arrow);
+    width: 0;
+    height: 0;
 }
 
 .theme-preview-box .msg-right .msg-bubble {
@@ -1073,15 +1070,12 @@
     display: block;
     position: absolute;
     top: var(--preview-tail-top);
-    right: calc(var(--preview-tail-width) / -2);
-    width: var(--preview-tail-width);
-    height: var(--preview-tail-width);
-    background: var(--preview-user-bg);
-    border-right: var(--preview-user-border);
-    border-top: var(--preview-user-border);
-    transform: rotate(45deg);
-    clip-path: polygon(0 0, 100% 0, 100% 100%);
-    z-index: 1;
+    right: calc(-1 * var(--preview-tail-width) + 1px);
+    border-top: var(--preview-tail-height) solid transparent;
+    border-bottom: var(--preview-tail-height) solid transparent;
+    border-left: var(--preview-tail-width) solid var(--preview-user-arrow);
+    width: 0;
+    height: 0;
 }
 
 .theme-preview-box[data-tail="0"] .msg-left .msg-bubble::before,
@@ -1089,54 +1083,36 @@
     display: none;
 }
 
-.theme-preview-box[data-kkt="first"] .msg-row.msg-left + .msg-row.msg-left,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-left + .msg-row.msg-left {
+.theme-preview-box[data-kkt="1"] .msg-row.msg-left + .msg-row.msg-left {
     margin-top: 2px;
 }
 
-.theme-preview-box[data-kkt="first"] .msg-row.msg-left + .msg-row.msg-left .msg-avatar-wrap {
+.theme-preview-box[data-kkt="1"] .msg-row.msg-left + .msg-row.msg-left .msg-avatar-wrap {
     opacity: 0;
     visibility: hidden;
 }
 
-.theme-preview-box[data-kkt="last"] .msg-row.msg-left:has(+ .msg-row.msg-left) .msg-avatar-wrap {
-    opacity: 0;
-    visibility: hidden;
-}
-
-.theme-preview-box[data-kkt="first"] .msg-row.msg-right + .msg-row.msg-right,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-right + .msg-row.msg-right {
+.theme-preview-box[data-kkt="1"] .msg-row.msg-right + .msg-row.msg-right {
     margin-top: 2px;
 }
 
-.theme-preview-box[data-kkt="first"] .msg-row.msg-right + .msg-row.msg-right .msg-avatar-wrap {
+.theme-preview-box[data-kkt="1"] .msg-row.msg-right + .msg-row.msg-right .msg-avatar-wrap {
     opacity: 0;
     visibility: hidden;
 }
 
-.theme-preview-box[data-kkt="last"] .msg-row.msg-right:has(+ .msg-row.msg-right) .msg-avatar-wrap {
-    opacity: 0;
-    visibility: hidden;
-}
-
-.theme-preview-box[data-kkt="first"] .msg-row.msg-left + .msg-row.msg-left .msg-bubble::before,
-.theme-preview-box[data-kkt="first"] .msg-row.msg-right + .msg-row.msg-right .msg-bubble::after,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-left + .msg-row.msg-left .msg-bubble::before,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-right + .msg-row.msg-right .msg-bubble::after {
+.theme-preview-box[data-kkt="1"] .msg-row.msg-left + .msg-row.msg-left .msg-bubble::before,
+.theme-preview-box[data-kkt="1"] .msg-row.msg-right + .msg-row.msg-right .msg-bubble::after {
     display: none;
 }
 
-.theme-preview-box[data-kkt="first"] .msg-row.msg-left + .msg-row.msg-left .msg-avatar-time,
-.theme-preview-box[data-kkt="first"] .msg-row.msg-right + .msg-row.msg-right .msg-avatar-time,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-left + .msg-row.msg-left .msg-avatar-time,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-right + .msg-row.msg-right .msg-avatar-time {
+.theme-preview-box[data-kkt="1"] .msg-row.msg-left + .msg-row.msg-left .msg-avatar-time,
+.theme-preview-box[data-kkt="1"] .msg-row.msg-right + .msg-row.msg-right .msg-avatar-time {
     display: none;
 }
 
-.theme-preview-box[data-kkt="first"] .msg-row.msg-left + .msg-row.msg-left .msg-bubble-time,
-.theme-preview-box[data-kkt="first"] .msg-row.msg-right + .msg-row.msg-right .msg-bubble-time,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-left + .msg-row.msg-left .msg-bubble-time,
-.theme-preview-box[data-kkt="last"] .msg-row.msg-right + .msg-row.msg-right .msg-bubble-time {
+.theme-preview-box[data-kkt="1"] .msg-row.msg-left + .msg-row.msg-left .msg-bubble-time,
+.theme-preview-box[data-kkt="1"] .msg-row.msg-right + .msg-row.msg-right .msg-bubble-time {
     display: none;
 }
 
@@ -1159,24 +1135,6 @@
 
 .theme-preview-box[data-ts="1"][data-tspos="bubble"] .msg-bubble-time {
     display: block;
-}
-
-.theme-preview-box[data-ts="1"][data-tspos="bubbleRight"] .msg-bubble-time {
-    display: block;
-    position: absolute;
-    right: -40px;
-    left: auto;
-    bottom: 2px;
-    font-size: 10px;
-    color: #999;
-    white-space: nowrap;
-    animation: chatThemeTimestampSlide 0.6s ease-out both;
-}
-
-.theme-preview-box[data-ts="1"][data-tspos="bubbleRight"] .msg-right .msg-bubble-time {
-    right: auto;
-    left: -40px;
-    text-align: right;
 }
 
 .theme-preview-box[data-read="0"] .msg-status-text {
