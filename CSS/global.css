@@ -27,6 +27,20 @@
     }
 }
 
+@media (display-mode: standalone) {
+    :root {
+        --app-vh: 100vh;
+    }
+}
+
+@media (display-mode: standalone) {
+    @supports (height: 100lvh) {
+        :root {
+            --app-vh: 100lvh;
+        }
+    }
+}
+
 * {
     box-sizing: border-box;
     user-select: none;
