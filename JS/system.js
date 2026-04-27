@@ -3261,6 +3261,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var inputEl = document.getElementById('ui-dialog-input');
         var cancelBtn = document.getElementById('ui-dialog-cancel');
         var okBtn = document.getElementById('ui-dialog-ok');
+        var actionsEl = okBtn && okBtn.parentNode ? okBtn.parentNode : null;
 
         dialogState.type = type;
         var title = (opts && typeof opts === 'object' ? String(opts.title || '') : '').trim();
@@ -3271,6 +3272,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var cancelText = (opts && typeof opts === 'object' ? String(opts.cancelText || '') : '').trim();
         okBtn.textContent = okText || (type === 'confirm' || type === 'prompt' ? '确定' : '知道了');
         cancelBtn.textContent = cancelText || '取消';
+        if (actionsEl && actionsEl.classList) {
+            actionsEl.classList.toggle('is-single', type === 'alert');
+        }
 
         if (type === 'alert') {
             cancelBtn.style.display = 'none';
