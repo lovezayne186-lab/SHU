@@ -3949,7 +3949,7 @@ async function callAISummary(params, onSuccess, onError) {
 
         const userLabelForMemory = userName || pronoun || '对方';
         const system = `
-你现在是 ${roleName}。请把最近这段聊天整理成【记忆档案】，不是日记，也不是聊天复读。
+你现在是 ${roleName}。请把最近这段聊天整理成【记忆档案】。
 
 [时间上下文]
 - 今天的真实日期是：${currentDateLabel || '未知'}。
@@ -3957,10 +3957,9 @@ async function callAISummary(params, onSuccess, onError) {
 - events 的日期必须严格依据这个时间范围，不得编造其它日期。
 
 [总原则]
-1. 只保留对未来相处有帮助的事实、偏好、习惯、关系进展、约定、计划和未完成事项。
-2. 严禁把原聊天句子直接搬进记忆；不要写“用户说：”“AI说：”“${roleName}：”“${userLabelForMemory}：”。
-3. 严禁使用大段引号或台词式表达；必须改写成清晰、客观、可复用的记忆条目。
-4. 没有依据就输出空数组，不要硬编。
+1. 尽量保留对未来相处有帮助的事实、偏好、习惯、关系进展、约定、计划、未完成事项和日常相处细节。
+2. 可以保留必要的原话、称呼和细节，不要因为内容日常、琐碎或像原话就删掉。
+3. 没有依据就输出空数组，不要硬编。
 
 [三类记忆的写法]
 1. likes：只写【${userLabelForMemory}】明确表达过的喜好、厌恶、忌口、害怕、过敏、偏好。
@@ -3970,18 +3969,17 @@ async function callAISummary(params, onSuccess, onError) {
 2. habits：只写【${userLabelForMemory}】明确表现出的生活/行为习惯，如作息、饮食、工作学习节奏、出行方式、表达方式中非常稳定的模式。
    - 口吻示例：“${userLabelForMemory}经常晚上处理工作，容易熬夜。”
    - 口吻示例：“${userLabelForMemory}经常用表情包表达情绪。”
+   - 如果出现几点起床、几点睡觉、是否熬夜、早起/晚睡、上课/上班节奏，这类作息习惯要优先保留。
    - 不要总结普通语气、口癖，除非它已经形成明确习惯。
 3. events：这是“我们发生的事”，是长期记忆主力。
    - 必须用角色第一人称“我”来写，记录我和${userLabelForMemory}之间已经发生或确认的事。
-   - 重点写：重要事件、关键决定、未来计划、具体时间点、未完成事项、关系阶段变化、需要后续承接的共同约定。
+   - 尽量写下我和${userLabelForMemory}之间发生过、聊到过、确认过、约定过、产生情绪变化或值得后续承接的事。
    - 每条必须以具体日期开头，例如“1月28日：”或“1月28日-1月30日：”。
    - 写法示例：“1月28日：我和${userLabelForMemory}约定周六晚上一起看电影，地点还没最终确定。”
    - 写法示例：“1月28日：${userLabelForMemory}希望我之后少用引用回复，正常聊天时更自然地接话。”
 
 [输出格式（必须严格遵守）]
 - 严格 JSON：{"likes": string[], "habits": string[], "events": string[]}
-- likes/habits 每条尽量 80 字以内。
-- events 可以更详细，每条尽量 180 字以内，但必须是总结后的事实，不得是聊天原文。
 `;
 
         const context = `
@@ -4085,32 +4083,167 @@ ${segmentText}
             stack: traceStack
         });
 
-        // 尝试解析 JSON（容错：去代码块、抽取首个对象）
-        let jsonText = String(raw || '').trim();
-        if (jsonText.includes('```')) {
-            jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        function cleanSummaryJsonCandidate(text) {
+            return String(text || '')
+                .replace(/^\uFEFF/, '')
+                .replace(/```(?:json|JSON)?/g, '')
+                .replace(/```/g, '')
+                .trim();
         }
-        const start = jsonText.indexOf('{');
-        const end = jsonText.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            jsonText = jsonText.slice(start, end + 1);
+
+        function extractBalancedJsonObject(text) {
+            const s = String(text || '');
+            const startIndex = s.indexOf('{');
+            if (startIndex < 0) return '';
+            let depth = 0;
+            let inString = false;
+            let quote = '';
+            let escaped = false;
+            for (let i = startIndex; i < s.length; i++) {
+                const ch = s[i];
+                if (inString) {
+                    if (escaped) {
+                        escaped = false;
+                    } else if (ch === '\\') {
+                        escaped = true;
+                    } else if (ch === quote) {
+                        inString = false;
+                        quote = '';
+                    }
+                    continue;
+                }
+                if (ch === '"' || ch === "'") {
+                    inString = true;
+                    quote = ch;
+                    continue;
+                }
+                if (ch === '{') depth++;
+                if (ch === '}') {
+                    depth--;
+                    if (depth === 0) return s.slice(startIndex, i + 1);
+                }
+            }
+            const endIndex = s.lastIndexOf('}');
+            return endIndex > startIndex ? s.slice(startIndex, endIndex + 1) : '';
         }
+
+        function repairSummaryJsonText(text) {
+            return String(text || '')
+                .replace(/[“”]/g, '"')
+                .replace(/[‘’]/g, "'")
+                .replace(/,\s*([}\]])/g, '$1')
+                .replace(/([{,]\s*)(likes|habits|events)\s*:/g, '$1"$2":');
+        }
+
+        function normalizeSummaryObject(value) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+            if (value.choices && value.choices[0] && value.choices[0].message && value.choices[0].message.content) {
+                return null;
+            }
+            return {
+                likes: Array.isArray(value.likes) ? value.likes : [],
+                habits: Array.isArray(value.habits) ? value.habits : [],
+                events: Array.isArray(value.events) ? value.events : []
+            };
+        }
+
+        function parseSummaryLooseText(text) {
+            const buckets = { likes: [], habits: [], events: [] };
+            let current = '';
+            const lines = String(text || '')
+                .replace(/\r/g, '\n')
+                .split('\n')
+                .map(function (line) { return line.trim(); })
+                .filter(Boolean);
+            const keyMap = {
+                likes: 'likes',
+                like: 'likes',
+                '喜好': 'likes',
+                '偏好': 'likes',
+                habits: 'habits',
+                habit: 'habits',
+                '习惯': 'habits',
+                '长期习惯': 'habits',
+                events: 'events',
+                event: 'events',
+                '事件': 'events',
+                '我们': 'events',
+                '我们发生的事': 'events'
+            };
+            lines.forEach(function (line) {
+                const normalized = line.replace(/^#+\s*/, '').replace(/^[-*•]\s*/, '').trim();
+                const heading = normalized.match(/^["']?([A-Za-z_]+|[\u4e00-\u9fa5]{1,8})["']?\s*[：:]\s*(.*)$/);
+                if (heading) {
+                    const key = keyMap[String(heading[1] || '').trim().toLowerCase()] || keyMap[String(heading[1] || '').trim()];
+                    if (key) {
+                        current = key;
+                        const rest = String(heading[2] || '').trim();
+                        if (rest && rest !== '[]') {
+                            try {
+                                const parsed = JSON.parse(repairSummaryJsonText(rest));
+                                if (Array.isArray(parsed)) {
+                                    parsed.forEach(function (item) { if (item) buckets[current].push(String(item)); });
+                                    return;
+                                }
+                            } catch (e) { }
+                            buckets[current].push(rest.replace(/^["']|["']$/g, '').trim());
+                        }
+                        return;
+                    }
+                }
+                if (current) {
+                    const item = normalized.replace(/^["']|["']$/g, '').replace(/,$/, '').trim();
+                    if (item && item !== '[]') buckets[current].push(item);
+                }
+            });
+            return (buckets.likes.length || buckets.habits.length || buckets.events.length) ? buckets : null;
+        }
+
+        // 尝试解析 JSON（容错：去代码块、平衡抽取对象、修正常见 JSON 瑕疵、最后解析分段文本）
+        let jsonText = cleanSummaryJsonCandidate(raw);
+        const balanced = extractBalancedJsonObject(jsonText);
+        if (balanced) jsonText = balanced;
 
         let obj = null;
         let parseFailed = false;
         let parseErrorMessage = '';
-        try {
-            obj = JSON.parse(jsonText);
-        } catch (parseError) {
-            parseFailed = true;
-            parseErrorMessage = String(parseError && parseError.message ? parseError.message : parseError || '');
-            obj = null;
+        const candidates = [
+            jsonText,
+            repairSummaryJsonText(jsonText),
+            cleanSummaryJsonCandidate(rawResponseText),
+            repairSummaryJsonText(cleanSummaryJsonCandidate(rawResponseText))
+        ].filter(function (item, index, arr) {
+            return item && arr.indexOf(item) === index;
+        });
+        for (let i = 0; i < candidates.length; i++) {
+            try {
+                const parsed = JSON.parse(candidates[i]);
+                const normalized = normalizeSummaryObject(parsed);
+                if (normalized) {
+                    obj = normalized;
+                    jsonText = candidates[i];
+                    parseFailed = false;
+                    parseErrorMessage = '';
+                    break;
+                }
+            } catch (parseError) {
+                parseFailed = true;
+                parseErrorMessage = String(parseError && parseError.message ? parseError.message : parseError || '');
+            }
         }
         if ((!obj || typeof obj !== 'object' || Array.isArray(obj)) && data && typeof data === 'object' && !Array.isArray(data)) {
             if (Array.isArray(data.likes) || Array.isArray(data.habits) || Array.isArray(data.events)) {
-                obj = data;
+                obj = normalizeSummaryObject(data);
                 parseFailed = false;
             }
+        }
+        if (!obj) {
+            obj = parseSummaryLooseText(raw);
+            if (obj) parseFailed = false;
+        }
+        if (!obj) {
+            parseFailed = true;
+            parseErrorMessage = parseErrorMessage || 'No summary object found';
         }
         try {
             if (typeof window !== 'undefined') {

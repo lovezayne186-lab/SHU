@@ -84,6 +84,43 @@ const Wallet = (function() {
         return tx;
     }
 
+    function recalculateTotals() {
+        if (!data) loadData();
+        let totalAssets = 0;
+        let transferIncome = 0;
+        let workIncome = 0;
+        data.transactions.forEach(t => {
+            if (!t || typeof t !== 'object') return;
+            const amount = parseFloat(t.amount);
+            if (isNaN(amount) || !isFinite(amount)) return;
+            if (t.type === 'income') {
+                totalAssets += amount;
+                if (t.category === 'transfer') transferIncome += amount;
+                else if (t.category === 'work') workIncome += amount;
+            } else if (t.type === 'expense') {
+                totalAssets -= amount;
+            }
+        });
+        data.totalAssets = totalAssets;
+        data.transferIncome = transferIncome;
+        data.workIncome = workIncome;
+    }
+
+    function removeTransactionsByRoleId(roleId) {
+        if (!data) loadData();
+        const id = String(roleId || '').trim();
+        if (!id || !Array.isArray(data.transactions)) return 0;
+        const before = data.transactions.length;
+        data.transactions = data.transactions.filter(t => String(t && t.peerRoleId || '').trim() !== id);
+        const removed = before - data.transactions.length;
+        if (removed > 0) {
+            recalculateTotals();
+            saveData();
+            render();
+        }
+        return removed;
+    }
+
     function getData() {
         if (!data) loadData();
         return data;
@@ -245,6 +282,7 @@ const Wallet = (function() {
     return {
         init: loadData,
         addTransaction: addTransaction,
+        removeTransactionsByRoleId: removeTransactionsByRoleId,
         getData: getData,
         open: open,
         close: close,

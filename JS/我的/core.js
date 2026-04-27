@@ -352,7 +352,7 @@ var MineCore = (function () {
         html += '                </div>';
         html += '                <div class="msg-content-wrapper">';
         html += '                  <div class="msg-bubble">';
-        html += '                    <span class="msg-text">就要留白多、低饱和、看起来很干净那种。</span>';
+        html += '                    <span class="msg-text">就要低饱和、很干净那种。</span>';
         html += '                    <div class="msg-bubble-time">12:36</div>';
         html += '                  </div>';
         html += '                  <div class="msg-status-text">已读</div>';

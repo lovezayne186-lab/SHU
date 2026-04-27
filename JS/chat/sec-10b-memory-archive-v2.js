@@ -10,7 +10,7 @@
     };
     const CATEGORY_DEFAULT_META = {
         likes: { kind: 'preference', importance: 0.66, confidence: 0.74, halfLifeDays: 45 },
-        habits: { kind: 'habit', importance: 0.62, confidence: 0.7, halfLifeDays: 35 },
+        habits: { kind: 'habit', importance: 0.72, confidence: 0.74, halfLifeDays: 180 },
         events: { kind: 'event', importance: 0.8, confidence: 0.68, halfLifeDays: 14 }
     };
     const SUMMARY_CHUNK_SIZE = 120;
@@ -106,7 +106,7 @@
 
     function inferEventTemporalMeta(content, fallbackTimestamp) {
         const text = normalizeLine(content);
-        const range = text.match(/^(\d{1,2})月(\d{1,2})日\s*[-~至到]\s*(\d{1,2})月(\d{1,2})日[：:]/);
+        const range = text.match(/^(?:(?:\d{2,4}年)?)(\d{1,2})月(\d{1,2})日\s*[-~至到]\s*(?:(?:\d{2,4}年)?)(\d{1,2})月(\d{1,2})日[：:]/);
         if (range) {
             const startAt = parseMonthDayToTimestamp(range[1], range[2], fallbackTimestamp);
             const endAt = parseMonthDayToTimestamp(range[3], range[4], fallbackTimestamp || startAt);
@@ -116,7 +116,7 @@
                 endAt: endAt || startAt || normalizeTimestamp(fallbackTimestamp, 0)
             };
         }
-        const single = text.match(/^(\d{1,2})月(\d{1,2})日[：:]/);
+        const single = text.match(/^(?:(?:\d{2,4}年)?)(\d{1,2})月(\d{1,2})日[：:]/);
         if (single) {
             const happenedAt = parseMonthDayToTimestamp(single[1], single[2], fallbackTimestamp);
             return {
@@ -369,9 +369,12 @@
         const entries = tabKey === 'likes'
             ? sections.likesEntries
             : (tabKey === 'habits' ? sections.habitsEntries : sections.eventsEntries);
+        const displayEntries = entries.slice().sort(function (a, b) {
+            return getEntryPrimaryTimestamp(b) - getEntryPrimaryTimestamp(a);
+        });
 
         textEl.innerHTML = '';
-        if (!entries.length) {
+        if (!displayEntries.length) {
             textEl.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">暂无记忆</div>';
             return;
         }
@@ -380,7 +383,7 @@
         ul.style.listStyle = 'none';
         ul.style.padding = '0';
         ul.style.margin = '0';
-        entries.forEach(function (entry) {
+        displayEntries.forEach(function (entry) {
             const li = document.createElement('li');
             li.className = 'memory-archive-entry';
             li.setAttribute('data-entry-id', String(entry.id || ''));
@@ -498,7 +501,7 @@
     function ensureEventDatePrefix(text, fallbackPrefix) {
         const clean = normalizeLine(text);
         if (!clean) return '';
-        if (/^\d{1,2}月\d{1,2}日(?:\s*[-~至到]\s*\d{1,2}月\d{1,2}日)?[：:]/.test(clean)) {
+        if (/^(?:(?:\d{2,4}年)?\d{1,2}月\d{1,2}日)(?:\s*[-~至到]\s*(?:(?:\d{2,4}年)?\d{1,2}月\d{1,2}日))?[：:]/.test(clean)) {
             return clean;
         }
         const stripped = clean.replace(/^(我们|今天|最近)[：:]?\s*/, '').trim();
@@ -545,10 +548,40 @@
         return out;
     }
 
+    function appendEntriesToArchive(archive, entries) {
+        if (!archive || !Array.isArray(entries) || !entries.length) {
+            return { candidateCount: 0, addedCount: 0, updatedCount: 0, categoryCounts: { likes: 0, habits: 0, events: 0 } };
+        }
+        const beforeEntries = normalizeEntries(archive.entries || []);
+        const beforeKeys = new Set(beforeEntries.map(function (entry) {
+            return normalizeDedupKey(entry.category, entry.content);
+        }).filter(Boolean));
+        const candidateEntries = normalizeEntries(entries);
+        const candidateKeys = new Set(candidateEntries.map(function (entry) {
+            return normalizeDedupKey(entry.category, entry.content);
+        }).filter(Boolean));
+        archive.entries = normalizeEntries(beforeEntries.concat(candidateEntries));
+        const categoryCounts = { likes: 0, habits: 0, events: 0 };
+        let addedCount = 0;
+        candidateEntries.forEach(function (entry) {
+            const key = normalizeDedupKey(entry.category, entry.content);
+            if (!key || beforeKeys.has(key)) return;
+            beforeKeys.add(key);
+            addedCount++;
+            if (categoryCounts[entry.category] !== undefined) categoryCounts[entry.category]++;
+        });
+        return {
+            candidateCount: candidateEntries.length,
+            addedCount: addedCount,
+            updatedCount: Math.max(0, candidateKeys.size - addedCount),
+            categoryCounts: categoryCounts
+        };
+    }
+
     function buildSegmentText(segment) {
         return (Array.isArray(segment) ? segment : [])
             .filter(function (msg) { return msg && (msg.role === 'me' || msg.role === 'ai') && msg.content; })
-            .slice(-200)
+            .slice(-1000)
             .map(function (msg) {
                 const who = msg.role === 'me' ? '用户' : 'AI';
                 if (msg.type === 'image') return who + ': [图片]';
@@ -611,19 +644,24 @@
     function isLikelyCopiedDialogueLine(text, copiedLineSet) {
         const raw = normalizeLine(text);
         if (!raw) return false;
-        const body = raw
-            .replace(/^\d{1,2}月\d{1,2}日(?:\s*[-~至到]\s*\d{1,2}月\d{1,2}日)?[：:]\s*/, '')
+        const withoutDate = raw
+            .replace(/^(?:(?:\d{2,4}年)?\d{1,2}月\d{1,2}日)(?:\s*[-~至到]\s*(?:(?:\d{2,4}年)?\d{1,2}月\d{1,2}日))?[：:]\s*/, '')
+            .trim();
+        const body = withoutDate
             .replace(/^(用户|AI|我|你|TA|Ta|[^:：\n]{1,24})[：:]\s*/, '')
             .replace(/\s+/g, ' ')
             .trim();
         if (!body) return true;
-        if (/^(用户|AI|我|你|TA|Ta|[^:：\n]{1,24})[：:]/.test(raw)) return true;
-        if (/[“”"「」『』]/.test(body) && body.length > 18) return true;
+        if (/^(用户|AI|TA|Ta)[：:]/.test(withoutDate)) return true;
+        if (/[“”"「」『』]/.test(body) && body.length > 40) return true;
         if (copiedLineSet && copiedLineSet.has(body)) return true;
         if (copiedLineSet) {
             for (const line of copiedLineSet) {
-                if (line.length >= 18 && (body === line || body.indexOf(line) >= 0 || line.indexOf(body) >= 0)) {
-                    return true;
+                if (line.length >= 24) {
+                    if (body === line) return true;
+                    if (body.length >= 24 && (body.indexOf(line) >= 0 || line.indexOf(body) >= 0)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -631,43 +669,24 @@
     }
 
     function filterApiLikes(items, userTextForDetect, segmentText) {
-        const markers = ['喜欢', '最喜欢', '偏爱', '爱吃', '爱喝', '爱看', '爱玩', '迷上', '沉迷', '讨厌', '不喜欢', '不爱', '不太喜欢', '不想', '不吃', '怕', '过敏', '忌口'];
-        const copiedLineSet = buildCopiedLineSet(segmentText);
         return (items || [])
             .map(normalizeLine)
-            .filter(Boolean)
-            .filter(function (s) { return s.length <= 80; })
-            .filter(function (s) { return !isLikelyCopiedDialogueLine(s, copiedLineSet); })
-            .filter(function (s) { return containsAny(s, markers); })
-            .filter(function (s) { return containsAny(userTextForDetect, markers) || containsAny(segmentText, markers); });
+            .filter(Boolean);
     }
 
     function filterApiHabits(items, emojiHeavyRatio, segmentText) {
-        const markers = ['习惯', '经常', '总是', '每天', '通常', '一般', '老是', '一直', '熬夜', '晚起', '早起', '失眠', '夜宵', '运动', '健身', '跑步', '喝咖啡', '加班', '通勤', '追剧', '刷手机', '表情', '表情包'];
-        const copiedLineSet = buildCopiedLineSet(segmentText);
         return (items || [])
             .map(normalizeLine)
-            .filter(Boolean)
-            .filter(function (s) { return s.length <= 80; })
-            .filter(function (s) { return !isLikelyCopiedDialogueLine(s, copiedLineSet); })
-            .filter(function (s) {
-                if (containsAny(s, ['说话', '聊天', '打字', '语气', '口癖', '句尾'])) {
-                    return containsAny(s, ['表情', '表情包']);
-                }
-                return true;
-            })
-            .filter(function (s) { return containsAny(s, markers) || (emojiHeavyRatio >= 0.6 && containsAny(s, ['表情', '表情包'])); });
+            .filter(Boolean);
     }
 
     function filterApiEvents(items, fallbackPrefix, segmentText) {
-        const filler = ['我们聊了很多', '对话很愉快', '聊得很愉快', '聊得很开心', '聊了不少', '日常闲聊'];
-        const copiedLineSet = buildCopiedLineSet(segmentText);
         const normalizeDatePrefix = function (item) {
             const withPrefix = ensureEventDatePrefix(item, fallbackPrefix);
             if (!withPrefix) return '';
             const prefix = String(fallbackPrefix || '').trim();
             if (!prefix) return withPrefix;
-            const m = withPrefix.match(/^\d{1,2}月\d{1,2}日(?:\s*[-~至到]\s*\d{1,2}月\d{1,2}日)?[：:]\s*(.*)$/);
+            const m = withPrefix.match(/^(?:(?:\d{2,4}年)?\d{1,2}月\d{1,2}日)(?:\s*[-~至到]\s*(?:(?:\d{2,4}年)?\d{1,2}月\d{1,2}日))?[：:]\s*(.*)$/);
             const body = m ? String(m[1] || '').trim() : String(withPrefix || '').trim();
             if (!body) return '';
             return prefix + '：' + body;
@@ -675,11 +694,7 @@
         return (items || [])
             .map(normalizeDatePrefix)
             .filter(Boolean)
-            .filter(function (s) { return s.length <= 180; })
-            .filter(function (s) { return /^\d{1,2}月\d{1,2}日(?:\s*[-~至到]\s*\d{1,2}月\d{1,2}日)?[：:]/.test(s); })
-            .filter(function (s) { return !isLikelyCopiedDialogueLine(s, copiedLineSet); })
-            .filter(function (s) { return !containsAny(s, filler); })
-            .filter(function (s) { return !/^\d{1,2}月\d{1,2}日(?:\s*[-~至到]\s*\d{1,2}月\d{1,2}日)?[：:]?\s*(聊了很多|聊得很愉快|聊得很开心)/.test(s); });
+            .filter(function (s) { return normalizeLine(s); });
     }
 
     function getEntryPrimaryTimestamp(entry) {
@@ -757,6 +772,19 @@
         return 0;
     }
 
+    function getHabitPersistenceBoost(entry) {
+        if (normalizeCategory(entry && entry.category) !== 'habits') return 0;
+        const content = normalizeLine(entry && entry.content);
+        if (!content) return 0;
+        if (/(几点|[0-2]?\d[:：点]|起床|睡觉|入睡|睡前|早睡|早起|晚睡|熬夜|失眠|作息|上班|上课|通勤|午睡|夜宵)/.test(content)) {
+            return 0.22;
+        }
+        if (/(每天|经常|总是|通常|一般|习惯|固定)/.test(content)) {
+            return 0.1;
+        }
+        return 0;
+    }
+
     function scoreEntryForPrompt(entry, context) {
         const ctx = context && typeof context === 'object' ? context : {};
         const nowTs = normalizeTimestamp(ctx.nowTs, Date.now());
@@ -778,6 +806,7 @@
             freshnessBoost = 0.04;
         }
         let score = importance * 0.34 + confidence * 0.16 + recency * 0.24 + relevance * 0.28 + evidenceBoost + sourceBoost + freshnessBoost;
+        score += getHabitPersistenceBoost(entry);
         if (!relevance && category === 'events' && ageDays > 30) score -= 0.12;
         if (!relevance && category !== 'events' && importance < 0.55) score -= 0.05;
         return score;
@@ -901,8 +930,9 @@
             if (tokensEl) tokensEl.innerText = tokenCount > 10000 ? (tokenCount / 1000).toFixed(1) + 'k' : String(tokenCount);
         }
 
-        window.currentMemoryArchiveTab = 'likes';
-        refreshArchiveModal('likes');
+        const initialTab = normalizeCategory(window.currentMemoryArchiveTab) || 'likes';
+        window.currentMemoryArchiveTab = initialTab;
+        refreshArchiveModal(initialTab);
         if (roleId) {
             window.setTimeout(function () {
                 try {
@@ -981,6 +1011,194 @@
         persistArchive(roleId, archive);
         inputEl.value = '';
         refreshArchiveModal(category);
+    };
+
+    function setManualMemorySummaryStatus(text, isError) {
+        const statusEl = document.getElementById('manual-memory-summary-status');
+        if (!statusEl) return;
+        statusEl.innerText = String(text || '');
+        statusEl.classList.toggle('is-error', !!isError);
+    }
+
+    function setManualMemorySummaryBusy(isBusy) {
+        const btn = document.getElementById('manual-memory-summary-start');
+        if (!btn) return;
+        btn.disabled = !!isBusy;
+        btn.innerText = isBusy ? '总结中...' : '开始总结';
+    }
+
+    function getManualMemorySummaryRange(total) {
+        const startEl = document.getElementById('manual-memory-summary-start-index');
+        const endEl = document.getElementById('manual-memory-summary-end-index');
+        const max = Math.max(0, Number(total) || 0);
+        let start = parseInt(startEl ? startEl.value : '', 10);
+        let end = parseInt(endEl ? endEl.value : '', 10);
+        if (isNaN(start)) start = 1;
+        if (isNaN(end)) end = max;
+        if (max <= 0) return null;
+        start = Math.max(1, Math.min(max, start));
+        end = Math.max(1, Math.min(max, end));
+        if (end < start) {
+            const tmp = start;
+            start = end;
+            end = tmp;
+        }
+        if (startEl) startEl.value = String(start);
+        if (endEl) endEl.value = String(end);
+        return { startIndex: start - 1, endIndex: end, startDisplay: start, endDisplay: end };
+    }
+
+    window.closeManualMemorySummaryModal = function () {
+        const modal = document.getElementById('manual-memory-summary-modal');
+        if (modal) modal.remove();
+    };
+
+    window.openManualMemorySummaryModal = function () {
+        const rid = String(window.currentChatRole || '').trim();
+        if (!rid) return;
+        const history = window.chatData && Array.isArray(window.chatData[rid]) ? window.chatData[rid] : [];
+        const total = history.length;
+        const old = document.getElementById('manual-memory-summary-modal');
+        if (old) old.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'manual-memory-summary-modal';
+        modal.className = 'manual-memory-summary-mask';
+        modal.innerHTML = ''
+            + '<div class="manual-memory-summary-card">'
+            + '  <div class="manual-memory-summary-header">'
+            + '    <div>'
+            + '      <div class="manual-memory-summary-title">手动总结</div>'
+            + '      <div class="manual-memory-summary-subtitle">当前共 ' + total + ' 条聊天，事件优先写入“我们”，习惯/喜好会写入对应档案。</div>'
+            + '    </div>'
+            + '    <button type="button" class="manual-memory-summary-close" onclick="closeManualMemorySummaryModal()">×</button>'
+            + '  </div>'
+            + '  <div class="manual-memory-summary-range">'
+            + '    <label class="manual-memory-summary-field">'
+            + '      <span>起始条数</span>'
+            + '      <input id="manual-memory-summary-start-index" type="number" inputmode="numeric" min="1" value="' + (total ? 1 : 0) + '" />'
+            + '    </label>'
+            + '    <label class="manual-memory-summary-field">'
+            + '      <span>结束条数</span>'
+            + '      <input id="manual-memory-summary-end-index" type="number" inputmode="numeric" min="1" value="' + total + '" />'
+            + '    </label>'
+            + '  </div>'
+            + '  <div id="manual-memory-summary-status" class="manual-memory-summary-status"></div>'
+            + '  <div class="manual-memory-summary-actions">'
+            + '    <button type="button" class="manual-memory-summary-btn secondary" onclick="closeManualMemorySummaryModal()">取消</button>'
+            + '    <button type="button" id="manual-memory-summary-start" class="manual-memory-summary-btn primary" onclick="startManualMemorySummary()">开始总结</button>'
+            + '  </div>'
+            + '</div>';
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) window.closeManualMemorySummaryModal();
+        });
+        document.body.appendChild(modal);
+        if (!total) setManualMemorySummaryStatus('当前还没有可总结的聊天。', true);
+    };
+
+    window.startManualMemorySummary = function () {
+        const rid = String(window.currentChatRole || '').trim();
+        if (!rid || window.__manualMemorySummaryInProgress) return;
+        const history = window.chatData && Array.isArray(window.chatData[rid]) ? window.chatData[rid] : [];
+        const range = getManualMemorySummaryRange(history.length);
+        if (!range) {
+            setManualMemorySummaryStatus('当前还没有可总结的聊天。', true);
+            return;
+        }
+        const segment = history.slice(range.startIndex, range.endIndex);
+        const segmentText = buildSegmentText(segment);
+        if (!segmentText) {
+            setManualMemorySummaryStatus('这个范围里没有可总结的聊天内容。', true);
+            return;
+        }
+        if (typeof window.callAISummary !== 'function') {
+            setManualMemorySummaryStatus('当前总结接口不可用，请稍后再试。', true);
+            return;
+        }
+
+        const profile = (window.charProfiles && window.charProfiles[rid]) || {};
+        const userPersonaObj = (window.userPersonas && window.userPersonas[rid]) || {};
+        const segmentStartTs = segment.length ? normalizeTimestamp(segment[0].timestamp, 0) : 0;
+        const segmentEndTs = segment.length ? normalizeTimestamp(segment[segment.length - 1].timestamp, segmentStartTs) : 0;
+        const segmentDatePrefix = buildMemoryDatePrefix(segmentStartTs, segmentEndTs);
+        const userMsgsForDetect = segment.filter(function (msg) { return msg && msg.role === 'me'; });
+        const userTextForDetect = userMsgsForDetect
+            .map(function (msg) { return msg && msg.type === 'text' ? normalizeText(msg.content) : ''; })
+            .filter(Boolean)
+            .join('\n');
+        const emojiHeavyRatio = userMsgsForDetect.length
+            ? (userMsgsForDetect.filter(isEmojiHeavyMessage).length / userMsgsForDetect.length)
+            : 0;
+        window.__manualMemorySummaryInProgress = true;
+        setManualMemorySummaryBusy(true);
+        setManualMemorySummaryStatus('正在总结第 ' + range.startDisplay + ' 条到第 ' + range.endDisplay + ' 条...', false);
+
+        try {
+            window.callAISummary(
+                {
+                    roleId: rid,
+                    roleName: profile.nickName || profile.name || 'AI',
+                    rolePrompt: profile.desc || '',
+                    userPersona: userPersonaObj.setting || '',
+                    userName: userPersonaObj.name || '',
+                    userGender: userPersonaObj.gender || '',
+                    segmentText: segmentText,
+                    segmentStartTs: segmentStartTs,
+                    segmentEndTs: segmentEndTs,
+                    nowTs: Date.now()
+                },
+                function (res) {
+                    try {
+                        loadStore();
+                        const archive = ensureArchive(rid);
+                        const likes = filterApiLikes((res && res.likes) || [], userTextForDetect, segmentText);
+                        const habits = filterApiHabits((res && res.habits) || [], emojiHeavyRatio, segmentText);
+                        const events = filterApiEvents((res && res.events) || [], segmentDatePrefix, segmentText);
+                        const nextEntries = buildEntriesFromBuckets({
+                            likes: likes,
+                            habits: habits,
+                            events: events
+                        }, 'manual', {
+                            segmentStartTs: segmentStartTs,
+                            segmentEndTs: segmentEndTs,
+                            importance: 0.88,
+                            confidence: 0.76
+                        });
+                        if (!nextEntries.length) {
+                            setManualMemorySummaryStatus('这段聊天没有提炼出适合写入记忆档案的内容。', true);
+                            return;
+                        }
+                        const writeStats = appendEntriesToArchive(archive, nextEntries);
+                        archive.meta.updatedAt = Date.now();
+                        persistArchive(rid, archive);
+                        const targetTab = events.length ? 'events' : (habits.length ? 'habits' : 'likes');
+                        window.currentMemoryArchiveTab = targetTab;
+                        refreshArchiveModal(targetTab);
+                        if (!writeStats.addedCount) {
+                            setManualMemorySummaryStatus('AI 返回了 ' + writeStats.candidateCount + ' 条，但和现有记忆重复，所以没有新增内容。', true);
+                            return;
+                        }
+                        const pieces = [];
+                        if (writeStats.categoryCounts.events) pieces.push('我们 ' + writeStats.categoryCounts.events + ' 条');
+                        if (writeStats.categoryCounts.habits) pieces.push('习惯 ' + writeStats.categoryCounts.habits + ' 条');
+                        if (writeStats.categoryCounts.likes) pieces.push('喜好 ' + writeStats.categoryCounts.likes + ' 条');
+                        setManualMemorySummaryStatus('已写入记忆档案：' + pieces.join('，') + '。', false);
+                    } finally {
+                        window.__manualMemorySummaryInProgress = false;
+                        setManualMemorySummaryBusy(false);
+                    }
+                },
+                function (err) {
+                    window.__manualMemorySummaryInProgress = false;
+                    setManualMemorySummaryBusy(false);
+                    setManualMemorySummaryStatus(String(err || '总结失败，请稍后再试。'), true);
+                }
+            );
+        } catch (e) {
+            window.__manualMemorySummaryInProgress = false;
+            setManualMemorySummaryBusy(false);
+            setManualMemorySummaryStatus('总结失败，请稍后再试。', true);
+        }
     };
 
     window.maybeAutoUpdateMemoryArchive = function (roleId) {
@@ -1070,8 +1288,10 @@
                                 habits: filterApiHabits(res.habits, emojiHeavyRatio, segmentText),
                                 events: filterApiEvents(res.events, segmentDatePrefix, segmentText)
                             }, 'auto', { segmentStartTs: segmentStartTs, segmentEndTs: segmentEndTs });
-                            archive.entries = normalizeEntries((archive.entries || []).concat(nextEntries));
-                            archive.meta.lastProcessedIndex = processedEndIndex;
+                            const writeStats = appendEntriesToArchive(archive, nextEntries);
+                            if (writeStats.candidateCount > 0) {
+                                archive.meta.lastProcessedIndex = processedEndIndex;
+                            }
                             archive.meta.updatedAt = Date.now();
                         } finally {
                             archive.meta.summaryInProgress = false;
@@ -1180,7 +1400,7 @@
                                     habits: filterApiHabits((res && res.habits ? res.habits : []).slice(0, 80), emojiHeavyRatio, segmentText),
                                     events: filterApiEvents((res && res.events ? res.events : []).slice(0, 80), segmentDatePrefix, segmentText)
                                 }, 'auto', { segmentStartTs: segmentStartTs, segmentEndTs: segmentEndTs });
-                                archive.entries = normalizeEntries((archive.entries || []).concat(nextEntries));
+                                appendEntriesToArchive(archive, nextEntries);
                                 archive.meta.lastProcessedIndex = end;
                                 archive.meta.updatedAt = Date.now();
                                 persistArchive(rid, archive);

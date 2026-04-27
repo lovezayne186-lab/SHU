@@ -2066,7 +2066,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function isLikelyCopiedDialogueLine(text, copiedLineSet) {
         const line = normalizeSummaryLine(text);
         if (!line) return false;
-        if (/^(用户|AI|角色|我|你)\s*[：:]/.test(line)) return true;
+        if (/^(用户|AI|角色|我|你|TA|Ta)\s*[：:]/.test(line)) return true;
         const cleaned = line.replace(/^(喜欢|习惯|事件|我们发生的事)\s*[：:]\s*/, '').trim();
         return copiedLineSet && copiedLineSet.has(cleaned);
     }
@@ -2176,7 +2176,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // 把片段整理成可读文本（用户/AI）
             const segmentText = segment
                 .filter(m => m && (m.role === 'me' || m.role === 'ai') && m.content)
-                .slice(-200) // 极限兜底，避免太长
+                .slice(-1000) // 极限兜底，避免太长
                 .map(m => {
                     const who = m.role === 'me' ? '用户' : 'AI';
                     if (m.type === 'image') return `${who}: [图片]`;
@@ -2205,8 +2205,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     .filter(Boolean)
                     .filter(s => s.length <= 80)
                     .filter(s => !isLikelyCopiedDialogueLine(s, copiedLineSet))
-                    .filter(s => containsAny(s, markers))
-                    .filter(s => containsAny(userTextForDetect, markers) || containsAny(segmentText, markers));
+                    .filter(s => containsAny(s, markers));
             }
 
             function filterApiHabits(items) {
@@ -2226,15 +2225,13 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             function filterApiEvents(items) {
-                const filler = ['我们聊了很多', '对话很愉快', '聊得很愉快', '聊得很开心', '聊了不少', '日常闲聊'];
                 return (items || [])
                     .map(normalizeSummaryLine)
                     .filter(Boolean)
                     .filter(s => s.length <= 180)
                     .filter(s => !isLikelyCopiedDialogueLine(s, copiedLineSet))
-                    .filter(s => /^(\d{1,2}月\d{1,2}日|\d{4}[-/年]\d{1,2}|我们|今天|最近|这次|那天|昨天|明天|后天|下次|未来|月底|周[一二三四五六日天]|星期[一二三四五六日天])/.test(s))
-                    .filter(s => !containsAny(s, filler))
-                    .filter(s => !/^(我们|今天|最近)[：:]?\s*(聊了很多|聊得很愉快|聊得很开心)/.test(s));
+                    .filter(s => /^((?:\d{2,4}年)?\d{1,2}月\d{1,2}日|\d{4}[-/年]\d{1,2}|我们|今天|最近|这次|那天|昨天|明天|后天|下次|未来|月底|周[一二三四五六日天]|星期[一二三四五六日天])/.test(s))
+                    .filter(s => !/^(我们|今天|最近)[：:]?\s*(聊了很多|聊得很愉快|聊得很开心|日常闲聊|聊了不少|没什么特别|没有特别|未发生)/.test(s));
             }
 
             // ✅ 优先用你的 API 总结（api.js 提供 window.callAISummary）
@@ -6477,7 +6474,9 @@ function createMessageRow(msg) {
             </div>
         `;
     } else {
-        const translatedPayload = msg.role === 'ai' && (
+        const msgType = String(msg.type || 'text').trim();
+        const isHtmlBubble = msg.role === 'ai' && msgType === 'html';
+        const translatedPayload = msg.role === 'ai' && !isHtmlBubble && (
             typeof window.shouldRenderTranslatedBubble === 'function'
                 ? window.shouldRenderTranslatedBubble(window.currentChatRole || msg.roleId || '', msg)
                 : (typeof window.isAutoTranslateEnabled === 'function'
@@ -6486,7 +6485,14 @@ function createMessageRow(msg) {
         ) && typeof parseTranslatedBubbleText === 'function'
             ? parseTranslatedBubbleText(displayContent)
             : null;
-        const safeContent = String(translatedPayload ? translatedPayload.bodyText : displayContent || '').replace(/\n/g, '<br>');
+        const bubbleTextForRender = String(translatedPayload ? translatedPayload.bodyText : displayContent || '');
+        const safeContent = isHtmlBubble
+            ? (typeof sanitizeChatBubbleHtml === 'function' ? sanitizeChatBubbleHtml(bubbleTextForRender) : bubbleTextForRender)
+            : (typeof escapeHtmlText === 'function'
+                ? escapeHtmlText(bubbleTextForRender)
+                : bubbleTextForRender.replace(/[&<>"']/g, function (ch) {
+                    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] || ch;
+                }));
         let quoteBlockHtml = "";
         if (msg.quote && msg.quote.text) {
             let shortQuote = String(msg.quote.text || '').replace(/\s+/g, ' ').trim();
@@ -6514,11 +6520,19 @@ function createMessageRow(msg) {
             </div>
         `;
         } else {
-            if (msg.role === 'ai' && msg.type === 'text') {
+            if (isHtmlBubble) {
                 bubbleHtml = `
                 <div class="msg-bubble custom-bubble-content">
                     ${quoteBlockHtml}
-                    <div class="msg-text custom-bubble-text" data-text="${safeContent}"></div>
+                    <div class="msg-text custom-bubble-text chat-html-bubble">${safeContent}</div>
+                </div>
+            `;
+            } else if (msg.role === 'ai' && msgType === 'text') {
+                const dataText = typeof escapeHtmlText === 'function' ? escapeHtmlText(bubbleTextForRender) : safeContent;
+                bubbleHtml = `
+                <div class="msg-bubble custom-bubble-content">
+                    ${quoteBlockHtml}
+                    <div class="msg-text custom-bubble-text" data-text="${dataText}" data-render-mode="text"></div>
                 </div>
             `;
             } else {

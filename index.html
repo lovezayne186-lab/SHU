@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="CSS/mine.css">
     <script src="vendor/tailwind/tailwindcss.js"></script>
     <script src="vendor/vue/vue.global.js"></script>
+    <script src="node_modules/jszip/dist/jszip.min.js"></script>
     <script type="module" src="JS/我的/articleData.js"></script>
     <script type="module" src="JS/我的/userCycleData.js"></script>
     <script src="JS/我的/period.js"></script>
@@ -1675,7 +1676,16 @@
                                 <option value="mine">我的表情</option>
                                 <option value="his">他的表情</option>
                                 <option value="general">当前聊天通用</option>
+                                <option value="global_general">所有联系人通用</option>
                             </select>
+                        </div>
+                        <div style="margin-bottom:8px;">
+                            <input type="file" id="sticker-import-file" accept=".txt,.doc,.docx,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;">
+                            <button type="button" id="sticker-import-file-btn"
+                                style="width:100%; padding:7px 10px; border:1px solid #ddd; background:#fafafa; border-radius:6px; font-size:13px; text-align:left;">
+                                导入 txt / doc 文件
+                            </button>
+                            <div id="sticker-import-file-name" style="margin-top:4px; font-size:12px; color:#777;"></div>
                         </div>
                         <div style="margin-bottom:10px;">
                             <textarea id="sticker-import-text" placeholder="每行一条：名称: URL，或直接粘贴 GIF/图片 URL"
@@ -2045,6 +2055,7 @@
                                 </div>
                                 <div style="display:flex; gap:10px; margin-top:10px;">
                                     <button onclick="refineMemoryArchiveEvents()" style="flex:1; background:#111827; color:#fff; padding:8px 10px; border-radius:12px; font-size:12px; border:none; cursor:pointer;">提炼“我们”记忆</button>
+                                    <button onclick="openManualMemorySummaryModal()" style="flex:1; background:#000; color:#fff; padding:8px 10px; border-radius:12px; font-size:12px; border:none; cursor:pointer;">手动总结</button>
                                     <button onclick="clearRoleApiMemory()" style="flex:1; background:#ff3b30; color:#fff; padding:8px 10px; border-radius:12px; font-size:12px; border:none; cursor:pointer;">清除角色记忆</button>
                                 </div>
                             </div>

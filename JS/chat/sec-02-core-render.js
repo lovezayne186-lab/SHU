@@ -1462,9 +1462,11 @@ function normalizeStickerListForAI(list) {
 
 function buildAIStickerPromptText() {
     const roleId = window.currentChatRole || '';
-    const scope = typeof window.getStickerScopeForRole === 'function'
-        ? window.getStickerScopeForRole(roleId)
-        : { tabs: window.stickerData || {} };
+    const scope = typeof window.getCombinedStickerScopeForRole === 'function'
+        ? window.getCombinedStickerScopeForRole(roleId)
+        : (typeof window.getStickerScopeForRole === 'function'
+            ? window.getStickerScopeForRole(roleId)
+            : { tabs: window.stickerData || {} });
     const tabs = scope && scope.tabs ? scope.tabs : {};
     const hisList = normalizeStickerListForAI(tabs.his);
     const generalList = normalizeStickerListForAI(tabs.general);
@@ -1477,7 +1479,7 @@ function buildAIStickerPromptText() {
         const n = item.name || '';
         lines.push('- 表情名: ' + n + ', URL: ' + item.src);
     }
-    const tail = '\n\n理解和选择表情时，优先根据“表情名”判断含义，不要只把它当成一张无意义图片。如果我想表达清单中某个表情的情绪，请必须回复该表情的 URL 格式：[STICKER:URL]。注意：你只能使用[可用表情清单]里提供的 URL，严禁编造 URL 或使用清单之外的图片。';
+    const tail = '\n\n【表情包发送规则】\n- 表情包不是照片/图片。表情包只能从[可用表情清单]中选择，优先根据“表情名”判断含义。\n- 如果要发送表情包，首选在 reply 数组里使用对象：{"type":"sticker","url":"清单里的完整URL"}。\n- 兼容写法是单独输出：[STICKER:清单里的完整URL]。冒号后必须是完整 URL，不要写表情名、描述、Markdown 图片或普通图片 URL。\n- 真实自拍、风景、饭、房间、物品等画面分享用 {"type":"photo","content":"画面描述"}，不要用 sticker。\n- 只能使用[可用表情清单]里提供的 URL，严禁编造 URL 或使用清单之外的图片。';
     return lines.join('\n') + tail;
 }
 

@@ -2335,6 +2335,105 @@ window.confirmDeleteRole = function (id) {
     window.deleteRole(id);
 };
 
+function cleanupRoleFromObjectMapStorage(storageKey, roleId) {
+    const id = String(roleId || '').trim();
+    if (!id) return;
+    try {
+        const raw = localStorage.getItem(storageKey) || '{}';
+        const obj = JSON.parse(raw);
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+        if (Object.prototype.hasOwnProperty.call(obj, id)) {
+            delete obj[id];
+            localStorage.setItem(storageKey, JSON.stringify(obj));
+        }
+    } catch (e) { }
+}
+
+function cleanupDeletedRoleReferences(id) {
+    const roleId = String(id || '').trim();
+    if (!roleId) return;
+
+    try {
+        if (typeof window.cleanupMomentsDataForRole === 'function') {
+            window.cleanupMomentsDataForRole(roleId);
+        }
+    } catch (e) {
+        console.warn('清理朋友圈角色残留失败', e);
+    }
+
+    try {
+        if (window.Wallet && typeof window.Wallet.removeTransactionsByRoleId === 'function') {
+            window.Wallet.removeTransactionsByRoleId(roleId);
+        } else {
+            const raw = localStorage.getItem('wechat_wallet') || '';
+            const data = raw ? JSON.parse(raw) : null;
+            if (data && typeof data === 'object' && Array.isArray(data.transactions)) {
+                data.transactions = data.transactions.filter(function (tx) {
+                    return String(tx && tx.peerRoleId || '').trim() !== roleId;
+                });
+                let totalAssets = 0;
+                let transferIncome = 0;
+                let workIncome = 0;
+                data.transactions.forEach(function (tx) {
+                    const amount = parseFloat(tx && tx.amount);
+                    if (isNaN(amount) || !isFinite(amount)) return;
+                    if (tx.type === 'income') {
+                        totalAssets += amount;
+                        if (tx.category === 'transfer') transferIncome += amount;
+                        else if (tx.category === 'work') workIncome += amount;
+                    } else if (tx.type === 'expense') {
+                        totalAssets -= amount;
+                    }
+                });
+                data.totalAssets = totalAssets;
+                data.transferIncome = transferIncome;
+                data.workIncome = workIncome;
+                localStorage.setItem('wechat_wallet', JSON.stringify(data));
+            }
+        }
+    } catch (e) {
+        console.warn('清理钱包流水失败', e);
+    }
+
+    try {
+        const state = window.familyCardState && typeof window.familyCardState === 'object'
+            ? window.familyCardState
+            : { receivedCards: [], sentCards: [] };
+        const received = Array.isArray(state.receivedCards) ? state.receivedCards : [];
+        const sent = Array.isArray(state.sentCards) ? state.sentCards : [];
+        state.receivedCards = received.filter(function (card) {
+            return String(card && (card.fromRoleId || card.peerRoleId) || '').trim() !== roleId;
+        });
+        state.sentCards = sent.filter(function (card) {
+            return String(card && (card.toRoleId || card.peerRoleId) || '').trim() !== roleId;
+        });
+        window.familyCardState = state;
+        localStorage.setItem('wechat_family_cards', JSON.stringify(state));
+    } catch (e) { }
+
+    try {
+        const profiles = window.charProfiles || {};
+        Object.keys(profiles).forEach(function (key) {
+            const p = profiles[key];
+            if (!p || typeof p !== 'object' || p.isGroup !== true) return;
+            if (Array.isArray(p.memberIds)) {
+                p.memberIds = p.memberIds.filter(function (memberId) {
+                    return String(memberId || '').trim() !== roleId;
+                });
+            }
+            if (Array.isArray(p.members)) {
+                p.members = p.members.filter(function (memberId) {
+                    return String(memberId || '').trim() !== roleId;
+                });
+            }
+        });
+        window.charProfiles = profiles;
+    } catch (e) { }
+
+    cleanupRoleFromObjectMapStorage('chat_settings_by_role', roleId);
+    cleanupRoleFromObjectMapStorage('moments_proactive_state_v1', roleId);
+}
+
 window.deleteRole = async function (id) {
     const profiles = (window.charProfiles && typeof window.charProfiles === 'object')
         ? window.charProfiles
@@ -2355,6 +2454,7 @@ window.deleteRole = async function (id) {
             if (window.userPersonas && window.userPersonas[id]) delete window.userPersonas[id];
             if (window.chatUnread && window.chatUnread[id] != null) delete window.chatUnread[id];
         }
+        cleanupDeletedRoleReferences(id);
     } catch (e0) {
         console.error('删除角色失败', e0);
         alert('❌ 删除失败：' + (e0 && e0.message ? e0.message : '未知错误'));

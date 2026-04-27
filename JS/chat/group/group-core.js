@@ -148,6 +148,22 @@
       .replace(/[【】\[\]（）()\-_.·,，:：]/g, '');
   }
 
+  function getGroupMemberTokens(member) {
+    if (!member || typeof member !== 'object') return [];
+    return [
+      member.roleId,
+      member.name,
+      member.originalName,
+      member.raw?.groupNickname,
+      member.raw?.nickName,
+      member.raw?.nickname,
+      member.raw?.displayName,
+      member.raw?.name
+    ]
+      .map((value) => normalizeNameToken(value))
+      .filter(Boolean);
+  }
+
   function matchGroupMember(roleId, hints) {
     const members = getMembers(roleId);
     const normalizedHints = safeArray(hints)
@@ -158,26 +174,25 @@
       return members[0] || null;
     }
 
-    return (
-      members.find((member) => {
-        const tokens = [
-          member.roleId,
-          member.name,
-          member.originalName,
-          member.raw?.groupNickname,
-          member.raw?.nickName,
-          member.raw?.name
-        ]
-          .map((value) => normalizeNameToken(value))
-          .filter(Boolean);
+    return members.find((member) => {
+      const tokens = getGroupMemberTokens(member);
 
-        return normalizedHints.some((hint) => {
-          return tokens.some((token) => token === hint || token.includes(hint) || hint.includes(token));
-        });
-      }) ||
-      members[0] ||
-      null
-    );
+      return normalizedHints.some((hint) => {
+        return tokens.some((token) => token === hint || token.includes(hint) || hint.includes(token));
+      });
+    }) || null;
+  }
+
+  function matchGroupMemberExact(roleId, hints) {
+    const members = getMembers(roleId);
+    const normalizedHints = safeArray(hints)
+      .map((value) => normalizeNameToken(value))
+      .filter(Boolean);
+    if (!normalizedHints.length) return null;
+    return members.find((member) => {
+      const tokens = getGroupMemberTokens(member);
+      return normalizedHints.some((hint) => tokens.indexOf(hint) !== -1);
+    }) || null;
   }
 
   function isGroupChatRole(roleId) {
@@ -187,7 +202,9 @@
   }
 
   function resolveGroupMessageSender(roleId, msg) {
-    return matchGroupMember(roleId, [msg?.senderRoleId, msg?.senderName, msg?.name]);
+    const hints = [msg?.senderRoleId, msg?.senderName, msg?.name].filter((value) => String(value || '').trim());
+    if (!hints.length) return null;
+    return matchGroupMemberExact(roleId, hints) || matchGroupMember(roleId, hints);
   }
 
   function getSenderLabel(roleId, msg) {
@@ -321,7 +338,8 @@
       '- If a character speaks a foreign language, their message MUST use this format: "Foreign text「Chinese translation」" (e.g., "Of course!「当然！」").',
       '- Characters should reply to each other naturally, reacting to both the user and other group members.',
       '- When a character speaks, they should generate 2 to 5 messages to make the conversation feel rich and continuous. You can split their words into multiple "text" or "quote_reply" objects.',
-      '- You can and SHOULD use "quote_reply" to quote other group members\' messages, not just the user\'s. Find their timestamps in the context history.',
+      '- Use "quote_reply" only when directly answering one specific existing message. The target_timestamp must be copied exactly from that message\'s [ts=...] tag.',
+      '- Do not quote a random or loosely related message. If you are not certain which message is being answered, use "text" instead of "quote_reply".',
       '- Create lively cross-character interactions (e.g., A says something, B quotes A and teases them, C chimes in).',
       '- Not everyone must talk each round.',
       '- Never reveal being an AI model.',
@@ -537,6 +555,8 @@
   function buildQuotePayload(roleId, targetTimestamp) {
     const target = findGroupMessageByTimestamp(roleId, targetTimestamp);
     if (!target) return null;
+    const quoteText = getMessageText(target);
+    if (!quoteText) return null;
     const quoteId =
       (typeof window.ensureChatMessageId === 'function' && window.ensureChatMessageId(target)) ||
       String(target.id || '').trim() ||
@@ -545,10 +565,10 @@
       quoteId,
       quote: {
         name: getSenderLabel(roleId, target),
-        text: getMessageText(target)
+        text: quoteText
       },
-      quoteText: getMessageText(target),
-      quoteSourceText: getMessageText(target)
+      quoteText,
+      quoteSourceText: quoteText
     };
   }
 
@@ -775,16 +795,18 @@
       let thoughtChain = null;
 
       parsed.forEach((item, index) => {
+        const speakerHints = [
+          item?.senderRoleId,
+          item?.roleId,
+          item?.name,
+          item?.speaker,
+          item?.sender
+        ].filter((value) => String(value || '').trim());
         const member =
-          matchGroupMember(roleId, [
-            item?.senderRoleId,
-            item?.roleId,
-            item?.name,
-            item?.speaker,
-            item?.sender
-          ]) ||
-          members[index % Math.max(members.length, 1)] ||
-          null;
+          matchGroupMemberExact(roleId, speakerHints) ||
+          (!speakerHints.length ? (members[index % Math.max(members.length, 1)] || null) : null);
+        const actionType = normalizeGroupActionType(item?.type);
+        if (!member && actionType !== 'thought_chain' && actionType !== 'system_message') return;
         const normalized = normalizeGroupAction(roleId, item, member);
         if (!normalized) return;
         if (normalized.thoughtChain && !thoughtChain) {

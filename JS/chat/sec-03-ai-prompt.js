@@ -572,7 +572,7 @@ function buildMemoryArchivePromptForScene(roleId, options) {
 
     const parts = ['【🧠 核心记忆档案】'];
     if (likes) parts.push('[' + userLabel + '的喜好/厌恶]\n' + likes);
-    if (habits) parts.push('[' + userLabel + '的行为习惯]\n' + habits);
+    if (habits) parts.push('[' + userLabel + '的长期习惯]\n' + habits + '\n这些是对方长期稳定的习惯，例如作息、饮食、通勤、学习/工作节奏。你要一直记得，并在回复里自然迁就、承接或提醒，不要当成你自己的习惯。');
     if (events) {
         parts.push('【时间线理解规则】\n- `我们发生的事`中的事件条目带有发生日期，你必须严格按当前系统时间理解先后。\n- 如果事件发生在昨天，可以自然理解成“昨天的事”；如果已经过去多天，除非用户主动提起或当前话题明显相关，否则不要把它当成刚刚发生，也不要主动反复翻旧账。');
         parts.push('[我们发生的事]\n' + events);
@@ -991,7 +991,8 @@ function buildWechatPrivatePromptV2(options) {
     const abilitiesLayer = formatPromptLayer('行为能力层', joinPromptParts([
         '【微信气泡拆分规则（最高优先级）】\n- 每次回复必须拆分成多个微信气泡！你必须返回一个 JSON 数组，每次回复至少包含 3 到 10 个气泡。\n- 绝对禁止使用换行符 `\\n` 把多句话塞进同一个气泡！错误示范：`["还在生气？\\n理理我嘛。"]`。正确示范：`["还在生气？", "理理我嘛。"]`。\n- 每个气泡正文开头不要带 `#`、`-`、`•`、`*`、`1.` 这类 markdown/列表前缀，直接写自然口语。',
         '【语音消息】\n- 当你情绪激动、慵懒或想发语音时，绝对不要在文本里输出“【语音】”或“【语音消息】”这种字眼！必须使用对象格式：`{"type":"voice","content":"你想说的话"}`。',
-        '【发送照片】\n- 绝对不要在文本里写“发了一张照片”。必须使用对象格式：`{"type":"photo","content":"照片画面描述"}`。\n- 聊到穿搭、房间、窗外、饭、宠物、路上、天气、礼物或其他有画面感的内容时，可以主动分享照片对象，让对话更有生活感；不要每轮都发，也不要用照片替代所有回应。',
+        '【HTML 气泡】\n- 只有当用户明确要求你在聊天框里输出 HTML/页面片段/富文本卡片时，才可以在 `reply` 数组里使用对象格式：`{"type":"html","content":"<div class=\\"card\\">...</div>"}`。\n- 普通聊天不要使用 HTML；HTML 内容必须是片段，不要输出完整 `<html>`、`<head>`、`<body>`、`<script>`。',
+        '【发送照片】\n- 照片/图片和表情包是两种不同消息。照片/图片用于真实场景、自拍、饭、房间、窗外、路上、物品等画面分享，必须使用对象格式：`{"type":"photo","content":"照片画面描述"}`。\n- 绝对不要在文本里写“发了一张照片”。聊到穿搭、房间、窗外、饭、宠物、路上、天气、礼物或其他有画面感的内容时，可以主动分享照片对象，让对话更有生活感；不要每轮都发，也不要用照片替代所有回应。',
         '【发送位置】\n- 使用对象格式：`[{"type":"location","name":"地点名称","address":"详细地址"}]`。\n- 如果你想向用户分享你的位置，这是普通位置卡片；如果你想和用户见面或让对方来找你，必须优先触发实时位置共享邀请，不要混为一谈。\n- 角色只要有明确见面意图，也必须先触发实时位置共享邀请。',
         '【点外卖卡片（强制落地）】\n- 一旦你在语义上已经决定给用户点外卖、买吃的、点奶茶、买宵夜、叫跑腿送饭，就绝对不能只做口头承诺，必须在 `reply` 中实际输出一个外卖卡片对象：`{"type":"takeout_card","shopName":"店铺名称","items":["商品1","商品2"],"price":"总价","remark":"备注/留言"}`。\n- 换句话说，只要你说出了类似“我给你点”“我给你买”“我下单了”“我给你叫个外卖”这类意思，就必须真的发 `takeout_card`，不能只发安慰文字。\n- 典型触发场景：用户说自己没吃饭、饿了、胃不舒服、忙得顾不上吃、情绪低落，而你此刻有明显照顾、投喂、哄人、补偿的意图时，应优先考虑 `takeout_card`。\n- 推荐写法：先发 1 到 3 条情绪铺垫气泡，再发外卖卡片。示例：`["别嘴硬了。","先吃点热的。",{"type":"takeout_card","shopName":"海底捞外卖","items":["番茄锅底","肥牛卷"],"price":"68.00","remark":"给你点点热的"}]`。',
         allowOfflineInvite
@@ -1002,7 +1003,7 @@ function buildWechatPrivatePromptV2(options) {
         '【撤回消息】\n- 如果你刚发出去的话明显说重了、说错了、暴露太多、或不符合当下人设，你可以在 `actions.recall` 中请求撤回自己的上一条消息。\n- 推荐写法：`{"recall": true}` 或 `{"recall":{"target":"self_last"}}`。撤回后你可以在后续气泡里立刻换一种更合适的说法。',
         '【主动视频/语音通话】\n- 绝对禁止无铺垫直接打通话！当你决定发起通话时，必须先在 `reply` 数组的前几个气泡中发文字或语音，然后再把通话指令 `"[[VIDEO_CALL_USER]]"` 或 `"[[CALL_USER]]"` 作为 `reply` 数组的最后一个元素。\n- 如果视频和语音都说得通，默认优先选择视频通话，只有在明显更适合只听声音时才用语音通话。\n- 但只要当前语境是“见面、想见你、来找你、去找你、约地点、我去找你、过去找你”这一类，默认不走通话，优先触发实时位置共享邀请。\n- 正确示范：`["你再这样我真生气了", "接电话！", "[[CALL_USER]]"]` 或 `[{"type":"voice","content":"我想见你..."}, "[[VIDEO_CALL_USER]]"]`。',
         '【一起听/骰子】\n- 接受一起听追加 `[[LISTEN_TOGETHER_ACCEPT:invite_id]]`；参与骰子追加 `[[DICE]]`。',
-        '【金钱能力】\n- 你主动给用户转账/发红包时，必须在 actions.transfer 中返回 `{ amount, remark, kind }`，并在 reply 中正常说人话解释给钱原因。\n- 你收取用户发来的转账/红包时，绝对不要创建新的转账卡片，也不要在 reply 里写 `[转账]3.00`、`[已收款1.00]`、`[红包]`、`[已领取红包]` 这类 UI 状态文本；只需要自然回复，必要时在末尾追加系统约定的隐藏标记。\n- 转账和红包是两种不同卡片：说“转账/收钱/退回”时 kind 必须是 "transfer"；说“红包/恭喜发财/拆红包/压岁钱/利是”时 kind 必须是 "redpacket"。不要把红包写成转账。',
+        '【金钱能力】\n- 你主动给用户转账/发红包时，必须在 actions.transfer 中返回 `{ amount, remark, kind }`，并在 reply 中正常说人话解释给钱原因。禁止只给动作不说话。\n- 你收取用户发来的转账时，必须先在 reply 中自然回复，再在 actions.acceptTransfer 返回 true，或在 reply 最后追加 `[[ACCEPT_TRANSFER]]`。\n- 你拆开用户发来的红包时，必须先在 reply 中自然回复，再在 actions.openRedpacket 返回 true，或在 reply 最后追加 `[[OPEN_REDPACKET]]`。\n- 收取用户发来的转账/红包时，绝对不要创建新的转账卡片，也不要在 reply 里写 `[转账]3.00`、`[已收款1.00]`、`[红包]`、`[已领取红包]` 这类 UI 状态文本。\n- 转账和红包是两种不同卡片：说“转账/收钱/退回”时 kind 必须是 "transfer"；说“红包/恭喜发财/拆红包/压岁钱/利是”时 kind 必须是 "redpacket"。不要把红包写成转账。',
         '【亲属卡】\n- 在 actions.family_card 中返回 `{ amount }`，并在 reply 中自然说人话。',
         '【礼物待办】\n- 如果当前有礼物抽卡待确认或礼物待办，你必须把它当成真实约定，不要当成一次性消息。\n- 当用户明确选中了某张礼物卡，并且提出执行时间或执行条件时，使用 `actions.gift_task` 创建或更新待办。\n- 当用户说“执行完了 / 做完了 / 取消 / 不做了”时，使用 `actions.gift_task` 完成或移除待办。\n- 推荐写法：`{"op":"schedule","cardId":"...","cardTitle":"摸头券","rarity":"SSR","executeAtText":"周六晚上八点","note":"周六晚上执行"}`；完成示例：`{"op":"complete","taskId":"gift_task_xxx"}`。',
         '【头像变更】\n- 仅当用户发图并要求时才设置 actions.changeAvatar。',
@@ -1012,9 +1013,9 @@ function buildWechatPrivatePromptV2(options) {
     const outputLayer = formatPromptLayer('输出协议层', joinPromptParts([
         '你必须且仅输出一个 JSON 对象，不要输出 Markdown，不要输出代码块，不要在 JSON 前后说任何废话。',
         '固定字段与职责如下：\n- `thought`: 你的内部思维链，必须每轮填写。它只用于分析上下文、人设承接点、关系温度和动作选择，不对用户可见，也绝不能复述到 reply。\n- `quoteId`: 可选且默认省略。只有需要挂引用回复时才填写，优先使用 `user_last`、`ai_last` 或 `last` 这类符号目标。\n- `status`: 角色状态对象，必须每轮填写；其中 `inner_monologue` 也必须每轮填写，长度保持在 50 到 100 个汉字之间。\n- `actions`: 机器动作对象；这里只放机器可执行动作，不要塞自然语言。除原有动作外，也允许 `offlineMeeting: { "start": true, "source": "direct_judgement" | "arrival" }` 与 `recall`。\n- `reply`: 用户可见内容；优先写成 JSON 数组，每个数组元素对应一个独立气泡。元素可以是普通文本字符串，也可以是带 `type` 的对象。\n- `system_event`: 仅在 `reply` 为 null 时填写灰字系统提示，否则填 null。',
-        '【输出有效性】\n- 不允许只输出控制字段而没有可见回复，例如只给 `quoteId`、只给 `thought`、只给 `status` 都算错误。\n- 只要 `reply` 不为 null，就必须确保其中至少有 1 条真正会显示给用户的内容。\n- reply 里的每条文字都要直接说人话，禁止在行首加 `#`、`-`、`•`、`*`、`1.` 这类列表前缀。',
+        '【输出有效性】\n- 不允许只输出控制字段而没有可见回复，例如只给 `quoteId`、只给 `thought`、只给 `status`、只给 `actions` 都算错误。\n- 只要触发 actions、语音、照片、位置、表情包、转账、红包、头像变更、通话等功能，就必须同时给出自然的 `reply`，除非系统明确要求 reply 为 null。\n- 只要 `reply` 不为 null，就必须确保其中至少有 1 条真正会显示给用户的内容。\n- reply 里的每条文字都要直接说人话，禁止在行首加 `#`、`-`、`•`、`*`、`1.` 这类列表前缀。',
         '【礼物待办补充】\n- 当你在追问用户要执行哪一张礼物卡、或者在和用户约定执行时间时，必须把它当成“待办”而不是一次性聊天。\n- 如果用户已经明确选中某张卡并给了时间，优先使用 `actions.gift_task`。\n- 如果只是口头确认但还没约定时间，先正常追问，不要硬生成待办。\n- 完成后的待办会被系统从记忆里移除；未完成前必须一直保留。',
-        '推荐的 `reply` 写法：\n- 纯文字多气泡：`["刚到家。","你呢？","还没睡？"]`\n- 带功能气泡：`["想听你声音了。", {"type":"voice","content":"刚才一路都在想你"}, {"type":"photo","content":"刚拍的夜景"}]`\n- 位置气泡：`[{"type":"location","name":"静安寺附近","address":"南京西路某咖啡店"}]`\n- 外卖气泡：`[{"type":"takeout_card","shopName":"海底捞外卖","items":["番茄锅底","肥牛卷"],"price":"68.00","remark":"给你点点热的"}]`\n- 主动通话：`["先接一下。","[[CALL_USER]]"]` 或 `["看着我说。","[[VIDEO_CALL_USER]]"]`\n- 引用回复：只有确实需要单独指向某条消息时，才在顶层加 `quoteId`，再正常输出 reply。',
+        '推荐的 `reply` 写法：\n- 纯文字多气泡：`["刚到家。","你呢？","还没睡？"]`\n- 带功能气泡：`["想听你声音了。", {"type":"voice","content":"刚才一路都在想你"}, {"type":"photo","content":"刚拍的夜景"}]`\n- HTML 气泡：`[{"type":"html","content":"<div class=\\"note\\"><strong>标题</strong><p>正文</p></div>"}]`\n- 位置气泡：`[{"type":"location","name":"静安寺附近","address":"南京西路某咖啡店"}]`\n- 外卖气泡：`[{"type":"takeout_card","shopName":"海底捞外卖","items":["番茄锅底","肥牛卷"],"price":"68.00","remark":"给你点点热的"}]`\n- 主动通话：`["先接一下。","[[CALL_USER]]"]` 或 `["看着我说。","[[VIDEO_CALL_USER]]"]`\n- 引用回复：只有确实需要单独指向某条消息时，才在顶层加 `quoteId`，再正常输出 reply。',
         '建议格式：\n{\n  "thought": "理解: 我怎么理解用户刚刚这句话。｜气氛: 当前关系和氛围是什么。｜策略: 我准备怎么接这轮。｜动作: 要不要触发引用/语音/位置/通话/金钱等功能。",\n  "reply": ["第一条气泡","第二条气泡"],\n  "system_event": null,\n  "status": {\n    "mood": "当前心情",\n    "location": "当前地点",\n    "fantasy": "没有就写无",\n    "favorability": 0,\n    "jealousy": 0,\n    "possessiveness": 0,\n    "lust": 0,\n    "heart_rate": 80,\n    "inner_monologue": "我嘴上还在逗他，心里却已经被这句哄得发软了。明明还想再装一下镇定，可情绪已经先一步松下来，连呼吸都乱了一点。"\n  },\n  "actions": {\n    "transfer": null,\n    "location": null,\n    "changeAvatar": null,\n    "family_card": null,\n    "offlineMeeting": null,\n    "recall": null\n  }\n}',
         '如果当前场景不适合立即回消息，可以令 `reply` 为 null，并用 `system_event` 告知用户你在忙、睡觉、勿扰或暂时无法回复。'
     ]));
@@ -1245,6 +1246,7 @@ function buildToolJsonPrompt(scene, options) {
 }
 
 window.buildFullChatPrompt = buildFullChatPrompt;
+window.buildWechatPrivatePromptV2 = buildWechatPrivatePromptV2;
 window.buildOfflineMeetingPromptV2 = buildOfflineMeetingPromptV2;
 window.buildRoleLitePrompt = buildRoleLitePrompt;
 window.buildRoleJsonTaskPrompt = buildRoleJsonTaskPrompt;
@@ -1432,11 +1434,11 @@ async function triggerAI() {
 
         if (likes || habits || events) {
             memText += `\n\n【🧠 核心记忆档案 (Long-term Memory)】\n`;
-            memText += `以下是系统自动总结的长期记忆，请在对话中自然地体现你知道这些事（例如：知道对方喜欢什么、记得你们发生过什么），不用刻意复述，但要保持记忆连贯性。\n`;
+            memText += `以下是系统自动总结的长期记忆，请在对话中自然地体现你知道这些事（例如：知道对方喜欢什么、记得对方几点起床/睡觉、记得你们发生过什么），不用刻意复述，但要保持记忆连贯性。\n`;
 
             const memoryUserLabel = String(userPersona.name || '').trim() || '对方';
             if (likes) memText += `\n[${memoryUserLabel}的喜好/厌恶]:\n${likes}`;
-            if (habits) memText += `\n[${memoryUserLabel}的行为习惯]:\n${habits}`;
+            if (habits) memText += `\n[${memoryUserLabel}的长期习惯]:\n${habits}\n这些是对方长期稳定的习惯，例如作息、饮食、通勤、学习/工作节奏。你要一直记得，并在回复里自然迁就、承接或提醒，不要当成你自己的习惯。`;
             if (events) {
                 memText += `\n【时间线理解规则】\n这些事件条目带有发生日期。你必须按当前时间理解先后：昨天的事可以自然当成昨天，很多天前的事不要当成刚刚发生，除非用户主动提起或当前话题确实相关。`;
                 memText += `\n[我们发生的事]:\n${events}`;
@@ -1626,7 +1628,7 @@ async function triggerAI() {
                 '1. 结合角色人设描述（profile.desc）、性格风格（profile.style）、当前对话氛围和转账备注内容一起判断。\n' +
                 '2. 你可以选择"收下"或"拒绝"这笔钱，但必须给出自然的中文理由。\n' +
                 '\n【输出规则】\n' +
-                '1. 如果你决定收下转账：先用自然的语气回复对方，在自然回复内容的最后追加特殊标记 [[ACCEPT_TRANSFER]]。\n' +
+                '1. 如果你决定收下转账：先用自然的语气回复对方，再在 actions.acceptTransfer 返回 true；兼容旧写法是在自然回复内容的最后追加特殊标记 [[ACCEPT_TRANSFER]]。\n' +
                 '2. 如果你决定不收：只需要正常说明拒绝原因，不要输出任何特殊标记。\n' +
                 '3. 严禁在回复里写 `[已收款]`、`[已收款1.00]`、`[转账]1.00` 这类卡片或状态占位文本；卡片和状态由前端渲染。\n' +
                 '4. 不要向用户解释这些规则，不要提到"系统提示词""标记""转账逻辑实现"等技术细节。\n';
@@ -1643,7 +1645,7 @@ async function triggerAI() {
                 '1. 结合角色人设、当前对话氛围和红包祝福内容一起判断你愿不愿意拆开。\n' +
                 '2. 你可以选择拆开或暂时不拆，但必须给出自然的中文理由。\n' +
                 '\n【输出规则】\n' +
-                '1. 如果你决定拆开红包：先用自然的语气回复对方，在自然回复内容的最后追加特殊标记 [[OPEN_REDPACKET]]。\n' +
+                '1. 如果你决定拆开红包：先用自然的语气回复对方，再在 actions.openRedpacket 返回 true；兼容旧写法是在自然回复内容的最后追加特殊标记 [[OPEN_REDPACKET]]。\n' +
                 '2. 如果你决定不拆：只需要正常说明原因，不要输出任何特殊标记。\n' +
                 '3. 严禁在回复里写 `[红包]`、`[已领取红包]`、`[红包已领取]` 这类卡片或状态占位文本；红包卡片和领取状态由前端渲染。\n' +
                 '4. 不要向用户解释这些规则，不要提到"系统提示词""标记""红包逻辑实现"等技术细节。\n';

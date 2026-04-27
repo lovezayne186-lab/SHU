@@ -187,6 +187,86 @@ function getAvatarByRoleId(roleId, data) {
     return p.avatar || DEFAULT_MOMENTS_AVATAR;
 }
 
+function isMomentsGroupRole(roleId, profile) {
+    var id = String(roleId || '').trim();
+    var p = profile && typeof profile === 'object' ? profile : ((window.charProfiles || {})[id] || {});
+    if (!id) return false;
+    if (p && p.isGroup === true) return true;
+    if (id.indexOf('group_') === 0) return true;
+    if (window.GroupChat && typeof window.GroupChat.isGroupChatRole === 'function') {
+        try {
+            return window.GroupChat.isGroupChatRole(id) === true;
+        } catch (e) { }
+    }
+    return false;
+}
+
+function compactMomentsRoleList(list, roleId) {
+    var id = String(roleId || '').trim();
+    if (!Array.isArray(list) || !id) return Array.isArray(list) ? list : [];
+    return list.filter(function (item) {
+        return String(item || '').trim() !== id;
+    });
+}
+
+function cleanupMomentsDataForRole(roleId) {
+    var id = String(roleId || '').trim();
+    if (!id) return 0;
+    var data = initMomentsData();
+    var posts = Array.isArray(data.posts) ? data.posts : [];
+    var removedPosts = 0;
+    var changed = false;
+    var nextPosts = [];
+
+    posts.forEach(function (post) {
+        if (!post || typeof post !== 'object') return;
+        if (String(post.roleId || '').trim() === id) {
+            removedPosts++;
+            changed = true;
+            return;
+        }
+        var before = JSON.stringify({
+            likes: post.likes,
+            comments: post.comments,
+            mentions: post.mentions,
+            visibility: post.visibility
+        });
+        if (Array.isArray(post.likes)) {
+            post.likes = compactMomentsRoleList(post.likes, id);
+        }
+        if (Array.isArray(post.comments)) {
+            post.comments = post.comments.filter(function (comment) {
+                return String(comment && comment.from || '').trim() !== id;
+            });
+        }
+        if (Array.isArray(post.mentions)) {
+            post.mentions = compactMomentsRoleList(post.mentions, id);
+        }
+        if (post.visibility && typeof post.visibility === 'object' && Array.isArray(post.visibility.list)) {
+            post.visibility.list = compactMomentsRoleList(post.visibility.list, id);
+        }
+        if (JSON.stringify({
+            likes: post.likes,
+            comments: post.comments,
+            mentions: post.mentions,
+            visibility: post.visibility
+        }) !== before) {
+            changed = true;
+        }
+        nextPosts.push(post);
+    });
+
+    if (changed || removedPosts > 0) {
+        data.posts = nextPosts;
+        window.momentsData = data;
+        saveMomentsData();
+        if (typeof renderMoments === 'function') {
+            try { renderMoments(); } catch (e) { }
+        }
+    }
+    return removedPosts;
+}
+
 function resolveMomentsRoleId(roleLike) {
     if (!roleLike) return '';
     const raw = String(roleLike);
@@ -1384,6 +1464,8 @@ function triggerAIReactionToMoment(post) {
     var visibility = post && post.visibility ? post.visibility : { type: 'public', list: [] };
 
     allRoles.forEach(function (roleId) {
+        var roleProfile = profiles[roleId] || {};
+        if (!roleId || roleId === 'me' || isMomentsGroupRole(roleId, roleProfile)) return;
         var canSee = true;
         if (visibility && visibility.type) {
             if (visibility.type === 'private') {
@@ -1414,7 +1496,8 @@ function triggerSingleAIReaction(post, aiId) {
     if (!aiId) return;
 
     var profiles = window.charProfiles || {};
-    var aiProfile = profiles[aiId] || {};
+    var aiProfile = profiles[aiId] || null;
+    if (!aiProfile || isMomentsGroupRole(aiId, aiProfile)) return;
 
     var data = window.momentsData || initMomentsData();
     var userName = data && data.userName ? data.userName : DEFAULT_MOMENTS_NAME;
@@ -1834,6 +1917,7 @@ window.changeMomentsCover = changeMomentsCover;
 window.changeMomentsAvatar = changeMomentsAvatar;
 window.previewImage = previewImage;
 window.openMomentsPublisher = openMomentsPublisher;
+window.cleanupMomentsDataForRole = cleanupMomentsDataForRole;
 
 initMomentsData();
 
@@ -1889,6 +1973,8 @@ function checkProactiveMomentsTick() {
     var state = loadProactiveState();
     roleIds.forEach(function (roleId) {
         if (!roleId || roleId === 'me') return;
+        var profile = profiles[roleId] || {};
+        if (isMomentsGroupRole(roleId, profile)) return;
         if (!isRoleMomentsPostingEnabled(roleId)) return;
         var s = state[roleId] || {};
         var lastCheck = typeof s.lastCheckAt === 'number' ? s.lastCheckAt : 0;
@@ -1905,6 +1991,7 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
     if (typeof window.callAI !== 'function') return;
     var profiles = window.charProfiles || {};
     var profile = profiles[roleId] || {};
+    if (!Object.prototype.hasOwnProperty.call(profiles, roleId) || isMomentsGroupRole(roleId, profile)) return;
     var data = window.momentsData || initMomentsData();
     var postsForLimit = Array.isArray(data.posts) ? data.posts : [];
     var nowTsForLimit = Date.now();

@@ -3604,10 +3604,10 @@ window.renderChatSettingsPanel = function (roleId) {
                 '<div class="text-[15px] text-gray-900">自动总结</div>',
                 '<div>' + buildIosSwitchHtml('setting-auto-summary-switch', 'toggleSummaryInput(); saveChatSettings();') + '</div>'
             )
-            + '<div id="setting-summary-freq-box" class="px-4 py-3 hidden" style="display:none;">'
-            + '  <div class="flex justify-between items-center">'
+            + '<div id="setting-summary-freq-box" class="chat-summary-config-box px-4 py-3 hidden" style="display:none;">'
+            + '  <div class="chat-summary-frequency-row">'
             + '    <div class="text-[14px] text-gray-600">每多少条总结一次</div>'
-            + '    <input id="setting-summary-freq" type="number" inputmode="numeric" class="w-20 text-right text-[15px] text-gray-900 bg-transparent outline-none" onchange="saveChatSettings()" />'
+            + '    <input id="setting-summary-freq" type="number" inputmode="numeric" class="chat-summary-frequency-input" onchange="saveChatSettings()" oninput="saveChatSettings()" />'
             + '  </div>'
             + '</div>'
             + row('<div class="text-[15px] text-gray-900">记忆档案</div>', '<div class="flex items-center gap-2">' + chevron + '</div>', 'onclick="openMemoryArchiveModal()" class="cursor-pointer active:bg-gray-50"')

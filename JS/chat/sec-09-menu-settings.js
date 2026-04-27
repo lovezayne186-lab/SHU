@@ -765,7 +765,7 @@ function normalizeStickerImportUrl(rawUrl) {
         if (url.length >= 2 && ((url.startsWith('`') && url.endsWith('`')) || (url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'")))) {
             url = url.slice(1, url.length - 1).trim();
         }
-        const stickerMatch = url.match(/^\[STICKER:\s*([^\]]+)\]$/i);
+        const stickerMatch = url.match(/^\[\s*(?:STICKER|表情包|贴纸)\s*[:：]\s*([^\]]+)\]$/i);
         if (stickerMatch && stickerMatch[1]) {
             url = String(stickerMatch[1]).trim();
         }
@@ -780,7 +780,7 @@ function parseStickerImportLine(rawLine) {
     const line = String(rawLine || '').trim();
     if (!line) return null;
 
-    if (/^(https?:)?\/\//i.test(line) || /^\[STICKER:/i.test(line)) {
+    if (/^(https?:)?\/\//i.test(line) || /^\[\s*(?:STICKER|表情包|贴纸)\s*[:：]/i.test(line)) {
         const directUrl = normalizeStickerImportUrl(line);
         if (!directUrl) return null;
         return {
@@ -789,7 +789,7 @@ function parseStickerImportLine(rawLine) {
         };
     }
 
-    const urlMatch = line.match(/(https?:\/\/\S+|\[STICKER:[^\]]+\])\s*$/i);
+    const urlMatch = line.match(/(https?:\/\/\S+|\[\s*(?:STICKER|表情包|贴纸)\s*[:：][^\]]+\])\s*$/i);
     let rawUrl = '';
     let rawName = '';
     if (urlMatch) {
@@ -807,6 +807,112 @@ function parseStickerImportLine(rawLine) {
         name: cleanName,
         url: rawUrl
     };
+}
+
+function collectStickerImportItems(rawText) {
+    const text = String(rawText || '');
+    const items = [];
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+        const line = String(lines[i] || '').trim();
+        if (!line) continue;
+        const parsed = parseStickerImportLine(line);
+        if (parsed && parsed.url) {
+            items.push(parsed);
+        }
+    }
+    const urlRe = /https?:\/\/[^\s"'<>，。；、)）\]}]+/gi;
+    let match = null;
+    while ((match = urlRe.exec(text)) !== null) {
+        const rawUrl = match[0];
+        const parsed = parseStickerImportLine(rawUrl);
+        if (parsed && parsed.url) {
+            items.push(parsed);
+        }
+    }
+    return items;
+}
+
+function readStickerImportFileAsArrayBuffer(file) {
+    return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function () { resolve(reader.result); };
+        reader.onerror = function () { reject(reader.error || new Error('读取文件失败')); };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+function readStickerImportFileAsText(file) {
+    return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function () { resolve(String(reader.result || '')); };
+        reader.onerror = function () { reject(reader.error || new Error('读取文件失败')); };
+        reader.readAsText(file, 'utf-8');
+    });
+}
+
+function extractStickerTextFromDocBinary(buffer) {
+    try {
+        const bytes = new Uint8Array(buffer || []);
+        if (typeof TextDecoder !== 'undefined') {
+            return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+        }
+        let out = '';
+        for (let i = 0; i < bytes.length; i++) {
+            const code = bytes[i];
+            out += code >= 32 || code === 10 || code === 13 || code === 9 ? String.fromCharCode(code) : ' ';
+        }
+        return out;
+    } catch (e) {
+        return '';
+    }
+}
+
+async function extractStickerTextFromDocxFile(file) {
+    if (!window.JSZip || typeof window.JSZip.loadAsync !== 'function') {
+        return readStickerImportFileAsText(file);
+    }
+    const zip = await window.JSZip.loadAsync(file);
+    const parts = [];
+    const names = ['word/document.xml'];
+    zip.forEach(function (relativePath) {
+        if (/^word\/(?:header|footer)\d*\.xml$/i.test(relativePath)) {
+            names.push(relativePath);
+        }
+    });
+    for (let i = 0; i < names.length; i++) {
+        const entry = zip.file(names[i]);
+        if (!entry) continue;
+        const xml = await entry.async('text');
+        const doc = new DOMParser().parseFromString(xml, 'application/xml');
+        const paragraphs = doc.getElementsByTagName('w:p');
+        if (paragraphs && paragraphs.length) {
+            for (let p = 0; p < paragraphs.length; p++) {
+                const texts = paragraphs[p].getElementsByTagName('w:t');
+                for (let j = 0; j < texts.length; j++) {
+                    parts.push(texts[j].textContent || '');
+                }
+                parts.push('\n');
+            }
+        } else {
+            parts.push(String(xml || '').replace(/<[^>]+>/g, ' '));
+            parts.push('\n');
+        }
+    }
+    return parts.join('');
+}
+
+async function readStickerImportFileText(file) {
+    if (!file) return '';
+    const name = String(file.name || '').toLowerCase();
+    if (/\.docx$/i.test(name)) {
+        return extractStickerTextFromDocxFile(file);
+    }
+    if (/\.doc$/i.test(name)) {
+        const buffer = await readStickerImportFileAsArrayBuffer(file);
+        return extractStickerTextFromDocBinary(buffer);
+    }
+    return readStickerImportFileAsText(file);
 }
 
 
@@ -829,6 +935,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const stickerImportModal = document.getElementById('sticker-import-modal');
     const stickerImportText = document.getElementById('sticker-import-text');
     const stickerImportCategory = document.getElementById('sticker-import-category');
+    const stickerImportFile = document.getElementById('sticker-import-file');
+    const stickerImportFileBtn = document.getElementById('sticker-import-file-btn');
+    const stickerImportFileName = document.getElementById('sticker-import-file-name');
     const stickerImportCancelBtn = document.getElementById('sticker-import-cancel-btn');
     const stickerImportConfirmBtn = document.getElementById('sticker-import-confirm-btn');
     const panelHeight = 250;
@@ -878,15 +987,56 @@ document.addEventListener('DOMContentLoaded', function () {
                     mine: Array.isArray(data.mine) ? data.mine : [],
                     his: Array.isArray(data.his) ? data.his : [],
                     general: Array.isArray(data.general) ? data.general : []
-                }
+            }
         };
+    }
+    function getGlobalStickerScopeForUi() {
+        if (typeof window.getGlobalStickerScope === 'function') {
+            return window.getGlobalStickerScope();
+        }
+        return null;
+    }
+    function makeStickerSelectionKey(scopeKind, id) {
+        const scope = String(scopeKind || 'role').trim() || 'role';
+        const key = String(id || '').trim();
+        return key ? (scope + ':' + key) : '';
+    }
+    function getStickerItemSelectionKey(item) {
+        if (!item) return '';
+        return makeStickerSelectionKey(item.__scopeKind || 'role', item.id);
     }
     function getStickerTabList() {
         const scope = getStickerScope();
         if (!scope.tabs[currentStickerCategory]) {
             scope.tabs[currentStickerCategory] = [];
         }
-        return scope.tabs[currentStickerCategory];
+        const roleList = Array.isArray(scope.tabs[currentStickerCategory]) ? scope.tabs[currentStickerCategory] : [];
+        if (currentStickerCategory !== 'general') {
+            return roleList.map(function (item) {
+                return item && typeof item === 'object' ? Object.assign({}, item, { __scopeKind: 'role' }) : item;
+            });
+        }
+        const merged = [];
+        const seen = new Set();
+        const makeDuplicateKey = typeof window.getStickerDuplicateUrlKey === 'function'
+            ? window.getStickerDuplicateUrlKey
+            : function (src) { return String(src || '').trim().replace(/\s+/g, ''); };
+        function appendList(list, scopeKind) {
+            list.forEach(function (item) {
+                if (!item) return;
+                const dupKey = makeDuplicateKey(item.src || item.url || item.href || '');
+                if (!dupKey || seen.has(dupKey)) return;
+                seen.add(dupKey);
+                merged.push(Object.assign({}, item, { __scopeKind: scopeKind }));
+            });
+        }
+        appendList(roleList, 'role');
+        const globalScope = getGlobalStickerScopeForUi();
+        const globalList = globalScope && globalScope.tabs && Array.isArray(globalScope.tabs.general)
+            ? globalScope.tabs.general
+            : [];
+        appendList(globalList, 'global');
+        return merged;
     }
     function getStickerCategoryList() {
         const scope = getStickerScope();
@@ -931,7 +1081,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (stickerManageSelectAllBtn) {
             const visible = getVisibleStickerItems();
             const allVisibleSelected = visible.length > 0 && visible.every(function (item) {
-                return item && selectedStickerIds.has(String(item.id || ''));
+                const key = getStickerItemSelectionKey(item);
+                return key && selectedStickerIds.has(key);
             });
             stickerManageSelectAllBtn.textContent = allVisibleSelected ? '取消全选' : '全选';
         }
@@ -1087,14 +1238,18 @@ document.addEventListener('DOMContentLoaded', function () {
             const url = normalizeStickerImportUrl(sticker.src || sticker.url || sticker.href || '');
             if (!url) return;
             const name = sanitizeStickerDisplayName(sticker.name, url);
+            const scopeKind = String(sticker.__scopeKind || 'role');
+            const selectionKey = getStickerItemSelectionKey(sticker);
             const item = document.createElement('div');
             item.className = 'sticker-item';
             item.dataset.id = String(sticker.id || '');
+            item.dataset.scopeKind = scopeKind;
+            item.dataset.selectKey = selectionKey;
             item.dataset.url = url;
             item.dataset.categoryId = String(sticker.categoryId || 'default');
             item.dataset.name = name;
-            item.title = name || '未命名表情';
-            if (selectedStickerIds.has(String(sticker.id || ''))) {
+            item.title = (name || '未命名表情') + (scopeKind === 'global' ? '（所有联系人通用）' : '');
+            if (selectionKey && selectedStickerIds.has(selectionKey)) {
                 item.classList.add('selected');
             }
             if (!name) {
@@ -1112,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const label = document.createElement('div');
             label.className = 'sticker-name';
-            label.textContent = name || '未命名表情';
+            label.textContent = (scopeKind === 'global' ? '全局 · ' : '') + (name || '未命名表情');
 
             item.appendChild(thumb);
             item.appendChild(label);
@@ -1155,14 +1310,16 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         const allVisibleSelected = visible.every(function (item) {
-            return item && selectedStickerIds.has(String(item.id || ''));
+            const key = getStickerItemSelectionKey(item);
+            return key && selectedStickerIds.has(key);
         });
         visible.forEach(function (item) {
-            if (!item || !item.id) return;
+            const key = getStickerItemSelectionKey(item);
+            if (!key) return;
             if (allVisibleSelected) {
-                selectedStickerIds.delete(String(item.id));
+                selectedStickerIds.delete(key);
             } else {
-                selectedStickerIds.add(String(item.id));
+                selectedStickerIds.add(key);
             }
         });
         renderStickers();
@@ -1195,14 +1352,25 @@ document.addEventListener('DOMContentLoaded', function () {
             if (typeof showCenterToast === 'function') showCenterToast('先在下方选择一个分类');
             return;
         }
-        const list = getStickerTabList();
         let changed = 0;
-        list.forEach(function (item) {
-            if (!item || !item.id) return;
-            if (!selectedStickerIds.has(String(item.id))) return;
+        const scope = getStickerScope();
+        const roleList = scope.tabs && Array.isArray(scope.tabs[currentStickerCategory]) ? scope.tabs[currentStickerCategory] : [];
+        roleList.forEach(function (item) {
+            const key = makeStickerSelectionKey('role', item && item.id);
+            if (!key || !selectedStickerIds.has(key)) return;
             item.categoryId = currentStickerFilter;
             changed++;
         });
+        if (currentStickerCategory === 'general') {
+            const globalScope = getGlobalStickerScopeForUi();
+            const globalList = globalScope && globalScope.tabs && Array.isArray(globalScope.tabs.general) ? globalScope.tabs.general : [];
+            globalList.forEach(function (item) {
+                const key = makeStickerSelectionKey('global', item && item.id);
+                if (!key || !selectedStickerIds.has(key)) return;
+                item.categoryId = currentStickerFilter;
+                changed++;
+            });
+        }
         if (!changed) {
             if (typeof showCenterToast === 'function') showCenterToast('没有可分类的表情');
             return;
@@ -1222,12 +1390,22 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         if (!(await chatUiConfirm('确定删除选中的表情包吗？', { title: '删除表情包' }))) return;
-        const list = getStickerTabList();
-        const next = list.filter(function (item) {
-            return !(item && item.id && selectedStickerIds.has(String(item.id)));
-        });
         const scope = getStickerScope();
-        scope.tabs[currentStickerCategory] = next;
+        if (scope.tabs && Array.isArray(scope.tabs[currentStickerCategory])) {
+            scope.tabs[currentStickerCategory] = scope.tabs[currentStickerCategory].filter(function (item) {
+                const key = makeStickerSelectionKey('role', item && item.id);
+                return !key || !selectedStickerIds.has(key);
+            });
+        }
+        if (currentStickerCategory === 'general') {
+            const globalScope = getGlobalStickerScopeForUi();
+            if (globalScope && globalScope.tabs && Array.isArray(globalScope.tabs.general)) {
+                globalScope.tabs.general = globalScope.tabs.general.filter(function (item) {
+                    const key = makeStickerSelectionKey('global', item && item.id);
+                    return !key || !selectedStickerIds.has(key);
+                });
+            }
+        }
         selectedStickerIds.clear();
         if (typeof window.persistStickerData === 'function') {
             window.persistStickerData();
@@ -1816,7 +1994,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const item = e.target.closest('.sticker-item');
             if (!item) return;
             if (Date.now() < suppressStickerClickUntil) return;
-            const stickerId = item.dataset.id || '';
+            const stickerId = item.dataset.selectKey || item.dataset.id || '';
             if (stickerManageMode) {
                 toggleStickerSelection(stickerId);
                 return;
@@ -1832,7 +2010,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 clearTimeout(stickerLongPressTimer);
                 stickerLongPressTimer = null;
             }
-            const stickerId = String(item.dataset.id || '').trim();
+            const stickerId = String(item.dataset.selectKey || item.dataset.id || '').trim();
             if (!stickerId) return;
             stickerLongPressTimer = setTimeout(function () {
                 suppressStickerClickUntil = Date.now() + 500;
@@ -1862,7 +2040,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const item = e.target.closest('.sticker-item');
             if (!item) return;
             e.preventDefault();
-            const stickerId = String(item.dataset.id || '').trim();
+            const stickerId = String(item.dataset.selectKey || item.dataset.id || '').trim();
             if (!stickerId) return;
             suppressStickerClickUntil = Date.now() + 500;
             enterStickerManageMode(stickerId);
@@ -1926,6 +2104,33 @@ document.addEventListener('DOMContentLoaded', function () {
             confirmStickerImport();
         });
     }
+    if (stickerImportFileBtn && stickerImportFile) {
+        stickerImportFileBtn.addEventListener('click', function () {
+            stickerImportFile.click();
+        });
+        stickerImportFile.addEventListener('change', async function () {
+            const file = stickerImportFile.files && stickerImportFile.files[0] ? stickerImportFile.files[0] : null;
+            if (!file || !stickerImportText) return;
+            if (stickerImportFileName) {
+                stickerImportFileName.textContent = '正在读取：' + String(file.name || '文件');
+            }
+            try {
+                const text = await readStickerImportFileText(file);
+                const prev = String(stickerImportText.value || '').trim();
+                stickerImportText.value = prev ? (prev + '\n' + text.trim()) : text.trim();
+                if (stickerImportFileName) {
+                    stickerImportFileName.textContent = '已读取：' + String(file.name || '文件');
+                }
+            } catch (err) {
+                if (stickerImportFileName) {
+                    stickerImportFileName.textContent = '';
+                }
+                await chatUiAlert('文件读取失败，请换 txt 文本或复制内容导入。');
+            } finally {
+                stickerImportFile.value = '';
+            }
+        });
+    }
     window.refreshStickerPanel = renderStickerPanel;
     syncStickerPanelState();
 });
@@ -1949,6 +2154,10 @@ function openStickerImportModal() {
 
     textarea.value = '';
     select.value = defaultKey;
+    const fileInput = document.getElementById('sticker-import-file');
+    const fileNameEl = document.getElementById('sticker-import-file-name');
+    if (fileInput) fileInput.value = '';
+    if (fileNameEl) fileNameEl.textContent = '';
     modal.style.display = 'flex';
 }
 
@@ -1964,15 +2173,18 @@ function confirmStickerImport() {
     const select = document.getElementById('sticker-import-category');
     if (!modal || !textarea || !select) return;
     const raw = textarea.value || '';
-    const lines = raw.split('\n');
-    const key = select.value || 'mine';
+    const selectedKey = select.value || 'mine';
+    const isGlobalGeneral = selectedKey === 'global_general';
+    const key = isGlobalGeneral ? 'general' : selectedKey;
     if (typeof window.ensureStickerStore === 'function') {
         window.ensureStickerStore(false);
     }
     const roleId = String(window.currentChatRole || '').trim() || '__default__';
-    const scope = typeof window.getStickerScopeForRole === 'function'
-        ? window.getStickerScopeForRole(roleId)
-        : null;
+    const scope = isGlobalGeneral
+        ? (typeof window.getGlobalStickerScope === 'function' ? window.getGlobalStickerScope() : null)
+        : (typeof window.getStickerScopeForRole === 'function'
+            ? window.getStickerScopeForRole(roleId)
+            : null);
     if (!scope || !scope.tabs) return;
     if (!Array.isArray(scope.tabs[key])) {
         scope.tabs[key] = [];
@@ -1980,7 +2192,7 @@ function confirmStickerImport() {
     const panelState = window.__chatStickerPanelState && typeof window.__chatStickerPanelState === 'object'
         ? window.__chatStickerPanelState
         : {};
-    let categoryId = String(panelState.currentFilter || 'all').trim() || 'all';
+    let categoryId = isGlobalGeneral ? 'default' : (String(panelState.currentFilter || 'all').trim() || 'all');
     if (categoryId === 'all') categoryId = 'default';
     const knownUrls = new Set();
     const makeDuplicateKey = typeof window.getStickerDuplicateUrlKey === 'function'
@@ -1995,8 +2207,10 @@ function confirmStickerImport() {
             if (dupKey) knownUrls.add(dupKey);
         });
     });
-    for (let i = 0; i < lines.length; i++) {
-        const parsed = parseStickerImportLine(lines[i]);
+    const parsedItems = collectStickerImportItems(raw);
+    let added = 0;
+    for (let i = 0; i < parsedItems.length; i++) {
+        const parsed = parsedItems[i];
         if (!parsed || !parsed.url) continue;
         const namePart = sanitizeStickerDisplayName(parsed.name, parsed.url);
         const urlPart = parsed.url;
@@ -2014,6 +2228,7 @@ function confirmStickerImport() {
             src: urlPart,
             categoryId: categoryId
         });
+        added++;
     }
     if (typeof window.persistStickerData === 'function') {
         window.persistStickerData();
@@ -2025,6 +2240,9 @@ function confirmStickerImport() {
     modal.style.display = 'none';
     if (typeof window.refreshStickerPanel === 'function') {
         window.refreshStickerPanel();
+    }
+    if (typeof showCenterToast === 'function') {
+        showCenterToast(added ? ('已导入 ' + added + ' 个表情包') : '没有可导入的新表情包');
     }
 }
 

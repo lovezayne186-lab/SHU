@@ -34,6 +34,14 @@ function getRoleNotificationMeta(roleId) {
 function getAiMessageNotificationPreview(msg) {
     if (!msg || String(msg.role || '') !== 'ai') return '';
     const type = String(msg.type || 'text').trim();
+    if (type === 'html') {
+        const div = typeof document !== 'undefined' && document.createElement ? document.createElement('div') : null;
+        if (div) {
+            div.innerHTML = sanitizeChatBubbleHtml(msg.content);
+            return String(div.textContent || '').trim();
+        }
+        return String(msg.content || '').replace(/<[^>]*>/g, '').trim();
+    }
     if (type === 'text') {
         const parsed = shouldRenderTranslatedBubble(window.currentChatRole || msg.roleId || '', msg)
             ? parseTranslatedBubbleText(msg.content)
@@ -83,6 +91,105 @@ function escapeHtmlText(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function sanitizeChatBubbleHtml(rawHtml) {
+    const raw = String(rawHtml == null ? '' : rawHtml);
+    if (!raw) return '';
+    if (typeof document === 'undefined' || !document.createElement) {
+        return escapeHtmlText(raw);
+    }
+
+    const allowedTags = new Set([
+        'a', 'b', 'blockquote', 'br', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'hr', 'i', 'img', 'li', 'mark', 'ol', 'p', 'pre', 'section', 'small', 'span', 'strong',
+        'table', 'tbody', 'td', 'th', 'thead', 'tr', 'u', 'ul'
+    ]);
+    const blockedTags = new Set([
+        'script', 'style', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form', 'input',
+        'button', 'textarea', 'select', 'option', 'svg', 'math', 'canvas', 'video', 'audio'
+    ]);
+    const allowedAttrsByTag = {
+        a: new Set(['href', 'target', 'rel']),
+        img: new Set(['src', 'alt', 'width', 'height']),
+        td: new Set(['colspan', 'rowspan']),
+        th: new Set(['colspan', 'rowspan'])
+    };
+    const globalAttrs = new Set(['class', 'title', 'role', 'aria-label', 'style']);
+
+    const isSafeUrl = function (value, isImage) {
+        const url = String(value || '').trim();
+        if (!url) return false;
+        const lower = url.replace(/[\u0000-\u001f\s]+/g, '').toLowerCase();
+        if (lower.startsWith('javascript:') || lower.startsWith('vbscript:') || lower.startsWith('data:text/html')) return false;
+        if (isImage && lower.startsWith('data:image/')) return true;
+        return /^(https?:|mailto:|tel:|\/|\.\/|\.\.\/|#)/i.test(url);
+    };
+
+    const sanitizeStyle = function (value) {
+        return String(value || '')
+            .split(';')
+            .map(function (rule) { return rule.trim(); })
+            .filter(function (rule) {
+                if (!rule || rule.indexOf(':') === -1) return false;
+                const lower = rule.toLowerCase();
+                return lower.indexOf('expression') === -1 &&
+                    lower.indexOf('javascript:') === -1 &&
+                    lower.indexOf('@import') === -1 &&
+                    lower.indexOf('behavior:') === -1 &&
+                    lower.indexOf('url(') === -1;
+            })
+            .join('; ');
+    };
+
+    const template = document.createElement('template');
+    template.innerHTML = raw;
+
+    const walk = function (node) {
+        const children = Array.prototype.slice.call(node.childNodes || []);
+        children.forEach(function (child) {
+            if (child.nodeType !== 1) return;
+            const tag = String(child.tagName || '').toLowerCase();
+            if (blockedTags.has(tag)) {
+                child.remove();
+                return;
+            }
+            if (!allowedTags.has(tag)) {
+                child.replaceWith(document.createTextNode(child.textContent || ''));
+                return;
+            }
+
+            Array.prototype.slice.call(child.attributes || []).forEach(function (attr) {
+                const name = String(attr.name || '').toLowerCase();
+                const value = String(attr.value || '');
+                const allowedForTag = allowedAttrsByTag[tag];
+                const isDataAttr = name.indexOf('data-') === 0;
+                const allowed = globalAttrs.has(name) || isDataAttr || (allowedForTag && allowedForTag.has(name));
+                if (!allowed || name.indexOf('on') === 0) {
+                    child.removeAttribute(attr.name);
+                    return;
+                }
+                if ((name === 'href' || name === 'src') && !isSafeUrl(value, tag === 'img')) {
+                    child.removeAttribute(attr.name);
+                    return;
+                }
+                if (name === 'style') {
+                    const cleanStyle = sanitizeStyle(value);
+                    if (cleanStyle) child.setAttribute('style', cleanStyle);
+                    else child.removeAttribute('style');
+                }
+            });
+
+            if (tag === 'a') {
+                child.setAttribute('rel', 'noopener noreferrer');
+                if (!child.getAttribute('target')) child.setAttribute('target', '_blank');
+            }
+            walk(child);
+        });
+    };
+
+    walk(template.content);
+    return template.innerHTML;
 }
 
 function getTranslatedRoleDisplayName(roleId) {
@@ -406,6 +513,7 @@ function bindTranslatedBubbleToggle(bubbleEl) {
 }
 
 window.escapeHtmlText = escapeHtmlText;
+window.sanitizeChatBubbleHtml = sanitizeChatBubbleHtml;
 window.parseTranslatedBubbleText = parseTranslatedBubbleText;
 window.buildTranslatedBubbleInnerHtml = buildTranslatedBubbleInnerHtml;
 window.bindTranslatedBubbleToggle = bindTranslatedBubbleToggle;
@@ -550,10 +658,105 @@ function getMoneyActionKind(info, fallbackText) {
         : 'transfer';
 }
 
+function buildModernChatJsonPromptForEvent(roleId, eventPrompt) {
+    const rid = String(roleId || window.currentChatRole || '').trim();
+    const extraPrompt = String(eventPrompt || '').trim();
+    const fallbackProfile = window.charProfiles && rid ? (window.charProfiles[rid] || {}) : {};
+    const fallbackPersona = window.userPersonas && rid ? (window.userPersonas[rid] || {}) : {};
+
+    if (typeof window.buildWechatPrivatePromptV2 === 'function' && typeof window.buildPromptContextBundle === 'function') {
+        try {
+            const bundle = window.buildPromptContextBundle(rid, {}) || {};
+            const profile = bundle.profile || fallbackProfile || {};
+            const userPersona = bundle.userPersona || fallbackPersona || {};
+            const stickerPromptText = typeof buildAIStickerPromptText === 'function' ? buildAIStickerPromptText() : '';
+            const timePrompt = '【当前系统时间】\n' + new Date().toLocaleString('zh-CN', { hour12: false });
+            return window.buildWechatPrivatePromptV2({
+                roleId: rid,
+                roleName: bundle.roleName || profile.nickName || profile.name || 'TA',
+                realName: String(profile.realName || profile.real_name || profile.nickName || profile.name || bundle.roleName || 'TA').trim() || 'TA',
+                language: String(profile.language || profile.lang || '').trim(),
+                roleDesc: profile.desc || '',
+                roleStyle: profile.style || '',
+                roleSchedule: profile.schedule || '',
+                roleRemark: bundle.roleRemark || '',
+                userName: userPersona.name || '',
+                userGender: userPersona.gender || '',
+                userBirthday: userPersona.birthday ? String(userPersona.birthday) + (userPersona.birthdayType === 'lunar' ? '（农历）' : '（阳历）') : '',
+                userSetting: userPersona.setting || '',
+                memoryArchivePrompt: bundle.memoryArchivePrompt || '',
+                worldBookPromptText: bundle.worldBookPromptText || '',
+                timePerceptionPrompt: timePrompt,
+                giftTaskPrompt: bundle.giftTaskPrompt || '',
+                coupleWishlistPrompt: bundle.coupleWishlistPrompt || '',
+                transferScenePrompt: extraPrompt,
+                stickerPromptText: stickerPromptText
+            });
+        } catch (e) { }
+    }
+
+    let prompt = String(fallbackProfile.desc || '你是一个真实的成年人角色，需要以自然微信聊天口吻回应用户。');
+    if (fallbackProfile.schedule) prompt += '\n\n【作息安排】\n' + String(fallbackProfile.schedule).trim();
+    if (fallbackProfile.style) prompt += '\n\n【聊天风格】\n' + String(fallbackProfile.style).trim();
+    if (extraPrompt) prompt += '\n\n' + extraPrompt;
+    prompt += '\n\n[[PROMPT_CLASS:FULL_CHAT]]\n[[SCENE:WECHAT_PRIVATE_V2]]\n[[PROMPT_OUTPUT:chat_json]]';
+    prompt += '\n\n你必须且仅输出一个 JSON 对象。必须包含 reply、status、actions、system_event。只要触发动作，就必须同时给出自然 reply。';
+    prompt += '\nreply 数组里可使用 {"type":"voice","content":"..."}、{"type":"photo","content":"画面描述"}、{"type":"sticker","url":"表情包URL"}；用户明确要求 HTML 时可使用 {"type":"html","content":"<div>...</div>"}。照片和表情包不要混用。';
+    return prompt;
+}
+
+function buildMoneyEventPrompt(kind, status, amount) {
+    const isRedpacket = kind === 'redpacket';
+    if (isRedpacket) {
+        if (status === 'accepted') {
+            return [
+                '【🧧 红包领取回执场景】',
+                '系统事件：用户刚刚领取了你之前发出的红包' + (amount ? '，金额 ' + amount + ' 元' : '') + '。',
+                '你需要像真人一样自然回应这件事，可以开心、打趣、接话或顺势推进关系。',
+                '必须输出主聊天 JSON；reply 至少 1 条自然可见气泡，不能只输出 actions。',
+                '不要新建红包/转账卡片，不要写 UI 状态占位符。'
+            ].join('\n');
+        }
+        return [
+            '【🧧 红包退回回执场景】',
+            '系统事件：用户没有领取你之前发出的红包，红包已退回。',
+            '请按人设自然回应，可以询问、打趣、体谅或收住。',
+            '必须输出主聊天 JSON；reply 至少 1 条自然可见气泡，不能只输出 actions。'
+        ].join('\n');
+    }
+    if (status === 'accepted') {
+        return [
+            '【💸 转账收款回执场景】',
+            '系统事件：用户刚刚收下了你之前发出的转账。',
+            '你需要像真人一样自然回应这件事，可以接住对方、解释、逗一下或继续当前话题。',
+            '必须输出主聊天 JSON；reply 至少 1 条自然可见气泡，不能只输出 actions。',
+            '不要新建转账/红包卡片，不要写 UI 状态占位符。'
+        ].join('\n');
+    }
+    return [
+        '【💸 转账退回回执场景】',
+        '系统事件：用户刚刚退回了你之前发出的转账。',
+        '请按人设自然回应，可以追问、体谅、坚持或收住。',
+        '必须输出主聊天 JSON；reply 至少 1 条自然可见气泡，不能只输出 actions。'
+    ].join('\n');
+}
+
+function buildImageEventPrompt(imageCount) {
+    const count = Math.max(1, parseInt(imageCount, 10) || 1);
+    return [
+        '【图片消息场景】',
+        '用户刚刚发送了' + count + '张真实图片。请结合图片内容和用户附带文字自然回复。',
+        '如果用户明确要求你“换头像/用这张当头像/把头像换成这个”，必须在 actions.changeAvatar 中返回 {"index": 1}，多图时按用户指代选择对应 index，并同时在 reply 中自然说明。',
+        '如果只是看图、分享照片或让你评价图片，不要更换头像。',
+        '照片/图片和表情包必须区分：用户发来的真实图片是 image；你要发表情包时只能用 {"type":"sticker","url":"可用表情清单里的URL"}；你要发生活照片时用 {"type":"photo","content":"画面描述"}。',
+        '必须输出主聊天 JSON；只要触发头像或其他动作，就必须同时给出自然 reply。'
+    ].join('\n');
+}
+
 function handleActions(roleId, actions, options) {
     const opts = options && typeof options === 'object' ? options : {};
     const onBackgroundMessage = typeof opts.onBackgroundMessage === 'function' ? opts.onBackgroundMessage : null;
-    const result = { postMessages: [], offlineMeetingStart: false, offlineMeetingSource: '', recall: null };
+    const result = { postMessages: [], offlineMeetingStart: false, offlineMeetingSource: '', recall: null, acceptTransfer: false, openRedpacket: false };
     if (!roleId || !actions || typeof actions !== 'object') return result;
     if (!window.chatData) window.chatData = {};
     if (!window.chatData[roleId]) window.chatData[roleId] = [];
@@ -594,6 +797,15 @@ function handleActions(roleId, actions, options) {
 
         if (act.changeAvatar) {
             handleChangeAvatarAction(roleId, act.changeAvatar);
+        }
+
+        const acceptTransferAct = act.acceptTransfer || act.accept_transfer || act.receiveTransfer || act.receive_transfer || act.collectTransfer || act.collect_transfer;
+        if (acceptTransferAct === true || acceptTransferAct === 'true' || acceptTransferAct === 1 || (acceptTransferAct && typeof acceptTransferAct === 'object')) {
+            result.acceptTransfer = true;
+        }
+        const openRedpacketAct = act.openRedpacket || act.open_redpacket || act.openRedPacket || act.open_hongbao || act.receiveRedpacket || act.receive_redpacket;
+        if (openRedpacketAct === true || openRedpacketAct === 'true' || openRedpacketAct === 1 || (openRedpacketAct && typeof openRedpacketAct === 'object')) {
+            result.openRedpacket = true;
         }
 
         const giftTaskAct = act.gift_task || act.giftTask || act.giftTodo || act.giftTodoAction;
@@ -1046,6 +1258,12 @@ function normalizeStructuredReplySegments(replyValue, options) {
             pushText(item.content != null ? item.content : item.text);
             return true;
         }
+        if (rawType === 'html') {
+            pushObject('html', {
+                content: String(item.content != null ? item.content : (item.html != null ? item.html : item.text || '')).trim()
+            });
+            return true;
+        }
         if (rawType === 'offline_action' || rawType === 'action' || rawType === 'narration') {
             const actionContent = String(item.content != null ? item.content : item.text || '').trim();
             if (offlineMode) pushObject('offline_action', { content: actionContent });
@@ -1068,7 +1286,7 @@ function normalizeStructuredReplySegments(replyValue, options) {
             return true;
         }
         if (rawType === 'sticker') {
-            pushObject('sticker', { content: String(item.url || item.content || '').trim() });
+            pushObject('sticker', { content: String(item.url || item.src || item.content || item.name || item.stickerName || '').trim() });
             return true;
         }
         if (rawType === 'dice') {
@@ -1243,6 +1461,13 @@ function normalizeImageUrlCandidate(url) {
         u = String(stickerMatch[1]).trim();
     }
     return u;
+}
+
+function resolveKnownStickerMetaForAI(roleId, rawValue, fallbackName) {
+    if (typeof window.resolveStickerMetaByUrl !== 'function') return null;
+    const meta = window.resolveStickerMetaByUrl(roleId, rawValue, fallbackName || '');
+    if (meta && meta.found && meta.url) return meta;
+    return null;
 }
 
 function isValidImageUrlCandidate(url) {
@@ -1852,6 +2077,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         return replySegments.map(function (seg) {
                             if (!seg) return '';
                             if (seg.kind === 'text') return String(seg.text || '');
+                            if (seg.kind === 'html') return String(seg.content || '');
                             if (seg.kind === 'voice' || seg.kind === 'photo' || seg.kind === 'sticker') return String(seg.content || '');
                             if (seg.kind === 'location') return String(seg.name || '') + ' ' + String(seg.address || '');
                             if (seg.kind === 'video_call') return '[[VIDEO_CALL_USER]]';
@@ -1869,8 +2095,8 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
 
                 const parsed = parseAITransferFromContent(commandCarrierText || '', roleId);
                 const transferInfo = parsed.transfer;
-                const acceptTransfer = parsed.acceptTransfer;
-                const openRedpacket = parsed.openRedpacket;
+                const acceptTransfer = parsed.acceptTransfer || !!(actions && actions.acceptTransfer);
+                const openRedpacket = parsed.openRedpacket || !!(actions && actions.openRedpacket);
                 const baseText = parsed.text || '';
                 const effectiveOfflineMode = wasOfflineMeeting || !!(actions && actions.offlineMeetingStart);
                 if (Array.isArray(replySegments) && replySegments.length) {
@@ -2011,11 +2237,14 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         continue;
                     }
 
-                    if (segment.kind === 'voice' || segment.kind === 'photo' || segment.kind === 'location' || segment.kind === 'sticker' || segment.kind === 'takeout_card') {
+                    if (segment.kind === 'voice' || segment.kind === 'photo' || segment.kind === 'location' || segment.kind === 'sticker' || segment.kind === 'takeout_card' || segment.kind === 'html') {
                         let directMsgType = 'text';
                         let directContent = '';
                         if (segment.kind === 'voice') {
                             directMsgType = 'voice';
+                            directContent = String(segment.content || '').trim();
+                        } else if (segment.kind === 'html') {
+                            directMsgType = 'html';
                             directContent = String(segment.content || '').trim();
                         } else if (segment.kind === 'photo') {
                             directMsgType = 'ai_secret_photo';
@@ -2147,11 +2376,11 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                             continue;
                         }
 
-                        const stickerPattern = /\[STICKER:\s*([^\s\]]+)\]/i;
+                        const stickerPattern = /\[\s*(?:STICKER|表情包|贴纸)\s*[:：]\s*([^\]]+?)\s*\]/i;
                         const stickerMatch = part.match(stickerPattern);
 
                         if (stickerMatch) {
-                            let url = stickerMatch[1].trim();
+                            let url = normalizeImageUrlCandidate(stickerMatch[1]);
                             if (url.startsWith('//')) {
                                 url = 'https:' + url;
                             }
@@ -2183,8 +2412,14 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                                 if (!isCurrentRequest()) return;
                             }
                         } else if (/^https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$/i.test(part)) {
-                            msgType = 'image';
-                            msgContent = part;
+                            const knownSticker = resolveKnownStickerMetaForAI(roleId, part, '');
+                            if (knownSticker && knownSticker.url) {
+                                msgType = 'sticker';
+                                msgContent = knownSticker.url;
+                            } else {
+                                msgType = 'image';
+                                msgContent = part;
+                            }
                         }
                     }
 
@@ -2532,6 +2767,8 @@ async function sendAITransferSystemNotice(roleId, status) {
         return;
     }
 
+    systemPrompt = buildModernChatJsonPromptForEvent(roleId, buildMoneyEventPrompt('transfer', status));
+
     const historyForApi = buildApiMemoryHistory(roleId, cleanHistory);
     invokeAIWithCommonHandlers(systemPrompt, historyForApi, text, roleId, headerTitle, oldTitle);
 }
@@ -2603,6 +2840,8 @@ async function sendAIRedpacketSystemNotice(roleId, status, amount) {
         return;
     }
 
+    systemPrompt = buildModernChatJsonPromptForEvent(roleId, buildMoneyEventPrompt('redpacket', status, amount));
+
     const historyForApi = buildApiMemoryHistory(roleId, cleanHistory);
     invokeAIWithCommonHandlers(systemPrompt, historyForApi, text, roleId, headerTitle, oldTitle);
 }
@@ -2672,6 +2911,8 @@ async function handleImageForAI(base64, roleId) {
         base64: base64,
         text: caption
     };
+
+    systemPrompt = buildModernChatJsonPromptForEvent(roleId, buildImageEventPrompt(1));
 
     const historyForApi = buildApiMemoryHistory(roleId, cleanHistory);
     invokeAIWithCommonHandlers(systemPrompt, historyForApi, userPayload, roleId, headerTitle, oldTitle);
@@ -2746,6 +2987,8 @@ async function handleImagesForAI(images, roleId, captionOverride) {
         images: list,
         text: caption
     };
+
+    systemPrompt = buildModernChatJsonPromptForEvent(roleId, buildImageEventPrompt(list.length));
 
     const historyForApi = buildApiMemoryHistory(roleId, cleanHistory);
     invokeAIWithCommonHandlers(systemPrompt, historyForApi, userPayload, roleId, headerTitle, oldTitle);
@@ -3394,20 +3637,21 @@ function appendMessageToDOM(msg) {
             </div>
         `;
     } else {
-        const stickerMatch = String(content || '').match(/\[STICKER:\s*([^\s\]]+)\]/i);
-        if (stickerMatch) {
-            let url = stickerMatch[1].trim();
-            if (url.startsWith('//')) {
-                url = 'https:' + url;
-            }
+            const stickerMatch = String(content || '').match(/\[\s*(?:STICKER|表情包|贴纸)\s*[:：]\s*([^\]]+?)\s*\]/i);
+            if (stickerMatch) {
+                let url = normalizeImageUrlCandidate(stickerMatch[1]);
+                if (url.startsWith('//')) {
+                    url = 'https:' + url;
+                }
             bubbleHtml = `
                 <div class="msg-bubble msg-bubble-image custom-bubble-content custom-sticker">
                     <img src="${url}">
                 </div>
             `;
         } else {
-            const translatedPayload = shouldRenderTranslatedBubble(roleId, msg) ? parseTranslatedBubbleText(displayContent) : null;
-            const safeContent = String(displayContent || '').replace(/\n/g, '<br>');
+            const msgType = String(msg.type || 'text').trim();
+            const isHtmlBubble = msg.role === 'ai' && msgType === 'html';
+            const translatedPayload = !isHtmlBubble && shouldRenderTranslatedBubble(roleId, msg) ? parseTranslatedBubbleText(displayContent) : null;
             let quoteBlockHtml = "";
             if (msg.quote && msg.quote.text) {
                 let shortQuote = msg.quote.text;
@@ -3439,12 +3683,22 @@ function appendMessageToDOM(msg) {
             `;
             } else {
                 const bubbleText = translatedPayload ? translatedPayload.bodyText : displayContent;
-                const safeBubbleText = String(bubbleText || '').replace(/\n/g, '<br>');
-                if (msg.role === 'ai' && msg.type === 'text') {
+                const safeBubbleText = isHtmlBubble
+                    ? sanitizeChatBubbleHtml(bubbleText)
+                    : escapeHtmlText(bubbleText || '');
+                const dataText = escapeHtmlText(bubbleText || '');
+                if (isHtmlBubble) {
                     bubbleHtml = `
                     <div class="msg-bubble custom-bubble-content">
                         ${quoteBlockHtml}
-                        <div class="msg-text custom-bubble-text" data-text="${safeBubbleText}"></div>
+                        <div class="msg-text custom-bubble-text chat-html-bubble">${safeBubbleText}</div>
+                    </div>
+                `;
+                } else if (msg.role === 'ai' && msgType === 'text') {
+                    bubbleHtml = `
+                    <div class="msg-bubble custom-bubble-content">
+                        ${quoteBlockHtml}
+                        <div class="msg-text custom-bubble-text" data-text="${dataText}" data-render-mode="text"></div>
                     </div>
                 `;
                 } else {
@@ -3680,12 +3934,14 @@ function appendMessageToDOM(msg) {
             
             if (isHistoricalMessage) {
                 // 历史消息：直接显示完整内容，不触发打字效果
-                textEl.innerHTML = fullText;
+                textEl.textContent = fullText;
                 textEl.removeAttribute('data-text');
+                textEl.removeAttribute('data-render-mode');
             } else {
                 // 新消息：触发打字效果
                 textEl.textContent = '';
                 textEl.removeAttribute('data-text');
+                textEl.removeAttribute('data-render-mode');
 
                 // 打字效果实现
                 let index = 0;
@@ -3693,15 +3949,8 @@ function appendMessageToDOM(msg) {
 
                 function type() {
                     if (index < fullText.length) {
-                        // 处理HTML标签
-                        if (fullText[index] === '<' && fullText.indexOf('>', index) !== -1) {
-                            const endTagIndex = fullText.indexOf('>', index);
-                            textEl.insertAdjacentHTML('beforeend', fullText.substring(index, endTagIndex + 1));
-                            index = endTagIndex + 1;
-                        } else {
-                            textEl.appendChild(document.createTextNode(fullText.charAt(index)));
-                            index++;
-                        }
+                        textEl.appendChild(document.createTextNode(fullText.charAt(index)));
+                        index++;
                         historyBox.scrollTop = historyBox.scrollHeight;
                         setTimeout(type, typeSpeed);
                     }
@@ -3840,6 +4089,12 @@ function buildEditableDraftForMessage(roleId, msg) {
         }
         return typeof m.content === 'string' ? m.content : '';
     }
+    if (type === 'html') {
+        return JSON.stringify({
+            type: 'html',
+            content: String(m.content || '')
+        }, null, 2);
+    }
     if (type === 'voice') {
         return JSON.stringify({
             type: 'voice',
@@ -3880,8 +4135,11 @@ function fillReplacementTextBubble(replacement) {
     const textEl = replacement.querySelector('.msg-text[data-text]');
     if (!textEl) return;
     const fullText = String(textEl.getAttribute('data-text') || '');
-    textEl.innerHTML = fullText;
+    const mode = String(textEl.getAttribute('data-render-mode') || 'text').trim();
+    if (mode === 'html') textEl.innerHTML = sanitizeChatBubbleHtml(fullText);
+    else textEl.textContent = fullText;
     textEl.removeAttribute('data-text');
+    textEl.removeAttribute('data-render-mode');
 }
 
 function replaceEditedMessageRow(row, msg) {
@@ -3923,6 +4181,11 @@ function applyManualStructuredObjectToMessage(roleId, msg, parsedValue, rawInput
                 msg.quote = { name: '引用', text: msg.quoteSourceText };
             }
         }
+        return true;
+    }
+    if (rawType === 'html') {
+        msg.type = 'html';
+        msg.content = String(obj.content != null ? obj.content : (obj.html != null ? obj.html : obj.text || '')).trim();
         return true;
     }
     if (rawType === 'voice') {

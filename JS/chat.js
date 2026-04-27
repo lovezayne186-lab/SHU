@@ -1204,6 +1204,7 @@ const STICKER_STORE_VERSION = 2;
 const STICKER_STORE_PRIMARY_KEY = 'stickerData_v2';
 const STICKER_STORE_LEGACY_KEY = 'stickerData';
 const STICKER_DEFAULT_SCOPE = '__default__';
+const STICKER_GLOBAL_SCOPE = '__global__';
 const STICKER_DEFAULT_CATEGORY_ID = 'default';
 const STICKER_DEFAULT_CATEGORY_NAME = '默认';
 window.stickerData = window.stickerData || null;
@@ -1453,6 +1454,11 @@ function ensureStickerStore(forcePersist) {
     const previous = window.stickerData;
     const normalized = normalizeStickerStore(previous, window.currentChatRole || STICKER_DEFAULT_SCOPE);
     const key = getStickerScopeKey(window.currentChatRole);
+    if (!normalized.roleScopes[STICKER_GLOBAL_SCOPE]) {
+        normalized.roleScopes[STICKER_GLOBAL_SCOPE] = createEmptyStickerScope();
+    } else {
+        normalized.roleScopes[STICKER_GLOBAL_SCOPE] = normalizeStickerScope(normalized.roleScopes[STICKER_GLOBAL_SCOPE]);
+    }
     if (!normalized.roleScopes[key]) {
         normalized.roleScopes[key] = createEmptyStickerScope();
     } else {
@@ -1482,6 +1488,37 @@ function getStickerScopeForRole(roleId) {
         store.roleScopes[key] = createEmptyStickerScope();
     }
     return store.roleScopes[key];
+}
+
+function getGlobalStickerScope() {
+    const store = ensureStickerStore(false);
+    if (!store.roleScopes[STICKER_GLOBAL_SCOPE]) {
+        store.roleScopes[STICKER_GLOBAL_SCOPE] = createEmptyStickerScope();
+    }
+    return store.roleScopes[STICKER_GLOBAL_SCOPE];
+}
+
+function getCombinedStickerScopeForRole(roleId) {
+    const roleScope = getStickerScopeForRole(roleId);
+    const globalScope = getGlobalStickerScope();
+    const combined = normalizeStickerScope(roleScope);
+    const globalGeneral = globalScope && globalScope.tabs && Array.isArray(globalScope.tabs.general)
+        ? globalScope.tabs.general
+        : [];
+    const roleGeneral = combined.tabs && Array.isArray(combined.tabs.general) ? combined.tabs.general : [];
+    const seen = new Set();
+    const mergedGeneral = [];
+    function pushItem(item) {
+        if (!item) return;
+        const key = getStickerDuplicateUrlKey(item.src || item.url || item.href || '');
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        mergedGeneral.push(item);
+    }
+    roleGeneral.forEach(pushItem);
+    globalGeneral.forEach(pushItem);
+    combined.tabs.general = mergedGeneral;
+    return combined;
 }
 
 function persistStickerData() {
@@ -1588,6 +1625,8 @@ function renameStickerCategory(roleId, categoryId, nextName) {
 }
 
 window.getStickerScopeForRole = getStickerScopeForRole;
+window.getGlobalStickerScope = getGlobalStickerScope;
+window.getCombinedStickerScopeForRole = getCombinedStickerScopeForRole;
 window.ensureStickerStore = ensureStickerStore;
 window.persistStickerData = persistStickerData;
 window.ensureStickerCategory = ensureStickerCategory;
@@ -1741,30 +1780,40 @@ function sanitizeStickerSemanticName(rawName, rawUrl) {
 function resolveStickerMetaByUrl(roleId, rawUrl, fallbackName) {
     const normalizedUrl = normalizeStickerLookupUrl(rawUrl);
     const fallback = sanitizeStickerSemanticName(fallbackName, normalizedUrl);
-    if (!normalizedUrl) {
-        return { url: '', name: fallback };
-    }
+    const lookupName = sanitizeStickerSemanticName(rawUrl, '') || fallback;
     const rid = String(roleId || window.currentChatRole || '').trim();
-    const scope = typeof window.getStickerScopeForRole === 'function'
-        ? window.getStickerScopeForRole(rid)
-        : { tabs: window.stickerData || {} };
-    const tabs = scope && scope.tabs && typeof scope.tabs === 'object' ? scope.tabs : {};
-    const tabKeys = Object.keys(tabs);
-    for (let i = 0; i < tabKeys.length; i++) {
-        const list = Array.isArray(tabs[tabKeys[i]]) ? tabs[tabKeys[i]] : [];
-        for (let j = 0; j < list.length; j++) {
-            const item = list[j];
-            if (!item) continue;
-            const itemUrl = normalizeStickerLookupUrl(item.src || item.url || item.href || '');
-            if (!itemUrl || itemUrl !== normalizedUrl) continue;
-            const itemName = sanitizeStickerSemanticName(item.name || '', itemUrl);
-            return {
-                url: itemUrl,
-                name: itemName || fallback
-            };
+    const scopes = [];
+    if (typeof window.getStickerScopeForRole === 'function') {
+        scopes.push(window.getStickerScopeForRole(rid));
+    } else {
+        scopes.push({ tabs: window.stickerData || {} });
+    }
+    if (typeof window.getGlobalStickerScope === 'function') {
+        scopes.push(window.getGlobalStickerScope());
+    }
+    for (let s = 0; s < scopes.length; s++) {
+        const scope = scopes[s];
+        const tabs = scope && scope.tabs && typeof scope.tabs === 'object' ? scope.tabs : {};
+        const tabKeys = Object.keys(tabs);
+        for (let i = 0; i < tabKeys.length; i++) {
+            const list = Array.isArray(tabs[tabKeys[i]]) ? tabs[tabKeys[i]] : [];
+            for (let j = 0; j < list.length; j++) {
+                const item = list[j];
+                if (!item) continue;
+                const itemUrl = normalizeStickerLookupUrl(item.src || item.url || item.href || '');
+                const itemName = sanitizeStickerSemanticName(item.name || '', itemUrl);
+                const sameUrl = !!(normalizedUrl && itemUrl && itemUrl === normalizedUrl);
+                const sameName = !!(lookupName && itemName && itemName === lookupName);
+                if (!sameUrl && !sameName) continue;
+                return {
+                    url: itemUrl,
+                    name: itemName || fallback,
+                    found: true
+                };
+            }
         }
     }
-    return { url: normalizedUrl, name: fallback };
+    return { url: normalizedUrl, name: fallback, found: false };
 }
 
 function buildStickerSemanticText(roleId, msg, options) {
