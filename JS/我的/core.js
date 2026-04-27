@@ -217,6 +217,13 @@ var MineCore = (function () {
         html += '          <div class="theme-label"> 合并气泡</div>';
         html += '          <label class="theme-switch"><input type="checkbox" id="theme-kkt-merge"><span class="theme-switch-ui"></span></label>';
         html += '        </div>';
+        html += '        <div class="theme-row theme-row-col" id="theme-kkt-merge-mode-row" style="display:none;">';
+        html += '          <div class="theme-label">合并模式</div>';
+        html += '          <div class="theme-seg" id="theme-kkt-merge-mode-seg">';
+        html += '            <button type="button" class="theme-seg-btn is-active" data-merge-mode="first">头像在第一条</button>';
+        html += '            <button type="button" class="theme-seg-btn" data-merge-mode="last">头像在最后一条</button>';
+        html += '          </div>';
+        html += '        </div>';
         html += '        <div class="theme-row theme-row-col">';
         html += '          <div class="theme-label">阴影强度</div>';
         html += '          <input type="range" id="theme-shadow" class="theme-range" min="0" max="24" value="8">';
@@ -254,6 +261,7 @@ var MineCore = (function () {
         html += '          <div class="theme-seg" id="theme-avatar-shape-seg">';
         html += '            <button type="button" class="theme-seg-btn is-active" data-shape="circle">圆形</button>';
         html += '            <button type="button" class="theme-seg-btn" data-shape="squircle">方圆</button>';
+        html += '            <button type="button" class="theme-seg-btn" data-shape="square">方形</button>';
         html += '          </div>';
         html += '        </div>';
         html += '        <div class="theme-row theme-row-col">';
@@ -272,7 +280,7 @@ var MineCore = (function () {
         html += '          <div class="theme-label">时间戳位置</div>';
         html += '          <div class="theme-seg" id="theme-timestamp-pos">';
         html += '            <button type="button" class="theme-seg-btn is-active" data-tspos="avatar">头像下</button>';
-        html += '            <button type="button" class="theme-seg-btn" data-tspos="bubble">气泡角</button>';
+        html += '            <button type="button" class="theme-seg-btn" data-tspos="bubbleRight">气泡右边</button>';
         html += '            <button type="button" class="theme-seg-btn" data-tspos="off">关闭</button>';
         html += '          </div>';
         html += '        </div>';
@@ -882,6 +890,7 @@ var MineCore = (function () {
             timestampPos: 'avatar',
             readEnabled: true,
             kktMerge: false,
+            kktMergeMode: 'first',
             shadow: 8,
             aiRadius: { tl: 12, tr: 12, bl: 6, br: 12 },
             userRadius: { tl: 12, tr: 12, bl: 12, br: 6 },
@@ -914,15 +923,22 @@ var MineCore = (function () {
 
         base.timestampEnabled = c.timestampEnabled !== false;
         base.timestampPos = String(c.timestampPos || base.timestampPos);
-        if (base.timestampPos !== 'avatar' && base.timestampPos !== 'bubble') base.timestampPos = 'avatar';
+        if (base.timestampPos !== 'avatar' && base.timestampPos !== 'bubble' && base.timestampPos !== 'bubbleRight') base.timestampPos = 'avatar';
 
         base.readEnabled = c.readEnabled !== false;
 
         base.kktMerge = !!c.kktMerge;
+        base.kktMergeMode = String(c.kktMergeMode || 'first');
+        if (base.kktMergeMode !== 'first' && base.kktMergeMode !== 'last') base.kktMergeMode = 'first';
         base.shadow = clampNumber(c.shadow, 0, 24, base.shadow);
 
         base.avatarVisible = c.avatarVisible !== false;
-        base.avatarShape = c.avatarShape === 'squircle' ? 'squircle' : 'circle';
+        var shapeVal = String(c.avatarShape || 'circle');
+        if (shapeVal === 'squircle' || shapeVal === 'square' || shapeVal === 'circle') {
+            base.avatarShape = shapeVal;
+        } else {
+            base.avatarShape = 'circle';
+        }
         base.avatarSize = clampNumber(c.avatarSize, 24, 50, base.avatarSize);
 
         base.aiRadius = {
@@ -964,8 +980,8 @@ var MineCore = (function () {
 
         if (texture === 'outline') {
             bg = 'transparent';
-            border = '1px solid ' + rgbToRgba(rgb, 0.62);
-            arrow = 'transparent';
+            border = '2px solid ' + rgbToRgba(rgb, 0.75);
+            arrow = rgbToRgba(rgb, 0.75);
             shadow = 'none';
         } else if (texture === 'matte') {
             bg = rgbToRgba(rgb, 0.22);
@@ -1009,7 +1025,12 @@ var MineCore = (function () {
         var ai = buildBubbleMaterial(texture, aiRgb, c.shadow, true);
         var user = buildBubbleMaterial(texture, userRgb, c.shadow, false);
         var avatarSize = clampNumber(c.avatarSize, 24, 50, 40);
-        var avatarRadius = c.avatarShape === 'circle' ? '50%' : '35%';
+        var avatarRadius = '50%';
+        if (c.avatarShape === 'squircle') {
+            avatarRadius = '35%';
+        } else if (c.avatarShape === 'square') {
+            avatarRadius = '6px';
+        }
         var avatarGap = clampNumber(c.avatarBubbleGap, 0, 24, 4);
         var slim = clampNumber(c.tailSlim, 0, 100, 0);
         var tailWidth = clampNumber(6 + (slim / 100) * 10, 2, 16, 6);
@@ -1051,43 +1072,47 @@ var MineCore = (function () {
         out.push('  --chat-bubble-line-height: ' + lineHeight.toFixed(3) + ';');
         out.push('}');
         out.push('');
+        out.push('#chat-room-layer .msg-row.msg-plain-bubble .msg-content-wrapper .msg-bubble,');
         out.push('#chat-room-layer .msg-row.msg-plain-bubble .msg-bubble {');
-        out.push('  padding: calc(var(--chat-bubble-pad-y) * var(--chat-font-scale, 1)) calc(12px * var(--chat-font-scale, 1));');
-        out.push('  line-height: var(--chat-bubble-line-height);');
+        out.push('  padding: calc(var(--chat-bubble-pad-y) * var(--chat-font-scale, 1)) calc(12px * var(--chat-font-scale, 1)) !important;');
+        out.push('  line-height: var(--chat-bubble-line-height) !important;');
+        out.push('  overflow: visible !important;');
         out.push('}');
         out.push('');
+        out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-content-wrapper .msg-bubble,');
         out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-bubble {');
-        out.push('  background: var(--chat-ai-bubble-bg);');
-        out.push('  color: var(--chat-ai-bubble-color);');
-        out.push('  border: var(--chat-ai-bubble-border);');
-        out.push('  box-shadow: var(--chat-ai-bubble-shadow);');
-        out.push('  backdrop-filter: var(--chat-ai-bubble-backdrop);');
-        out.push('  -webkit-backdrop-filter: var(--chat-ai-bubble-backdrop);');
-        out.push('  border-top-left-radius: calc(var(--chat-ai-radius-tl) * var(--chat-font-scale, 1));');
-        out.push('  border-top-right-radius: calc(var(--chat-ai-radius-tr) * var(--chat-font-scale, 1));');
-        out.push('  border-bottom-left-radius: calc(var(--chat-ai-radius-bl) * var(--chat-font-scale, 1));');
-        out.push('  border-bottom-right-radius: calc(var(--chat-ai-radius-br) * var(--chat-font-scale, 1));');
-        out.push('  margin-left: var(--chat-avatar-bubble-gap);');
+        out.push('  background: var(--chat-ai-bubble-bg) !important;');
+        out.push('  color: var(--chat-ai-bubble-color) !important;');
+        out.push('  border: var(--chat-ai-bubble-border) !important;');
+        out.push('  box-shadow: var(--chat-ai-bubble-shadow) !important;');
+        out.push('  backdrop-filter: var(--chat-ai-bubble-backdrop) !important;');
+        out.push('  -webkit-backdrop-filter: var(--chat-ai-bubble-backdrop) !important;');
+        out.push('  border-top-left-radius: calc(var(--chat-ai-radius-tl) * var(--chat-font-scale, 1)) !important;');
+        out.push('  border-top-right-radius: calc(var(--chat-ai-radius-tr) * var(--chat-font-scale, 1)) !important;');
+        out.push('  border-bottom-left-radius: calc(var(--chat-ai-radius-bl) * var(--chat-font-scale, 1)) !important;');
+        out.push('  border-bottom-right-radius: calc(var(--chat-ai-radius-br) * var(--chat-font-scale, 1)) !important;');
+        out.push('  margin-left: var(--chat-avatar-bubble-gap) !important;');
         out.push('}');
         out.push('');
+        out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-content-wrapper .msg-bubble,');
         out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-bubble {');
-        out.push('  background: var(--chat-user-bubble-bg);');
-        out.push('  color: var(--chat-user-bubble-color);');
-        out.push('  border: var(--chat-user-bubble-border);');
-        out.push('  box-shadow: var(--chat-user-bubble-shadow);');
-        out.push('  backdrop-filter: var(--chat-user-bubble-backdrop);');
-        out.push('  -webkit-backdrop-filter: var(--chat-user-bubble-backdrop);');
-        out.push('  border-top-left-radius: calc(var(--chat-user-radius-tl) * var(--chat-font-scale, 1));');
-        out.push('  border-top-right-radius: calc(var(--chat-user-radius-tr) * var(--chat-font-scale, 1));');
-        out.push('  border-bottom-left-radius: calc(var(--chat-user-radius-bl) * var(--chat-font-scale, 1));');
-        out.push('  border-bottom-right-radius: calc(var(--chat-user-radius-br) * var(--chat-font-scale, 1));');
-        out.push('  margin-right: var(--chat-avatar-bubble-gap);');
+        out.push('  background: var(--chat-user-bubble-bg) !important;');
+        out.push('  color: var(--chat-user-bubble-color) !important;');
+        out.push('  border: var(--chat-user-bubble-border) !important;');
+        out.push('  box-shadow: var(--chat-user-bubble-shadow) !important;');
+        out.push('  backdrop-filter: var(--chat-user-bubble-backdrop) !important;');
+        out.push('  -webkit-backdrop-filter: var(--chat-user-bubble-backdrop) !important;');
+        out.push('  border-top-left-radius: calc(var(--chat-user-radius-tl) * var(--chat-font-scale, 1)) !important;');
+        out.push('  border-top-right-radius: calc(var(--chat-user-radius-tr) * var(--chat-font-scale, 1)) !important;');
+        out.push('  border-bottom-left-radius: calc(var(--chat-user-radius-bl) * var(--chat-font-scale, 1)) !important;');
+        out.push('  border-bottom-right-radius: calc(var(--chat-user-radius-br) * var(--chat-font-scale, 1)) !important;');
+        out.push('  margin-right: var(--chat-avatar-bubble-gap) !important;');
         out.push('}');
         out.push('');
         out.push('#chat-room-layer .msg-avatar {');
-        out.push('  width: calc(var(--chat-avatar-size) * var(--chat-font-scale, 1));');
-        out.push('  height: calc(var(--chat-avatar-size) * var(--chat-font-scale, 1));');
-        out.push('  border-radius: var(--chat-avatar-radius);');
+        out.push('  width: calc(var(--chat-avatar-size) * var(--chat-font-scale, 1)) !important;');
+        out.push('  height: calc(var(--chat-avatar-size) * var(--chat-font-scale, 1)) !important;');
+        out.push('  border-radius: var(--chat-avatar-radius) !important;');
         out.push('}');
         if (!c.avatarVisible) {
             out.push('');
@@ -1102,58 +1127,135 @@ var MineCore = (function () {
             out.push('}');
         }
         out.push('');
+        out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-content-wrapper .msg-bubble::before,');
         out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-bubble::before,');
+        out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-content-wrapper .msg-bubble::after,');
         out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-bubble::after {');
         out.push('  display: none;');
         out.push('  content: none;');
         out.push('}');
         if (c.tailEnabled) {
             out.push('');
+            out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-content-wrapper .msg-bubble::before,');
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-bubble::before,');
+            out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-content-wrapper .msg-bubble::after,');
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-bubble::after {');
             out.push('  content: "";');
             out.push('  display: block;');
             out.push('  position: absolute;');
             out.push('  top: var(--chat-tail-top);');
-            out.push('  width: 0;');
-            out.push('  height: 0;');
-            out.push('  border-top: var(--chat-tail-height) solid transparent;');
-            out.push('  border-bottom: var(--chat-tail-height) solid transparent;');
+            out.push('  width: var(--chat-tail-width);');
+            out.push('  height: var(--chat-tail-width);');
+            out.push('  transform: rotate(45deg);');
+            out.push('  z-index: 1;');
             out.push('}');
             out.push('');
+            out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-content-wrapper .msg-bubble::before,');
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-bubble::before {');
-            out.push('  left: calc(-1 * var(--chat-tail-width) + 1px);');
-            out.push('  border-right: var(--chat-tail-width) solid var(--chat-ai-bubble-arrow);');
+            out.push('  left: calc(var(--chat-tail-width) / -2);');
+            out.push('  background: var(--chat-ai-bubble-bg);');
+            out.push('  border-left: var(--chat-ai-bubble-border);');
+            out.push('  border-bottom: var(--chat-ai-bubble-border);');
+            out.push('  clip-path: polygon(0 0, 0 100%, 100% 100%);');
             out.push('}');
             out.push('');
+            out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-content-wrapper .msg-bubble::after,');
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-bubble::after {');
-            out.push('  right: calc(-1 * var(--chat-tail-width) + 1px);');
-            out.push('  border-left: var(--chat-tail-width) solid var(--chat-user-bubble-arrow);');
+            out.push('  right: calc(var(--chat-tail-width) / -2);');
+            out.push('  background: var(--chat-user-bubble-bg);');
+            out.push('  border-right: var(--chat-user-bubble-border);');
+            out.push('  border-top: var(--chat-user-bubble-border);');
+            out.push('  clip-path: polygon(0 0, 100% 0, 100% 100%);');
             out.push('}');
         }
         if (c.kktMerge) {
             out.push('');
-            out.push('#chat-room-layer .msg-row.msg-left:has(+ .msg-row.msg-left) .msg-avatar-wrap,');
-            out.push('#chat-room-layer .msg-row.msg-right:has(+ .msg-row.msg-right) .msg-avatar-wrap {');
-            out.push('  opacity: 0;');
-            out.push('  visibility: hidden;');
-            out.push('}');
+            if (c.kktMergeMode === 'last') {
+                out.push('body #chat-room-layer .msg-row.msg-left:not(:has(+ .msg-row.msg-left)) .msg-avatar-wrap,');
+                out.push('body #chat-room-layer .msg-row.msg-right:not(:has(+ .msg-row.msg-right)) .msg-avatar-wrap {');
+                out.push('  opacity: 1 !important;');
+                out.push('  visibility: visible !important;');
+                out.push('}');
+                out.push('body #chat-room-layer .msg-row.msg-left:has(+ .msg-row.msg-left) .msg-avatar-wrap,');
+                out.push('body #chat-room-layer .msg-row.msg-right:has(+ .msg-row.msg-right) .msg-avatar-wrap {');
+                out.push('  opacity: 0 !important;');
+                out.push('  visibility: hidden !important;');
+                out.push('}');
+                out.push('body #chat-room-layer .msg-row.msg-plain-bubble.msg-left[data-kkt-head="0"] .msg-bubble::before,');
+                out.push('body #chat-room-layer .msg-row.msg-plain-bubble.msg-right[data-kkt-head="0"] .msg-bubble::after {');
+                out.push('  display: none !important;');
+                out.push('}');
+            } else {
+                out.push('body #chat-room-layer .msg-row.msg-left + .msg-row.msg-left .msg-avatar-wrap,');
+                out.push('body #chat-room-layer .msg-row.msg-right + .msg-row.msg-right .msg-avatar-wrap {');
+                out.push('  opacity: 0 !important;');
+                out.push('  visibility: hidden !important;');
+                out.push('}');
+                out.push('body #chat-room-layer .msg-row.msg-plain-bubble.msg-left + .msg-row.msg-left .msg-bubble::before,');
+                out.push('body #chat-room-layer .msg-row.msg-plain-bubble.msg-right + .msg-row.msg-right .msg-bubble::after {');
+                out.push('  display: none !important;');
+                out.push('}');
+                out.push('body #chat-room-layer .msg-row.msg-left:not(.msg-row.msg-left + .msg-row.msg-left) .msg-avatar-wrap,');
+                out.push('body #chat-room-layer .msg-row.msg-right:not(.msg-row.msg-right + .msg-row.msg-right) .msg-avatar-wrap {');
+                out.push('  opacity: 1 !important;');
+                out.push('  visibility: visible !important;');
+                out.push('}');
+            }
         }
         if (!c.timestampEnabled) {
             out.push('');
-            out.push('#chat-room-layer .msg-avatar-time,');
-            out.push('#chat-room-layer .msg-bubble-time {');
+            out.push('body #chat-room-layer[data-chat-ts] .msg-row .msg-avatar-time,');
+            out.push('body #chat-room-layer[data-chat-ts] .msg-row .msg-bubble-time {');
             out.push('  display: none !important;');
             out.push('}');
         } else if (c.timestampPos === 'bubble') {
             out.push('');
-            out.push('#chat-room-layer .msg-row.msg-plain-bubble .msg-bubble-time {');
-            out.push('  display: block;');
+            out.push('body #chat-room-layer[data-chat-ts] .msg-row.msg-plain-bubble .msg-content-wrapper .msg-bubble-time,');
+            out.push('body #chat-room-layer[data-chat-ts] .msg-row.msg-plain-bubble .msg-bubble-time {');
+            out.push('  display: block !important;');
+            out.push('}');
+        } else if (c.timestampPos === 'bubbleRight') {
+            out.push('');
+            out.push('body #chat-room-layer[data-chat-ts] .msg-row .msg-avatar-time,');
+            out.push('body #chat-room-layer[data-chat-tspos] .msg-row .msg-avatar-time {');
+            out.push('  display: none !important;');
+            out.push('}');
+            out.push('body #chat-room-layer[data-chat-ts] .msg-row.msg-plain-bubble .msg-content-wrapper .msg-bubble-time,');
+            out.push('body #chat-room-layer[data-chat-ts] .msg-row.msg-plain-bubble .msg-bubble-time {');
+            out.push('  display: block !important;');
+            out.push('  position: absolute !important;');
+            out.push('  right: calc(-46px * var(--chat-font-scale, 1)) !important;');
+            out.push('  left: auto !important;');
+            out.push('  bottom: calc(2px * var(--chat-font-scale, 1)) !important;');
+            out.push('  font-size: calc(10px * var(--chat-font-scale, 1)) !important;');
+            out.push('  color: rgba(153, 153, 153, 0.96) !important;');
+            out.push('  white-space: nowrap !important;');
+            out.push('  animation: chatThemeTimestampSlide 0.6s ease-out both;');
+            out.push('}');
+            out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-content-wrapper .msg-bubble-time,');
+            out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-bubble-time {');
+            out.push('  right: auto !important;');
+            out.push('  left: calc(-46px * var(--chat-font-scale, 1)) !important;');
+            out.push('  text-align: right !important;');
+            out.push('}');
+            out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right:has(+ .msg-row.msg-right) .msg-bubble-time {');
+            out.push('  display: block !important;');
+            out.push('}');
+            out.push('@keyframes chatThemeTimestampSlide {');
+            out.push('  from { opacity: 0; transform: translateY(6px); }');
+            out.push('  to { opacity: 1; transform: translateY(0); }');
             out.push('}');
         }
         if (!c.readEnabled) {
             out.push('');
             out.push('#chat-room-layer .msg-status-text {');
+            out.push('  display: none !important;');
+            out.push('}');
+        }
+        if (c.kktMerge) {
+            out.push('');
+            out.push('body #chat-room-layer .msg-row.msg-left.msg-plain-bubble[data-kkt-not-last="1"] .msg-bubble-time,');
+            out.push('body #chat-room-layer .msg-row.msg-right.msg-plain-bubble[data-kkt-not-last="1"] .msg-bubble-time {');
             out.push('  display: none !important;');
             out.push('}');
         }
@@ -1226,7 +1328,12 @@ var MineCore = (function () {
 
         var avatarSize = clampNumber(config.avatarSize, 24, 50, 40);
         setCssVar(box, '--preview-avatar-size', avatarSize + 'px');
-        var avatarRadius = config.avatarShape === 'circle' ? '50%' : '35%';
+        var avatarRadius = '50%';
+        if (config.avatarShape === 'squircle') {
+            avatarRadius = '35%';
+        } else if (config.avatarShape === 'square') {
+            avatarRadius = '6px';
+        }
         setCssVar(box, '--preview-avatar-radius', avatarRadius);
         setCssVar(box, '--preview-avatar-gap', clampNumber(config.avatarBubbleGap, 0, 24, 4) + 'px');
 
@@ -1247,7 +1354,7 @@ var MineCore = (function () {
         setCssVar(box, '--preview-bubble-line-height', lh.toFixed(3));
 
         box.setAttribute('data-preview-avatar', config.avatarVisible ? '1' : '0');
-        box.setAttribute('data-kkt', config.kktMerge ? '1' : '0');
+        box.setAttribute('data-kkt', config.kktMerge ? String(config.kktMergeMode || 'first') : '0');
         box.setAttribute('data-tail', config.tailEnabled ? '1' : '0');
         box.setAttribute('data-ts', config.timestampEnabled ? '1' : '0');
         box.setAttribute('data-tspos', String(config.timestampPos || 'avatar'));
@@ -1291,6 +1398,10 @@ var MineCore = (function () {
 
         var kktInput = container.querySelector('#theme-kkt-merge');
         if (kktInput) kktInput.checked = !!themeStudioRuntime.config.kktMerge;
+
+        var kktModeRow = container.querySelector('#theme-kkt-merge-mode-row');
+        if (kktModeRow) kktModeRow.style.display = themeStudioRuntime.config.kktMerge ? '' : 'none';
+        syncKktMergeModeUI(container, themeStudioRuntime.config.kktMergeMode || 'first');
 
         var shadowInput = container.querySelector('#theme-shadow');
         if (shadowInput) shadowInput.value = String(themeStudioRuntime.config.shadow);
@@ -1550,6 +1661,11 @@ var MineCore = (function () {
                 setTimestampPos(container, tspos);
                 return;
             }
+            var mergeMode = t.getAttribute && t.getAttribute('data-merge-mode');
+            if (mergeMode) {
+                setKktMergeMode(container, mergeMode);
+                return;
+            }
             var cssPresetActionEl = t.closest && t.closest('[data-css-preset-action]');
             if (cssPresetActionEl) {
                 var cssCard = cssPresetActionEl.closest('.theme-css-preset-card');
@@ -1674,6 +1790,8 @@ var MineCore = (function () {
         if (kktInput) {
             kktInput.addEventListener('change', function () {
                 themeStudioRuntime.config.kktMerge = !!kktInput.checked;
+                var modeRow = panel.querySelector('#theme-kkt-merge-mode-row');
+                if (modeRow) modeRow.style.display = themeStudioRuntime.config.kktMerge ? '' : 'none';
                 applyPreviewThemeConfig(container, themeStudioRuntime.config);
             });
         }
@@ -1851,6 +1969,9 @@ var MineCore = (function () {
 
         var kktInput = container.querySelector('#theme-kkt-merge');
         if (kktInput) kktInput.checked = !!themeStudioRuntime.config.kktMerge;
+        var kktModeRow = container.querySelector('#theme-kkt-merge-mode-row');
+        if (kktModeRow) kktModeRow.style.display = themeStudioRuntime.config.kktMerge ? '' : 'none';
+        syncKktMergeModeUI(container, themeStudioRuntime.config.kktMergeMode || 'first');
 
         var shadowInput = container.querySelector('#theme-shadow');
         if (shadowInput) shadowInput.value = String(themeStudioRuntime.config.shadow);
@@ -1925,7 +2046,11 @@ var MineCore = (function () {
             if (t === shape) b.classList.add('is-active');
             else b.classList.remove('is-active');
         });
-        themeStudioRuntime.config.avatarShape = shape === 'squircle' ? 'squircle' : 'circle';
+        if (shape === 'squircle' || shape === 'square' || shape === 'circle') {
+            themeStudioRuntime.config.avatarShape = shape;
+        } else {
+            themeStudioRuntime.config.avatarShape = 'circle';
+        }
         applyPreviewThemeConfig(container, themeStudioRuntime.config);
     }
 
@@ -1946,11 +2071,36 @@ var MineCore = (function () {
         var enabled = v !== 'off';
         themeStudioRuntime.config.timestampEnabled = enabled;
         if (enabled) {
-            themeStudioRuntime.config.timestampPos = (v === 'bubble') ? 'bubble' : 'avatar';
+            if (v === 'bubble') {
+                themeStudioRuntime.config.timestampPos = 'bubble';
+            } else if (v === 'bubbleRight') {
+                themeStudioRuntime.config.timestampPos = 'bubbleRight';
+            } else {
+                themeStudioRuntime.config.timestampPos = 'avatar';
+            }
         }
         var checkbox = container.querySelector('#theme-timestamp-visible');
         if (checkbox) checkbox.checked = enabled;
         syncTimestampPosUI(container, enabled ? (themeStudioRuntime.config.timestampPos || 'avatar') : 'off');
+        applyPreviewThemeConfig(container, themeStudioRuntime.config);
+    }
+
+    function syncKktMergeModeUI(container, mode) {
+        var seg = container.querySelector('#theme-kkt-merge-mode-seg');
+        if (!seg) return;
+        var btns = seg.querySelectorAll('.theme-seg-btn');
+        btns.forEach(function (b) {
+            var m = b.getAttribute('data-merge-mode') || '';
+            if (m === mode) b.classList.add('is-active');
+            else b.classList.remove('is-active');
+        });
+    }
+
+    function setKktMergeMode(container, mode) {
+        var v = String(mode || '').trim();
+        if (v !== 'first' && v !== 'last') v = 'first';
+        themeStudioRuntime.config.kktMergeMode = v;
+        syncKktMergeModeUI(container, v);
         applyPreviewThemeConfig(container, themeStudioRuntime.config);
     }
 
@@ -2122,6 +2272,9 @@ var MineCore = (function () {
 
         var kktInput = container.querySelector('#theme-kkt-merge');
         if (kktInput) kktInput.checked = !!c.kktMerge;
+        var kktModeRow = container.querySelector('#theme-kkt-merge-mode-row');
+        if (kktModeRow) kktModeRow.style.display = c.kktMerge ? '' : 'none';
+        syncKktMergeModeUI(container, c.kktMergeMode || 'first');
         var shadowInput = container.querySelector('#theme-shadow');
         if (shadowInput) shadowInput.value = String(c.shadow);
 
