@@ -473,32 +473,6 @@ function renderSettingsUI(container) {
     container.innerHTML = `
         <div style="padding: 20px;padding-bottom: 100px;">
 
-            <div class="setting-card" style="background: linear-gradient(135deg, rgba(15,23,42,0.96) 0%, rgba(30,41,59,0.96) 100%); padding: 16px; border-radius: 14px; margin-bottom: 15px; box-shadow: 0 10px 24px rgba(15,23,42,0.18); color: #f8fafc;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
-                    <div>
-                        <h4 style="margin: 0; color:#f8fafc;">应用版本与更新</h4>
-                        <div style="font-size:12px; color:rgba(248,250,252,0.72); margin-top:6px; line-height:1.6;">当前版本读取本机已安装缓存，最新版本直接读取服务器上的更新脚本。</div>
-                    </div>
-                    <button type="button" onclick="refreshSettingsVersionInfo({ forceNetwork: true })" style="padding:8px 12px; border:none; border-radius:10px; background:rgba(255,255,255,0.14); color:#fff; font-size:12px; font-weight:700; cursor:pointer;">
-                        重新检查
-                    </button>
-                </div>
-                <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-top:14px;">
-                    <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px;">
-                        <div style="font-size:12px; color:rgba(248,250,252,0.68);">当前版本</div>
-                        <div id="settings-current-version" style="margin-top:6px; font-size:16px; font-weight:800; color:#fff;">检测中...</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px;">
-                        <div style="font-size:12px; color:rgba(248,250,252,0.68);">最新版本</div>
-                        <div id="settings-latest-version" style="margin-top:6px; font-size:16px; font-weight:800; color:#fff;">检测中...</div>
-                    </div>
-                </div>
-                <div id="settings-app-version-status" style="margin-top:12px; font-size:12px; color:rgba(248,250,252,0.75); line-height:1.6;">正在读取版本信息...</div>
-                <button id="settings-update-app-btn" type="button" onclick="updateAppToLatestVersion()" style="margin-top:12px; width:100%; padding:12px; border:none; border-radius:12px; background:linear-gradient(135deg, #38bdf8 0%, #2563eb 100%); color:#fff; font-size:14px; font-weight:800; cursor:pointer; box-shadow:0 8px 20px rgba(37,99,235,0.28);">
-                    立即更新
-                </button>
-            </div>
-            
             <!-- API 地址设置 -->
             <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
                 <h4 style="margin: 0 0 10px 0; color:#333;">API 地址 (Base URL)</h4>
@@ -695,6 +669,31 @@ function renderSettingsUI(container) {
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <!-- 应用版本与更新 -->
+            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-top: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <h4 style="margin: 0; color:#333;">应用版本与更新</h4>
+                    <button type="button" onclick="refreshSettingsVersionInfo({ forceNetwork: true })" style="padding:6px 12px; border:none; border-radius:8px; background:rgba(0,0,0,0.05); color:#333; font-size:12px; font-weight:600; cursor:pointer;">
+                        重新检查
+                    </button>
+                </div>
+                <p style="font-size: 12px; color: #999; margin: 8px 0 0; line-height: 1.6;">当前版本读取本机已安装缓存，最新版本直接读取服务器上的更新脚本。</p>
+                <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-top:12px;">
+                    <div style="background:rgba(0,0,0,0.02); border:1px solid rgba(0,0,0,0.05); border-radius:10px; padding:10px;">
+                        <div style="font-size:12px; color:#666;">当前版本</div>
+                        <div id="settings-current-version" style="margin-top:4px; font-size:14px; font-weight:700; color:#333;">检测中...</div>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.02); border:1px solid rgba(0,0,0,0.05); border-radius:10px; padding:10px;">
+                        <div style="font-size:12px; color:#666;">最新版本</div>
+                        <div id="settings-latest-version" style="margin-top:4px; font-size:14px; font-weight:700; color:#333;">检测中...</div>
+                    </div>
+                </div>
+                <div id="settings-app-version-status" style="margin-top:10px; font-size:12px; color:#6b7280; line-height:1.6; font-weight:500;">正在读取版本信息...</div>
+                <button id="settings-update-app-btn" type="button" onclick="updateAppToLatestVersion()" style="margin-top:12px; width:100%; padding:12px; border:none; border-radius:10px; background:linear-gradient(135deg, #38bdf8 0%, #0284c7 100%); color:#fff; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 4px 12px rgba(2,132,199,0.35);">
+                    立即更新
+                </button>
             </div>
 
             <!-- 清除数据按钮 -->
