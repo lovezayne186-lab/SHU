@@ -31,6 +31,7 @@
     };
 
     let storeInstance = null;
+    let legacyStoreInstance = null;
     let snapshotCache = null;
     let initPromise = null;
 
@@ -119,6 +120,38 @@
         return out;
     }
 
+    function roleCount(map) {
+        return isObject(map) ? Object.keys(map).filter(Boolean).length : 0;
+    }
+
+    function chatMessageCount(chats) {
+        if (!isObject(chats)) return 0;
+        return Object.keys(chats).reduce(function (sum, roleId) {
+            const list = chats[roleId];
+            return sum + (Array.isArray(list) ? list.length : 0);
+        }, 0);
+    }
+
+    function hasSnapshotPayload(snapshot) {
+        const snap = normalizeSnapshot(snapshot);
+        return roleCount(snap.profiles) > 0 ||
+            chatMessageCount(snap.chats) > 0 ||
+            roleCount(snap.userPersonas) > 0 ||
+            roleCount(snap.chatMapData) > 0 ||
+            roleCount(snap.memoryArchive) > 0;
+    }
+
+    function looksLikeAccidentalDataLoss(base, next) {
+        const oldSnap = normalizeSnapshot(base);
+        const newSnap = normalizeSnapshot(next);
+        const oldProfiles = roleCount(oldSnap.profiles);
+        const newProfiles = roleCount(newSnap.profiles);
+        const oldMessages = chatMessageCount(oldSnap.chats);
+        const newMessages = chatMessageCount(newSnap.chats);
+        return (oldProfiles > 0 && newProfiles < oldProfiles) ||
+            (oldMessages > 0 && newMessages < oldMessages);
+    }
+
     function getStore() {
         if (storeInstance) return storeInstance;
         if (!window.localforage || typeof window.localforage.createInstance !== 'function') return null;
@@ -130,38 +163,89 @@
         return storeInstance;
     }
 
+    function getLegacyStore() {
+        if (legacyStoreInstance) return legacyStoreInstance;
+        if (!window.localforage || typeof window.localforage.createInstance !== 'function') return null;
+        legacyStoreInstance = window.localforage.createInstance({
+            name: DB_NAME,
+            storeName: 'wechat'
+        });
+        return legacyStoreInstance;
+    }
+
     async function readStoreSnapshot() {
+        let out = emptySnapshot();
         const store = getStore();
         if (store && typeof store.getItem === 'function') {
             try {
                 const value = await withTimeout(store.getItem(SNAPSHOT_KEY), 1800, 'wechat_v2 read');
-                if (value && typeof value === 'object') return normalizeSnapshot(value);
+                if (value && typeof value === 'object') out = mergeSnapshot(out, value);
             } catch (e) {
                 console.warn('[WechatStore] 读取 wechat_v2 超时或失败，改用轻量回退', e);
             }
         }
         try {
-            return normalizeSnapshot(parseJson(localStorage.getItem(FALLBACK_KEY), null));
-        } catch (e) {
-            return normalizeSnapshot(null);
-        }
+            const fallback = parseJson(localStorage.getItem(FALLBACK_KEY), null);
+            if (hasSnapshotPayload(fallback)) out = mergeSnapshot(out, fallback, { preserveExistingObjects: true });
+        } catch (e) { }
+        return normalizeSnapshot(out);
     }
 
-    async function writeStoreSnapshot(snapshot) {
-        const next = normalizeSnapshot(snapshot);
+    function writeLocalStorageMirrors(snapshot) {
+        const snap = normalizeSnapshot(snapshot);
+        try { localStorage.setItem(FALLBACK_KEY, JSON.stringify(snap)); } catch (e0) { }
+        try { localStorage.setItem(LEGACY_KEYS.profiles, JSON.stringify(snap.profiles || {})); } catch (e1) { }
+        try { localStorage.setItem(LEGACY_KEYS.chats, JSON.stringify(snap.chats || {})); } catch (e2) { }
+        try { localStorage.setItem(LEGACY_KEYS.chatMapData, JSON.stringify(snap.chatMapData || {})); } catch (e3) { }
+        try { localStorage.setItem(LEGACY_KEYS.userPersonas, JSON.stringify(snap.userPersonas || {})); } catch (e4) { }
+        try { localStorage.setItem(LEGACY_KEYS.backgrounds, JSON.stringify(snap.backgrounds || {})); } catch (e5) { }
+        try { localStorage.setItem(LEGACY_KEYS.callLogs, JSON.stringify(snap.callLogs || {})); } catch (e6) { }
+        try { localStorage.setItem(LEGACY_KEYS.unread, JSON.stringify(snap.unread || {})); } catch (e7) { }
+        try { localStorage.setItem(LEGACY_KEYS.familyCards, JSON.stringify(snap.familyCards || {})); } catch (e8) { }
+        try { localStorage.setItem(LEGACY_KEYS.memoryArchive, JSON.stringify(snap.memoryArchive || {})); } catch (e9) { }
+        try { localStorage.setItem(LEGACY_KEYS.stickerData, JSON.stringify(snap.stickerData || null)); } catch (e10) { }
+    }
+
+    async function writeLegacyForageSnapshot(snapshot) {
+        const legacy = getLegacyStore();
+        if (!legacy || typeof legacy.setItem !== 'function') return;
+        const snap = normalizeSnapshot(snapshot);
+        await withTimeout(Promise.all([
+            legacy.setItem(LEGACY_KEYS.profiles, snap.profiles || {}),
+            legacy.setItem(LEGACY_KEYS.chats, snap.chats || {}),
+            legacy.setItem(LEGACY_KEYS.chatMapData, snap.chatMapData || {}),
+            legacy.setItem(LEGACY_KEYS.userPersonas, snap.userPersonas || {}),
+            legacy.setItem(LEGACY_KEYS.backgrounds, snap.backgrounds || {}),
+            legacy.setItem(LEGACY_KEYS.callLogs, snap.callLogs || {}),
+            legacy.setItem(LEGACY_KEYS.unread, snap.unread || {}),
+            legacy.setItem(LEGACY_KEYS.familyCards, snap.familyCards || {}),
+            legacy.setItem(LEGACY_KEYS.memoryArchive, snap.memoryArchive || {}),
+            legacy.setItem(LEGACY_KEYS.stickerData, snap.stickerData || null)
+        ]), 2500, 'legacy wechat mirror write');
+    }
+
+    async function writeStoreSnapshot(snapshot, options) {
+        const opts = options || {};
+        let next = normalizeSnapshot(snapshot);
+        const base = normalizeSnapshot(snapshotCache || null);
+        if (!opts.allowDataLoss && hasSnapshotPayload(base) && looksLikeAccidentalDataLoss(base, next)) {
+            console.warn('[WechatStore] 检测到疑似空快照覆盖，已合并保留现有联系人/聊天记录');
+            next = mergeSnapshot(next, base, { preserveExistingObjects: true });
+        }
         next.updatedAt = nowIso();
         snapshotCache = next;
+        writeLocalStorageMirrors(next);
         const store = getStore();
         if (store && typeof store.setItem === 'function') {
             try {
                 await withTimeout(store.setItem(SNAPSHOT_KEY, next), 2500, 'wechat_v2 write');
             } catch (e) {
                 console.warn('[WechatStore] 写入 wechat_v2 超时或失败，暂存轻量回退', e);
-                try { localStorage.setItem(FALLBACK_KEY, JSON.stringify(next)); } catch (e1) { }
             }
         } else {
-            localStorage.setItem(FALLBACK_KEY, JSON.stringify(next));
+            writeLocalStorageMirrors(next);
         }
+        try { await writeLegacyForageSnapshot(next); } catch (e2) { console.warn('[WechatStore] 写入旧存储镜像失败', e2); }
         applySnapshotToWindow(next);
         try {
             window.dispatchEvent(new CustomEvent('wechat-store-updated', {
@@ -186,26 +270,31 @@
                 return;
             }
             if (isObject(dst[id]) && isObject(value)) {
-                dst[id] = Object.assign({}, dst[id], clone(value));
+                dst[id] = opts.preserveExistingObjects
+                    ? Object.assign({}, clone(value), dst[id])
+                    : Object.assign({}, dst[id], clone(value));
                 return;
             }
+            if (opts.preserveExistingObjects && dst[id] !== undefined && dst[id] !== null) return;
             if (value !== undefined && value !== null) dst[id] = clone(value);
         });
         return dst;
     }
 
-    function mergeSnapshot(base, incoming) {
+    function mergeSnapshot(base, incoming, options) {
+        const opts = options || {};
+        const mapOpts = opts.preserveExistingObjects ? { preserveExistingObjects: true } : {};
         const out = normalizeSnapshot(base);
         const src = normalizeSnapshot(incoming);
-        out.profiles = mergeRoleMap(out.profiles, src.profiles);
+        out.profiles = mergeRoleMap(out.profiles, src.profiles, mapOpts);
         out.chats = mergeRoleMap(out.chats, src.chats, { arrayByLength: true });
-        out.chatMapData = mergeRoleMap(out.chatMapData, src.chatMapData);
-        out.userPersonas = mergeRoleMap(out.userPersonas, src.userPersonas);
-        out.backgrounds = mergeRoleMap(out.backgrounds, src.backgrounds);
+        out.chatMapData = mergeRoleMap(out.chatMapData, src.chatMapData, mapOpts);
+        out.userPersonas = mergeRoleMap(out.userPersonas, src.userPersonas, mapOpts);
+        out.backgrounds = mergeRoleMap(out.backgrounds, src.backgrounds, mapOpts);
         out.callLogs = mergeRoleMap(out.callLogs, src.callLogs, { arrayByLength: true });
-        out.unread = mergeRoleMap(out.unread, src.unread);
-        out.familyCards = mergeRoleMap(out.familyCards, src.familyCards);
-        out.memoryArchive = mergeRoleMap(out.memoryArchive, src.memoryArchive);
+        out.unread = mergeRoleMap(out.unread, src.unread, mapOpts);
+        out.familyCards = mergeRoleMap(out.familyCards, src.familyCards, mapOpts);
+        out.memoryArchive = mergeRoleMap(out.memoryArchive, src.memoryArchive, mapOpts);
         if (src.stickerData != null) out.stickerData = clone(src.stickerData);
         out.updatedAt = nowIso();
         return out;
@@ -241,8 +330,8 @@
     }
 
     async function readLegacyForageSnapshot() {
-        if (!window.localforage || typeof window.localforage.createInstance !== 'function') return emptySnapshot();
-        const legacy = window.localforage.createInstance({ name: DB_NAME, storeName: 'wechat' });
+        const legacy = getLegacyStore();
+        if (!legacy || typeof legacy.getItem !== 'function') return emptySnapshot();
         const map = {};
         const fields = Object.keys(LEGACY_KEYS);
         for (let i = 0; i < fields.length; i++) {
@@ -326,16 +415,11 @@
         if (!force && initPromise) return initPromise;
         initPromise = (async function () {
             let snap = await readStoreSnapshot();
-            const shouldMigrate = force || !localStorage.getItem(MIGRATED_KEY);
-            if (shouldMigrate) {
-                snap = mergeSnapshot(snap, readLocalStorageLegacySnapshot());
-                snap = mergeSnapshot(snap, await readLegacyForageSnapshot());
-                snap = includeMomentRoleIds(snap);
-                await writeStoreSnapshot(snap);
-                try { localStorage.setItem(MIGRATED_KEY, nowIso()); } catch (e) { }
-            } else {
-                applySnapshotToWindow(snap);
-            }
+            snap = mergeSnapshot(snap, readLocalStorageLegacySnapshot(), { preserveExistingObjects: true });
+            snap = mergeSnapshot(snap, await readLegacyForageSnapshot(), { preserveExistingObjects: true });
+            snap = includeMomentRoleIds(snap);
+            await writeStoreSnapshot(snap, { allowDataLoss: true });
+            try { localStorage.setItem(MIGRATED_KEY, nowIso()); } catch (e) { }
             snapshotCache = normalizeSnapshot(snap);
             return clone(snapshotCache);
         })();
@@ -352,6 +436,9 @@
     }
 
     async function saveSnapshotFromWindow() {
+        if (initPromise) {
+            try { await initPromise; } catch (e) { }
+        }
         const base = currentSnapshot();
         const next = normalizeSnapshot(snapshotFromWindow());
         next.createdAt = base.createdAt || next.createdAt;
@@ -375,7 +462,7 @@
         ROLE_MAP_KEYS.forEach(function (key) {
             if (snap[key] && typeof snap[key] === 'object') delete snap[key][id];
         });
-        return writeStoreSnapshot(snap);
+        return writeStoreSnapshot(snap, { allowDataLoss: true });
     }
 
     async function appendMessage(roleId, msg) {
@@ -394,7 +481,7 @@
         if (!id) throw new Error('缺少聊天 ID');
         const snap = currentSnapshot();
         snap.chats[id] = Array.isArray(messages) ? clone(messages) : [];
-        return writeStoreSnapshot(snap);
+        return writeStoreSnapshot(snap, { allowDataLoss: true });
     }
 
     async function importContactBackup(json) {
@@ -460,6 +547,7 @@
         applySnapshotToWindow: applySnapshotToWindow,
         resetRuntime: function () {
             storeInstance = null;
+            legacyStoreInstance = null;
             snapshotCache = null;
             initPromise = null;
         },

@@ -1057,9 +1057,18 @@ let saveDataFlushInFlight = null;
 let legacyWechatMirrorWarned = false;
 
 function syncLegacyWechatMirror() {
+    try { localStorage.setItem(DB.keys.charProfiles, JSON.stringify(window.charProfiles || {})); } catch (e0) { }
+    try { localStorage.setItem(DB.keys.chatData, JSON.stringify(window.chatData || {})); } catch (e1) { }
+    try { localStorage.setItem(DB.keys.chatMapData, JSON.stringify(window.chatMapData || {})); } catch (e2) { }
+    try { localStorage.setItem(DB.keys.userPersonas, JSON.stringify(window.userPersonas || {})); } catch (e3) { }
+    try { localStorage.setItem(DB.keys.chatBackgrounds, JSON.stringify(window.chatBackgrounds || {})); } catch (e4) { }
+    try { localStorage.setItem(DB.keys.callLogs, JSON.stringify(window.callLogs || {})); } catch (e5) { }
+    try { localStorage.setItem(DB.keys.chatUnread, JSON.stringify(window.chatUnread || {})); } catch (e6) { }
+    try { localStorage.setItem(DB.keys.familyCards, JSON.stringify(window.familyCardState || {})); } catch (e7) { }
+    try { localStorage.setItem('stickerData_v2', JSON.stringify(window.stickerData || null)); } catch (e8) { }
     if (!legacyWechatMirrorWarned) {
         legacyWechatMirrorWarned = true;
-        console.info('[WechatStorage] 正式联系人/聊天数据已切换到 wechat_v2，跳过旧 localStorage 镜像写入');
+        console.info('[WechatStorage] 已写入 wechat_v2，并同步保留旧 localStorage 镜像用于刷新恢复');
     }
 }
 
