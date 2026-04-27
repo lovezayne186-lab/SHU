@@ -295,6 +295,11 @@ function syncChatBubbleRuntimeFlags(cssText) {
             chatRoom.setAttribute('data-chat-tail', '0');
         }
 
+        if (css.indexOf('msg-status-text') >= 0 || css.indexOf('data-chat-read') >= 0) {
+            const readDisabled = /msg-status-text[\s\S]*?\{[\s\S]*?display\s*:\s*none\s*!important/i.test(css);
+            chatRoom.setAttribute('data-chat-read', readDisabled ? '0' : '1');
+        }
+
         if (css.indexOf('data-kkt-head') >= 0 || css.indexOf('data-kkt-not-last') >= 0 || css.indexOf('msg-left + .msg-row.msg-left') >= 0) {
             chatRoom.setAttribute('data-chat-kkt', css.indexOf('data-kkt-head') >= 0 ? 'last' : 'first');
         }

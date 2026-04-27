@@ -695,8 +695,8 @@ async function maybeSyncOfflineAIStatusOnInit() {
     }
 
     var THEME_VAR_NAMES = [
-        '--chat-ai-bubble-bg', '--chat-ai-bubble-border', '--chat-ai-bubble-backdrop', '--chat-ai-bubble-shadow', '--chat-ai-bubble-arrow', '--chat-ai-bubble-color',
-        '--chat-user-bubble-bg', '--chat-user-bubble-border', '--chat-user-bubble-backdrop', '--chat-user-bubble-shadow', '--chat-user-bubble-arrow', '--chat-user-bubble-color',
+        '--chat-ai-bubble-bg', '--chat-ai-bubble-border', '--chat-ai-bubble-backdrop', '--chat-ai-bubble-shadow', '--chat-ai-bubble-arrow', '--chat-ai-tail-fill', '--chat-ai-bubble-color',
+        '--chat-user-bubble-bg', '--chat-user-bubble-border', '--chat-user-bubble-backdrop', '--chat-user-bubble-shadow', '--chat-user-bubble-arrow', '--chat-user-tail-fill', '--chat-user-bubble-color',
         '--chat-ai-radius-tl', '--chat-ai-radius-tr', '--chat-ai-radius-bl', '--chat-ai-radius-br',
         '--chat-user-radius-tl', '--chat-user-radius-tr', '--chat-user-radius-bl', '--chat-user-radius-br',
         '--chat-avatar-size', '--chat-avatar-radius', '--chat-avatar-bubble-gap',
@@ -781,6 +781,8 @@ async function maybeSyncOfflineAIStatusOnInit() {
 
         var ai = buildBubbleMaterial(texture, aiRgb, config.shadow, true);
         var user = buildBubbleMaterial(texture, userRgb, config.shadow, false);
+        var aiTailFill = texture === 'outline' ? 'var(--chat-bubble-tail-mask, #ededed)' : ai.bg;
+        var userTailFill = texture === 'outline' ? 'var(--chat-bubble-tail-mask, #ededed)' : user.bg;
 
         try {
             setVarIfAllowed(style, '--chat-ai-bubble-bg', ai.bg, overrides);
@@ -788,6 +790,7 @@ async function maybeSyncOfflineAIStatusOnInit() {
             setVarIfAllowed(style, '--chat-ai-bubble-backdrop', ai.backdrop, overrides);
             setVarIfAllowed(style, '--chat-ai-bubble-shadow', ai.shadow, overrides);
             setVarIfAllowed(style, '--chat-ai-bubble-arrow', ai.arrow, overrides);
+            setVarIfAllowed(style, '--chat-ai-tail-fill', aiTailFill, overrides);
             setVarIfAllowed(style, '--chat-ai-bubble-color', computeTextColor(aiRgb), overrides);
 
             setVarIfAllowed(style, '--chat-user-bubble-bg', user.bg, overrides);
@@ -795,6 +798,7 @@ async function maybeSyncOfflineAIStatusOnInit() {
             setVarIfAllowed(style, '--chat-user-bubble-backdrop', user.backdrop, overrides);
             setVarIfAllowed(style, '--chat-user-bubble-shadow', user.shadow, overrides);
             setVarIfAllowed(style, '--chat-user-bubble-arrow', user.arrow, overrides);
+            setVarIfAllowed(style, '--chat-user-tail-fill', userTailFill, overrides);
             setVarIfAllowed(style, '--chat-user-bubble-color', computeTextColor(userRgb), overrides);
 
             setVarIfAllowed(style, '--chat-ai-radius-tl', clampNumber(config.aiRadius && config.aiRadius.tl, 0, 30, 12) + 'px', overrides);

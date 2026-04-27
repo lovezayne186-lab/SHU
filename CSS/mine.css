@@ -1046,7 +1046,7 @@
     left: calc(var(--preview-tail-width) / -2);
     width: var(--preview-tail-width);
     height: var(--preview-tail-width);
-    background: var(--preview-ai-bg);
+    background: var(--preview-ai-tail-fill, var(--preview-ai-bg));
     border-left: var(--preview-ai-border);
     border-bottom: var(--preview-ai-border);
     transform: rotate(45deg);
@@ -1076,7 +1076,7 @@
     right: calc(var(--preview-tail-width) / -2);
     width: var(--preview-tail-width);
     height: var(--preview-tail-width);
-    background: var(--preview-user-bg);
+    background: var(--preview-user-tail-fill, var(--preview-user-bg));
     border-right: var(--preview-user-border);
     border-top: var(--preview-user-border);
     transform: rotate(45deg);

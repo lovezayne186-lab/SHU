@@ -1024,6 +1024,8 @@ var MineCore = (function () {
         var texture = String(c.texture || 'solid');
         var ai = buildBubbleMaterial(texture, aiRgb, c.shadow, true);
         var user = buildBubbleMaterial(texture, userRgb, c.shadow, false);
+        var aiTailFill = texture === 'outline' ? 'var(--chat-bubble-tail-mask, #ededed)' : ai.bg;
+        var userTailFill = texture === 'outline' ? 'var(--chat-bubble-tail-mask, #ededed)' : user.bg;
         var avatarSize = clampNumber(c.avatarSize, 24, 50, 40);
         var avatarRadius = '50%';
         if (c.avatarShape === 'squircle') {
@@ -1047,12 +1049,14 @@ var MineCore = (function () {
         out.push('  --chat-ai-bubble-backdrop: ' + ai.backdrop + ';');
         out.push('  --chat-ai-bubble-shadow: ' + ai.shadow + ';');
         out.push('  --chat-ai-bubble-arrow: ' + ai.arrow + ';');
+        out.push('  --chat-ai-tail-fill: ' + aiTailFill + ';');
         out.push('  --chat-ai-bubble-color: ' + computeTextColor(aiRgb) + ';');
         out.push('  --chat-user-bubble-bg: ' + user.bg + ';');
         out.push('  --chat-user-bubble-border: ' + user.border + ';');
         out.push('  --chat-user-bubble-backdrop: ' + user.backdrop + ';');
         out.push('  --chat-user-bubble-shadow: ' + user.shadow + ';');
         out.push('  --chat-user-bubble-arrow: ' + user.arrow + ';');
+        out.push('  --chat-user-tail-fill: ' + userTailFill + ';');
         out.push('  --chat-user-bubble-color: ' + computeTextColor(userRgb) + ';');
         out.push('  --chat-ai-radius-tl: ' + clampNumber(c.aiRadius && c.aiRadius.tl, 0, 30, 12) + 'px;');
         out.push('  --chat-ai-radius-tr: ' + clampNumber(c.aiRadius && c.aiRadius.tr, 0, 30, 12) + 'px;');
@@ -1153,7 +1157,7 @@ var MineCore = (function () {
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-content-wrapper .msg-bubble::before,');
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-left .msg-bubble::before {');
             out.push('  left: calc(var(--chat-tail-width) / -2);');
-            out.push('  background: var(--chat-ai-bubble-bg);');
+            out.push('  background: var(--chat-ai-tail-fill, var(--chat-ai-bubble-bg));');
             out.push('  border-left: var(--chat-ai-bubble-border);');
             out.push('  border-bottom: var(--chat-ai-bubble-border);');
             out.push('  clip-path: polygon(0 0, 0 100%, 100% 100%);');
@@ -1162,7 +1166,7 @@ var MineCore = (function () {
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-content-wrapper .msg-bubble::after,');
             out.push('#chat-room-layer .msg-row.msg-plain-bubble.msg-right .msg-bubble::after {');
             out.push('  right: calc(var(--chat-tail-width) / -2);');
-            out.push('  background: var(--chat-user-bubble-bg);');
+            out.push('  background: var(--chat-user-tail-fill, var(--chat-user-bubble-bg));');
             out.push('  border-right: var(--chat-user-bubble-border);');
             out.push('  border-top: var(--chat-user-bubble-border);');
             out.push('  clip-path: polygon(0 0, 100% 0, 100% 100%);');
@@ -1248,7 +1252,9 @@ var MineCore = (function () {
         }
         if (!c.readEnabled) {
             out.push('');
-            out.push('#chat-room-layer .msg-status-text {');
+            out.push('body #chat-room-layer .msg-status-text,');
+            out.push('body #chat-room-layer .msg-row.msg-plain-bubble .msg-status-text,');
+            out.push('body #chat-room-layer .msg-row.msg-plain-bubble.msg-right:has(+ .msg-row.msg-right) .msg-status-text {');
             out.push('  display: none !important;');
             out.push('}');
         }
@@ -1302,12 +1308,15 @@ var MineCore = (function () {
         var texture = String(config.texture || 'solid');
         var ai = buildBubbleMaterial(texture, aiRgb, config.shadow, true);
         var user = buildBubbleMaterial(texture, userRgb, config.shadow, false);
+        var aiTailFill = texture === 'outline' ? '#ffffff' : ai.bg;
+        var userTailFill = texture === 'outline' ? '#ffffff' : user.bg;
 
         setCssVar(box, '--preview-ai-bg', ai.bg);
         setCssVar(box, '--preview-ai-border', ai.border);
         setCssVar(box, '--preview-ai-backdrop', ai.backdrop);
         setCssVar(box, '--preview-ai-shadow', ai.shadow);
         setCssVar(box, '--preview-ai-arrow', ai.arrow);
+        setCssVar(box, '--preview-ai-tail-fill', aiTailFill);
         setCssVar(box, '--preview-ai-color', computeTextColor(aiRgb));
 
         setCssVar(box, '--preview-user-bg', user.bg);
@@ -1315,6 +1324,7 @@ var MineCore = (function () {
         setCssVar(box, '--preview-user-backdrop', user.backdrop);
         setCssVar(box, '--preview-user-shadow', user.shadow);
         setCssVar(box, '--preview-user-arrow', user.arrow);
+        setCssVar(box, '--preview-user-tail-fill', userTailFill);
         setCssVar(box, '--preview-user-color', computeTextColor(userRgb));
 
         setCssVar(box, '--preview-ai-radius-tl', clampNumber(config.aiRadius && config.aiRadius.tl, 0, 30, 12) + 'px');

@@ -916,7 +916,7 @@
 }
 
 #chat-room-layer[data-chat-read="0"] .msg-status-text {
-    display: none;
+    display: none !important;
 }
 
 /* 已读状态样式：只有最后一条消息显示已读 */
@@ -7530,7 +7530,7 @@
 
 :where(#chat-room-layer[data-chat-tail="1"] .msg-row.msg-plain-bubble).msg-left .msg-bubble::before {
     left: calc(var(--chat-tail-width, calc(6px * var(--chat-font-scale, 1))) / -2);
-    background: var(--chat-ai-bubble-bg, #ffffff);
+    background: var(--chat-ai-tail-fill, var(--chat-ai-bubble-bg, #ffffff));
     border-left: var(--chat-ai-bubble-border, none);
     border-bottom: var(--chat-ai-bubble-border, none);
     clip-path: polygon(0 0, 0 100%, 100% 100%);
@@ -7538,7 +7538,7 @@
 
 :where(#chat-room-layer[data-chat-tail="1"] .msg-row.msg-plain-bubble).msg-right .msg-bubble::after {
     right: calc(var(--chat-tail-width, calc(6px * var(--chat-font-scale, 1))) / -2);
-    background: var(--chat-user-bubble-bg, #333333);
+    background: var(--chat-user-tail-fill, var(--chat-user-bubble-bg, #333333));
     border-right: var(--chat-user-bubble-border, none);
     border-top: var(--chat-user-bubble-border, none);
     clip-path: polygon(0 0, 100% 0, 100% 100%);
@@ -7590,6 +7590,11 @@
 
 #chat-room-layer .msg-row.msg-plain-bubble.msg-right:has(+ .msg-row.msg-right) .msg-bubble-time {
     display: block !important;
+}
+
+#chat-room-layer[data-chat-read="0"] .msg-row.msg-plain-bubble .msg-status-text,
+#chat-room-layer[data-chat-read="0"] .msg-row.msg-plain-bubble.msg-right:has(+ .msg-row.msg-right) .msg-status-text {
+    display: none !important;
 }
 
 #chat-room-layer .msg-row.msg-left + .msg-row.msg-left,
