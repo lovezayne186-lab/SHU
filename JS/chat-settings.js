@@ -38,6 +38,20 @@ function rememberChatSettingsRoleId(roleId) {
 
 const CHAT_BUBBLE_CSS_BY_ROLE_KEY = 'chat_bubble_css_by_role';
 const CHAT_BUBBLE_PRESETS_BY_ROLE_KEY = 'chat_bubble_presets_by_role';
+const CHAT_BUBBLE_CSS_ROLE_DB_PREFIX = 'chat_bubble_css_role_v2:';
+const CHAT_BUBBLE_CSS_ROLE_LS_PREFIX = 'chat_bubble_css_role_v2_';
+const chatBubbleCssMemory = {};
+const chatBubbleCssHydrating = {};
+
+function getChatBubbleCssRoleKey(roleId) {
+    const id = String(roleId || '').trim();
+    return id ? CHAT_BUBBLE_CSS_ROLE_DB_PREFIX + id : '';
+}
+
+function getChatBubbleCssRoleLsKey(roleId) {
+    const id = String(roleId || '').trim();
+    return id ? CHAT_BUBBLE_CSS_ROLE_LS_PREFIX + id : '';
+}
 
 function readChatBubbleCssByRole() {
     try {
@@ -51,24 +65,124 @@ function readChatBubbleCssByRole() {
 function getChatBubbleCssFallback(roleId) {
     const id = resolveChatSettingsRoleId(roleId);
     if (!id) return '';
+    if (Object.prototype.hasOwnProperty.call(chatBubbleCssMemory, id)) {
+        return String(chatBubbleCssMemory[id] || '');
+    }
+    try {
+        const perRoleKey = getChatBubbleCssRoleLsKey(id);
+        const perRoleCss = perRoleKey ? localStorage.getItem(perRoleKey) : '';
+        if (perRoleCss) {
+            chatBubbleCssMemory[id] = perRoleCss;
+            return perRoleCss;
+        }
+    } catch (e0) { }
     const all = readChatBubbleCssByRole();
-    return typeof all[id] === 'string' ? all[id] : '';
+    const legacyCss = typeof all[id] === 'string' ? all[id] : '';
+    if (legacyCss) chatBubbleCssMemory[id] = legacyCss;
+    return legacyCss;
 }
 
 function saveChatBubbleCssFallback(roleId, cssText) {
     const id = resolveChatSettingsRoleId(roleId);
     if (!id) return;
+    const text = String(cssText || '');
+    if (text) chatBubbleCssMemory[id] = text;
+    else delete chatBubbleCssMemory[id];
+    if (window.localforage && typeof window.localforage.setItem === 'function') {
+        const key = getChatBubbleCssRoleKey(id);
+        if (key) {
+            const task = text
+                ? window.localforage.setItem(key, text)
+                : (typeof window.localforage.removeItem === 'function' ? window.localforage.removeItem(key) : window.localforage.setItem(key, ''));
+            if (task && typeof task.catch === 'function') task.catch(function () { });
+        }
+    } else {
+        try {
+            const perRoleKey = getChatBubbleCssRoleLsKey(id);
+            if (perRoleKey) {
+                if (text) localStorage.setItem(perRoleKey, text);
+                else localStorage.removeItem(perRoleKey);
+            }
+        } catch (e0) { }
+    }
     try {
         const all = readChatBubbleCssByRole();
-        const text = String(cssText || '');
-        if (text) {
-            all[id] = text;
-        } else {
-            delete all[id];
-        }
+        delete all[id];
         localStorage.setItem(CHAT_BUBBLE_CSS_BY_ROLE_KEY, JSON.stringify(all));
     } catch (e) { }
 }
+
+function hydrateChatBubbleCssForRole(roleId) {
+    const id = resolveChatSettingsRoleId(roleId);
+    if (!id) return Promise.resolve('');
+    if (Object.prototype.hasOwnProperty.call(chatBubbleCssMemory, id)) {
+        return Promise.resolve(String(chatBubbleCssMemory[id] || ''));
+    }
+    if (chatBubbleCssHydrating[id]) return chatBubbleCssHydrating[id];
+    chatBubbleCssHydrating[id] = (async function () {
+        let css = '';
+        const key = getChatBubbleCssRoleKey(id);
+        if (key && window.localforage && typeof window.localforage.getItem === 'function') {
+            try {
+                css = await window.localforage.getItem(key) || '';
+            } catch (e0) {
+                css = '';
+            }
+        }
+        if (!css) {
+            css = getChatBubbleCssFallback(id);
+        }
+        if (!css) {
+            try {
+                const raw = localStorage.getItem('chat_settings_by_role') || '{}';
+                const all = JSON.parse(raw);
+                const legacySettings = all && typeof all === 'object' ? all[id] : null;
+                css = legacySettings && typeof legacySettings.bubbleCss === 'string' ? legacySettings.bubbleCss : '';
+            } catch (e1) {
+                css = '';
+            }
+        }
+        if (css) {
+            chatBubbleCssMemory[id] = String(css);
+            saveChatBubbleCssFallback(id, css);
+        }
+        delete chatBubbleCssHydrating[id];
+        return String(css || '');
+    })();
+    return chatBubbleCssHydrating[id];
+}
+
+function migrateLegacyChatBubbleCssStorage() {
+    try {
+        const legacyCssByRole = readChatBubbleCssByRole();
+        Object.keys(legacyCssByRole).forEach(function (roleId) {
+            const css = legacyCssByRole[roleId];
+            if (typeof css === 'string' && css) saveChatBubbleCssFallback(roleId, css);
+        });
+        localStorage.removeItem(CHAT_BUBBLE_CSS_BY_ROLE_KEY);
+    } catch (e0) { }
+
+    try {
+        const raw = localStorage.getItem('chat_settings_by_role') || '{}';
+        const allSettings = JSON.parse(raw);
+        if (!allSettings || typeof allSettings !== 'object') return;
+        let changed = false;
+        Object.keys(allSettings).forEach(function (roleId) {
+            const settings = allSettings[roleId];
+            if (!settings || typeof settings !== 'object') return;
+            if (typeof settings.bubbleCss === 'string' && settings.bubbleCss) {
+                saveChatBubbleCssFallback(roleId, settings.bubbleCss);
+            }
+            if (Object.prototype.hasOwnProperty.call(settings, 'bubbleCss')) {
+                delete settings.bubbleCss;
+                changed = true;
+            }
+        });
+        if (changed) localStorage.setItem('chat_settings_by_role', JSON.stringify(allSettings));
+    } catch (e1) { }
+}
+
+setTimeout(migrateLegacyChatBubbleCssStorage, 0);
 
 function readChatBubblePresetsByRole() {
     try {
@@ -113,11 +227,10 @@ function getCurrentChatSettings(roleId) {
     }
     const id = resolveChatSettingsRoleId(roleId);
     const settings = allSettings[id] || {};
-    if (settings && typeof settings === 'object' && (!Object.prototype.hasOwnProperty.call(settings, 'bubbleCss') || !String(settings.bubbleCss || '').trim())) {
+    if (settings && typeof settings === 'object') {
         const fallbackCss = getChatBubbleCssFallback(id);
-        if (fallbackCss) {
-            return Object.assign({}, settings, { bubbleCss: fallbackCss });
-        }
+        if (fallbackCss) return Object.assign({}, settings, { bubbleCss: fallbackCss });
+        if (typeof settings.bubbleCss === 'string' && settings.bubbleCss) return settings;
     }
     return settings;
 }
@@ -132,10 +245,26 @@ function saveCurrentChatSettings(roleId, settings) {
     }
     const id = resolveChatSettingsRoleId(roleId);
     if (!id) return;
-    allSettings[id] = Object.assign({}, allSettings[id] || {}, settings || {});
+    const nextSettings = Object.assign({}, settings || {});
     if (settings && Object.prototype.hasOwnProperty.call(settings, 'bubbleCss')) {
         saveChatBubbleCssFallback(id, settings.bubbleCss || '');
+        delete nextSettings.bubbleCss;
     }
+    const merged = Object.assign({}, allSettings[id] || {}, nextSettings);
+    if (Object.prototype.hasOwnProperty.call(merged, 'bubbleCss')) {
+        delete merged.bubbleCss;
+    }
+    allSettings[id] = merged;
+    Object.keys(allSettings).forEach(function (key) {
+        const item = allSettings[key];
+        if (!item || typeof item !== 'object') return;
+        if (typeof item.bubbleCss === 'string' && item.bubbleCss) {
+            saveChatBubbleCssFallback(key, item.bubbleCss);
+        }
+        if (Object.prototype.hasOwnProperty.call(item, 'bubbleCss')) {
+            delete item.bubbleCss;
+        }
+    });
     localStorage.setItem('chat_settings_by_role', JSON.stringify(allSettings));
 }
 
@@ -233,6 +362,11 @@ function applyChatBubbleCssFromSettings(roleId) {
     let styleEl = document.getElementById(styleId);
     const trimmed = String(cssText || '').trim();
     if (!trimmed) {
+        if (!chatBubbleCssHydrating[id]) {
+            hydrateChatBubbleCssForRole(id).then(function (loadedCss) {
+                if (loadedCss) applyChatBubbleCssFromSettings(id);
+            });
+        }
         if (styleEl && styleEl.parentNode) {
             styleEl.parentNode.removeChild(styleEl);
         }
@@ -2292,6 +2426,14 @@ function initChatSettingsUI(roleId) {
     if (bubbleCssInput) {
         if (bubbleCssInput.dataset) bubbleCssInput.dataset.roleId = id;
         bubbleCssInput.value = typeof settings.bubbleCss === 'string' ? settings.bubbleCss : '';
+        hydrateChatBubbleCssForRole(id).then(function (loadedCss) {
+            if (!loadedCss || !bubbleCssInput || !bubbleCssInput.dataset || String(bubbleCssInput.dataset.roleId || '') !== id) return;
+            if (bubbleCssInput.value !== loadedCss) {
+                bubbleCssInput.value = loadedCss;
+                updateBubblePreview();
+                renderChatBubblePresetList(id);
+            }
+        });
     }
     toggleSummaryInput();
     if (busyReplyModeBox) {

@@ -955,9 +955,11 @@ function sendMessage() {
 
     if (typeof window.isLocationShareActive === 'function' && window.isLocationShareActive(roleId)) {
         if (typeof window.handleMainChatInputForLocationShare === 'function') {
-            window.handleMainChatInputForLocationShare(text);
-            input.value = '';
-            focusChatInputSafely(input, document.activeElement === input ? 0 : 10);
+            const handledByLocationShare = window.handleMainChatInputForLocationShare(text);
+            if (handledByLocationShare) {
+                input.value = '';
+                focusChatInputSafely(input, document.activeElement === input ? 0 : 10);
+            }
             return;
         }
     }
@@ -1012,7 +1014,7 @@ function sendMessage() {
 
     const layer = document.getElementById('location-share-layer');
     const state = layer && layer._locationShareState ? layer._locationShareState : null;
-    if (state && state.travelStatus === 'moving' && state.travelDurationMs > 0 && state.travelStartTime > 0) {
+    if (state && String(state.roleId || '') === String(roleId || '') && state.travelStatus === 'moving' && state.travelDurationMs > 0 && state.travelStartTime > 0) {
         const nowTs = Date.now();
         let remainingMs = state.travelDurationMs - (nowTs - state.travelStartTime);
         if (remainingMs < 0) remainingMs = 0;
@@ -1684,13 +1686,40 @@ function ensureMessageContent(msg) {
         try {
             parsed = JSON.parse(msg.content);
         } catch(e) {}
-        const shopName = parsed && parsed.shopName ? parsed.shopName : '外卖';
+        const shopName = parsed && (parsed.foodName || parsed.shopName) ? (parsed.foodName || parsed.shopName) : '外卖';
+        const payMode = parsed && parsed.paymentMode ? String(parsed.paymentMode) : 'paid';
+        const isPayOnBehalf = payMode === 'pay_on_behalf';
         if (msg.role === 'ai') {
-            msg.content = `[你(AI)为用户点了一份${shopName}]`;
+            msg.content = isPayOnBehalf
+                ? `[你(AI)向用户发起了一份${shopName}的外卖代付]`
+                : `[你(AI)为用户点了一份${shopName}]`;
         } else if (msg.role === 'me') {
-            msg.content = `[用户为你点了一份${shopName}]`;
+            msg.content = isPayOnBehalf
+                ? `[用户向你发起了一份${shopName}的外卖代付]`
+                : `[用户为你点了一份${shopName}]`;
         } else {
             msg.content = `[系统通知：收到一份${shopName}]`;
+        }
+    } else if (msg.type === 'gift_card') {
+        let parsed = null;
+        try {
+            parsed = JSON.parse(msg.content);
+        } catch(e) {}
+        const itemName = parsed && parsed.itemName ? String(parsed.itemName) : '礼物';
+        const anonymous = !!(parsed && parsed.anonymous === true);
+        const payMode = parsed && parsed.paymentMode ? String(parsed.paymentMode) : 'paid';
+        const isPayOnBehalf = payMode === 'pay_on_behalf';
+        const giftText = anonymous ? '匿名包裹' : itemName;
+        if (msg.role === 'ai') {
+            msg.content = isPayOnBehalf
+                ? `[你(AI)向用户发起了一份${giftText}的礼物代付]`
+                : `[你(AI)送了用户一份${giftText}]`;
+        } else if (msg.role === 'me') {
+            msg.content = isPayOnBehalf
+                ? `[用户向你发起了一份${giftText}的礼物代付]`
+                : `[用户送了你一份${giftText}]`;
+        } else {
+            msg.content = `[系统通知：收到一份${giftText}]`;
         }
     } else {
         // 其他类型：标记为未知

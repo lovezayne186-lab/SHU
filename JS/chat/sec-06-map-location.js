@@ -696,33 +696,84 @@ function closeMapCreatorModal() {
 }
 
 function isLocationShareActive(roleId) {
+    return !!getLocationShareStateForRole(roleId);
+}
+
+function getLocationShareStateForRole(roleId) {
+    const targetRoleId = String(roleId || '').trim();
     const layer = document.getElementById('location-share-layer');
-    if (!layer || layer.style.display === 'none') return false;
+    if (!targetRoleId || !layer || layer.style.display === 'none') return null;
     const state = layer._locationShareState;
-    if (!state || state.roleId !== roleId) return false;
-    return true;
+    if (!state || String(state.roleId || '') !== targetRoleId) return null;
+    return state;
 }
 
 window.isLocationShareActive = isLocationShareActive;
+window.getLocationShareStateForRole = getLocationShareStateForRole;
+
+function isLocationShareRoleVisible(roleId) {
+    return String(window.currentChatRole || '') === String(roleId || '');
+}
+
+function pushLocationShareMessage(roleId, msg) {
+    if (!roleId || !msg) return false;
+    if (!window.chatData) window.chatData = {};
+    if (!window.chatData[roleId]) window.chatData[roleId] = [];
+    window.chatData[roleId].push(msg);
+    let rendered = false;
+    if (isLocationShareRoleVisible(roleId) && typeof appendMessageToDOM === 'function') {
+        appendMessageToDOM(msg);
+        rendered = true;
+    } else if (typeof window.loadWechatChatList === 'function') {
+        try { window.loadWechatChatList(true); } catch (e) { }
+    }
+    return rendered;
+}
+
+function findPendingLocationShareUserMessage(roleId, state) {
+    const list = window.chatData && window.chatData[roleId] ? window.chatData[roleId] : [];
+    const handledTs = Number(state && state._lastHandledLocationShareUserTs) || 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+        const msg = list[i];
+        if (!msg || msg.type !== 'location_share') continue;
+        const ts = Number(msg.timestamp) || 0;
+        if (msg.role === 'ai') return null;
+        if (msg.role === 'me' && ts > handledTs) return msg;
+    }
+    return null;
+}
 
 function handleMainChatInputForLocationShare(text) {
-    const roleId = window.currentChatRole;
-    if (!roleId) return;
-    const layer = document.getElementById('location-share-layer');
-    const state = layer ? layer._locationShareState : null;
-    if (!state) return;
-    if (state.isSending) return;
+    const roleId = String(window.currentChatRole || '').trim();
+    if (!roleId) return false;
+    const state = getLocationShareStateForRole(roleId);
+    if (!state) return false;
+    if (state.isSending) {
+        try {
+            if (typeof showTip === 'function') showTip('正在回复中，先等一下就好。');
+        } catch (e) { }
+        return false;
+    }
 
     const now = Date.now();
     const prefixed = `[实时位置共享中] ${text}`;
-    if (!window.chatData[roleId]) window.chatData[roleId] = [];
     const userMsg = { role: 'me', content: prefixed, type: 'location_share', timestamp: now, status: 'sent' };
-    window.chatData[roleId].push(userMsg);
+    pushLocationShareMessage(roleId, userMsg);
+    state.pendingReplyTs = now;
+    state.pendingReplyText = prefixed;
+    setLocationShareStatusText('已发送，点回复按钮让对方回应');
     saveData();
-    appendMessageToDOM(userMsg); // Show in main chat
+    return true;
+}
 
+window.handleMainChatInputForLocationShare = handleMainChatInputForLocationShare;
+
+function requestLocationShareAIReply(roleId, state, userContent, sourceMsg) {
+    if (!roleId || !state) return false;
+    if (state.isSending) return true;
+    if (String(state.roleId || '') !== String(roleId || '')) return false;
+    if (typeof window.callAI !== 'function') return false;
     state.isSending = true;
-
     const history = window.chatData[roleId] || [];
     const cleanHistory = history.map(msg => ensureMessageContent({ ...msg })).filter(m => m.content);
 
@@ -741,7 +792,7 @@ function handleMainChatInputForLocationShare(text) {
         const modeCode = state.travelMode ? String(state.travelMode).toUpperCase() : '';
         const modeLabel = modeCode ? getLocationShareModeLabel(modeCode) : '';
         if (travelStatus === 'idle') {
-            systemPrompt += `\n【出行方式强制规则】\n1. 当直线距离小于 600 米时，你必须选择步行（WALK）。\n2. 当直线距离大于等于 600 米时，你必须结合自己的人设信息（是否有车、是否着急、是否有钱等），在骑行（BIKE）、公交（BUS）、开车（CAR）中选择一种最符合你人设的方式。\n3. 一旦决定要出发，必须在回复末尾追加指令：[[START_MOVE: MODE]]，其中 MODE 为 WALK、BIKE、BUS、CAR 之一。\n4. 只需要用自然的中文描述你的决定，不要向用户解释这些规则或技术细节。`;
+            systemPrompt += '\n' + buildLocationShareTravelDecisionRules(state, distanceMeters);
         } else if (travelStatus === 'moving') {
             if (modeLabel && modeCode) {
                 systemPrompt += `\n【行程状态】\n你已经以${modeLabel}（${modeCode}）的方式在前往用户的路上，本次行程中禁止更改出行方式或重新选择 [[START_MOVE: ...]] 指令。请继续以${modeLabel}的方式向用户汇报路况、进度和预计到达时间。`;
@@ -754,25 +805,47 @@ function handleMainChatInputForLocationShare(text) {
     }
     setLocationShareStatusText('正在根据人设规划路线...');
 
-    // Trigger AI directly
-    if (typeof window.callAI === 'function') {
-        window.callAI(
-            systemPrompt, cleanHistory, prefixed,
-            function (aiResponseText) {
-                // Here we process the AI reply
-                // But we don't have the location share chatBox anymore, we just use main chat
-                handleLocationShareAIReplyMain(aiResponseText, state, state.markers, roleId);
-                state.isSending = false;
-            },
-            function (errorMessage) {
-                state.isSending = false;
-                alert("❌ 发送失败\n\n" + errorMessage);
+    window.callAI(
+        systemPrompt, cleanHistory, userContent,
+        function (aiResponseText) {
+            if (sourceMsg && sourceMsg.timestamp) {
+                state._lastHandledLocationShareUserTs = Number(sourceMsg.timestamp) || Date.now();
             }
-        );
-    }
+            state.pendingReplyTs = 0;
+            state.pendingReplyText = '';
+            handleLocationShareAIReplyMain(aiResponseText, state, state.markers, roleId);
+            state.isSending = false;
+        },
+        function (errorMessage) {
+            state.isSending = false;
+            console.error(errorMessage);
+            if (isLocationShareRoleVisible(roleId)) alert("❌ 发送失败\n\n" + errorMessage);
+        }
+    );
+    return true;
 }
 
-window.handleMainChatInputForLocationShare = handleMainChatInputForLocationShare;
+function replyToLocationSharePending(roleId) {
+    const targetRoleId = String(roleId || window.currentChatRole || '').trim();
+    const state = getLocationShareStateForRole(targetRoleId);
+    if (!state) return false;
+    if (state.isSending) {
+        try {
+            if (typeof showTip === 'function') showTip('正在回复中，先等一下就好。');
+        } catch (e) { }
+        return true;
+    }
+    const pending = findPendingLocationShareUserMessage(targetRoleId, state);
+    if (!pending) {
+        try {
+            if (typeof showTip === 'function') showTip('先发一句话，再点回复。');
+        } catch (e2) { }
+        return true;
+    }
+    return requestLocationShareAIReply(targetRoleId, state, pending.content || state.pendingReplyText || '', pending);
+}
+
+window.replyToLocationSharePending = replyToLocationSharePending;
 
 function handleLocationShareAIReplyMain(rawReply, state, markers, roleId) {
     if (!state || !roleId) return;
@@ -796,22 +869,20 @@ function handleLocationShareAIReplyMain(rawReply, state, markers, roleId) {
             type: 'location_share',
             timestamp: ts
         };
-        window.chatData[roleId].push(aiMsg);
-        appendMessageToDOM(aiMsg); // Show in main chat
+        pushLocationShareMessage(roleId, aiMsg);
     }
 
     if (!hasText && rawReply && rawReply.length > 5 && !cleaned) {
         let fallback = rawReply.replace(/```/g, '');
         const ts = Date.now();
         const aiMsg = { role: 'ai', content: fallback, type: 'location_share', timestamp: ts };
-        window.chatData[roleId].push(aiMsg);
-        appendMessageToDOM(aiMsg);
+        pushLocationShareMessage(roleId, aiMsg);
     }
 
     if (moveCommand && moveCommand.kind === 'start') {
         if (state.travelStatus === 'idle') {
             const destination = state.userMarker ? state.userMarker : null;
-            startLocationShareTravel(state, moveCommand.mode, destination);
+            startLocationShareTravel(state, moveCommand.mode, destination, moveCommand.etaMinutes);
         }
     }
     saveData();
@@ -839,6 +910,8 @@ function closeLocationShareLayer() {
         layer.style.display = 'none';
         layer.innerHTML = '';
         layer.classList.remove('is-floating-window');
+        layer.classList.remove('is-user-location-locked');
+        layer.classList.remove('is-fast-forwarding');
     }
     if (document && document.body && document.body.dataset) {
         if (document.body.dataset._locationSharePrevOverflow !== undefined) {
@@ -851,6 +924,7 @@ function closeLocationShareLayer() {
     const floatWindow = document.getElementById('location-share-float-window');
     if (floatWindow) {
         floatWindow.style.display = 'none';
+        floatWindow.classList.remove('is-fast-forwarding');
     }
 }
 
@@ -913,6 +987,7 @@ function sanitizeLocationShareAIText(text) {
 }
 
 const DEBUG_SPEED_UP = false;
+const LOCATION_SHARE_FAST_FORWARD_HOLD_MS = 280;
 
 function cleanLocationShareAIThinking(text) {
     let out = String(text || '');
@@ -930,12 +1005,13 @@ function cleanLocationShareAIThinking(text) {
 function parseLocationShareMoveCommand(text) {
     const raw = String(text || '');
     if (!raw) return null;
-    const startRe = /\[\[\s*START_MOVE\s*:\s*([A-Z]+)\s*\]\]/i;
+    const startRe = /\[\[\s*START_MOVE\s*:\s*([A-Z]+)(?:\s*[,，|]\s*(?:(?:ETA|TIME|MINUTES|MIN)\s*=\s*)?([0-9]+(?:\.[0-9]+)?)(?:\s*(?:分钟|min|mins|m))?)?\s*\]\]/i;
     const startMatch = raw.match(startRe);
     if (startMatch) {
         const mode = String(startMatch[1] || '').trim().toUpperCase();
         if (mode === 'WALK' || mode === 'BIKE' || mode === 'BUS' || mode === 'CAR') {
-            return { kind: 'start', mode: mode };
+            const eta = startMatch[2] != null ? Number(startMatch[2]) : null;
+            return { kind: 'start', mode: mode, etaMinutes: isFinite(eta) && eta > 0 ? eta : null };
         }
     }
     return null;
@@ -973,13 +1049,77 @@ function getLocationShareModeLabel(mode) {
     return '出行';
 }
 
-function getLocationShareTravelDurationMs(mode) {
+function formatLocationShareDurationMs(ms) {
+    const totalMs = Math.max(0, Number(ms) || 0);
+    const sec = Math.ceil(totalMs / 1000);
+    const min = Math.floor(sec / 60);
+    const s = sec % 60;
+    const minStr = min > 0 ? min + ' 分 ' : '';
+    return minStr + s + ' 秒';
+}
+
+function estimateLocationShareTravelMinutes(mode, distanceMeters) {
+    const upper = String(mode || '').toUpperCase();
+    const distance = Math.max(0, Number(distanceMeters) || 0);
+    if (distance <= 0) return 0;
+    let minutes = 0;
+    if (upper === 'WALK') {
+        minutes = distance / 80 + 0.5;
+    } else if (upper === 'BIKE') {
+        minutes = distance / 180 + 1;
+    } else if (upper === 'BUS') {
+        const wait = distance < 1200 ? 3 : (distance < 3500 ? 5 : 8);
+        minutes = distance / 260 + wait;
+    } else if (upper === 'CAR') {
+        const prep = distance < 1000 ? 2 : 4;
+        minutes = distance / 500 + prep;
+    } else {
+        minutes = distance / 90 + 1;
+    }
+    const minFloor = distance < 80 ? 0.5 : (distance < 180 ? 1 : 2);
+    return Math.max(minFloor, Math.min(180, minutes));
+}
+
+function getLocationShareTravelDurationMs(mode, distanceMeters, etaMinutes) {
     const upper = String(mode || '').toUpperCase();
     const unit = DEBUG_SPEED_UP ? 1000 : 60000;
-    if (upper === 'CAR') return 10 * unit;
-    if (upper === 'WALK') return 15 * unit;
-    if (upper === 'BIKE' || upper === 'BUS') return 20 * unit;
-    return 15 * unit;
+    let minutes = Number(etaMinutes);
+    if (!isFinite(minutes) || minutes <= 0) {
+        minutes = estimateLocationShareTravelMinutes(upper, distanceMeters);
+    }
+    if (!isFinite(minutes) || minutes <= 0) minutes = 1;
+    minutes = Math.max(0.5, Math.min(180, minutes));
+    return Math.round(minutes * unit);
+}
+
+function applyLocationShareFastForwardVisualState(state) {
+    const layer = document.getElementById('location-share-layer');
+    const floatWindow = document.getElementById('location-share-float-window');
+    const active = !!(state && state.travelFastForwardRequested && state.travelStatus === 'moving');
+    if (layer) {
+        layer.classList.toggle('is-fast-forwarding', active);
+    }
+    if (floatWindow) {
+        floatWindow.classList.toggle('is-fast-forwarding', active);
+    }
+}
+
+function getLocationShareTravelSpeedMultiplier(state) {
+    return state && state.travelFastForwardRequested ? 2 : 1;
+}
+
+function setLocationShareTravelFastForward(state, enabled) {
+    if (!state) return;
+    state.travelFastForwardRequested = !!enabled;
+    applyLocationShareFastForwardVisualState(state);
+}
+
+function getLocationShareTravelStatusLabel(mode, state) {
+    const modeLabel = getLocationShareModeLabel(mode);
+    if (state && state.travelFastForwardRequested && state.travelStatus === 'moving') {
+        return `正在${modeLabel}前往（2倍速）...`;
+    }
+    return `正在${modeLabel}前往...`;
 }
 
 function setLocationShareStatusText(text) {
@@ -989,14 +1129,21 @@ function setLocationShareStatusText(text) {
     statusEl.textContent = text || '';
 }
 
-function startLocationShareTravel(state, mode, destination) {
+function startLocationShareTravel(state, mode, destination, etaMinutes) {
     if (!state || !destination || !state._aiWrapEl) return;
-    const durationMs = getLocationShareTravelDurationMs(mode);
     const layer = document.getElementById('location-share-layer');
     let totalDistance = null;
     if (state.userMarker && state.aiMarker) {
         totalDistance = computeLocationShareDistanceMeters(state.userMarker, state.aiMarker, state);
     }
+    if (totalDistance === 0) {
+        closeLocationShareLayer();
+        if (state.roleId) {
+            triggerLocationShareArrivalConversation(state.roleId, null, { immediate: true });
+        }
+        return;
+    }
+    const durationMs = getLocationShareTravelDurationMs(mode, totalDistance, etaMinutes);
     const startMarker = {
         x: Number(state.aiMarker && state.aiMarker.x),
         y: Number(state.aiMarker && state.aiMarker.y),
@@ -1006,6 +1153,8 @@ function startLocationShareTravel(state, mode, destination) {
     state.travelStatus = 'moving';
     state.travelDurationMs = durationMs;
     state.travelStartTime = Date.now();
+    state.travelElapsedMs = 0;
+    state.travelLastTickAt = state.travelStartTime;
     state.travelTotalDistanceMeters = totalDistance;
     state.travelRemainingDistanceMeters = totalDistance;
     if (state.travelTimerId) {
@@ -1014,21 +1163,17 @@ function startLocationShareTravel(state, mode, destination) {
     }
     const statusEl = layer ? layer.querySelector('#location-share-status-text') : null;
     const modeLabel = getLocationShareModeLabel(mode);
+    const initialStatusLabel = getLocationShareTravelStatusLabel(mode, state);
+    applyLocationShareFastForwardVisualState(state);
     if (statusEl) {
-        statusEl.textContent = `正在${modeLabel}前往...`;
+        statusEl.textContent = initialStatusLabel;
     }
     const distanceEl = layer ? layer.querySelector('#location-share-distance-text') : null;
     if (distanceEl && totalDistance !== null) {
         const label = totalDistance >= 1000
             ? (totalDistance / 1000).toFixed(1).replace(/\.0$/, '') + 'km'
             : totalDistance + 'm';
-        const remainText = (function (ms) {
-            const sec = Math.ceil(ms / 1000);
-            const min = Math.floor(sec / 60);
-            const s = sec % 60;
-            const minStr = min > 0 ? min + ' 分 ' : '';
-            return minStr + s + ' 秒';
-        })(durationMs);
+        const remainText = formatLocationShareDurationMs(durationMs);
         distanceEl.innerHTML = `距离 ${label}<br>剩余 ${remainText}`;
     }
     const destMarker = {
@@ -1048,7 +1193,15 @@ function startLocationShareTravel(state, mode, destination) {
             return;
         }
         const now = Date.now();
-        const elapsed = now - state.travelStartTime;
+        const lastTickAt = Number(state.travelLastTickAt) || now;
+        let deltaMs = now - lastTickAt;
+        if (!isFinite(deltaMs) || deltaMs < 0) deltaMs = 0;
+        state.travelLastTickAt = now;
+        const elapsed = Math.min(
+            state.travelDurationMs,
+            (Number(state.travelElapsedMs) || 0) + deltaMs * getLocationShareTravelSpeedMultiplier(state)
+        );
+        state.travelElapsedMs = elapsed;
         let remainingMs = state.travelDurationMs - elapsed;
         if (remainingMs <= 0) {
             remainingMs = 0;
@@ -1059,13 +1212,7 @@ function startLocationShareTravel(state, mode, destination) {
             remainDistance = Math.max(0, Math.round(state.travelTotalDistanceMeters * ratio));
             state.travelRemainingDistanceMeters = remainDistance;
         }
-        const timeLabel = (function (ms) {
-            const sec = Math.ceil(ms / 1000);
-            const min = Math.floor(sec / 60);
-            const s = sec % 60;
-            const minStr = min > 0 ? min + ' 分 ' : '';
-            return minStr + s + ' 秒';
-        })(remainingMs);
+        const timeLabel = formatLocationShareDurationMs(remainingMs);
         let distanceLabel = '';
         if (remainDistance !== null) {
             if (remainDistance >= 1000) {
@@ -1118,6 +1265,7 @@ function startLocationShareTravel(state, mode, destination) {
             clearInterval(state.travelTimerId);
             state.travelTimerId = null;
             state.travelStatus = 'arrived';
+            setLocationShareTravelFastForward(state, false);
             state.aiMarker = destMarker;
             updateDistance(state.userMarker, state.aiMarker);
             const roleIdNow = state.roleId;
@@ -1131,13 +1279,14 @@ function startLocationShareTravel(state, mode, destination) {
             }
             return;
         }
-        statusElNow.textContent = `正在${modeLabel}前往...`;
+        statusElNow.textContent = getLocationShareTravelStatusLabel(mode, state);
     }, 1000);
 }
 
-function triggerLocationShareArrivalConversation(roleId, travelMode) {
+function triggerLocationShareArrivalConversation(roleId, travelMode, options) {
     if (!roleId) return;
     if (typeof window.callAI !== 'function') return;
+    const opts = options && typeof options === 'object' ? options : {};
 
     if (!window.chatMapData) window.chatMapData = {};
     if (!window.chatMapData[roleId]) window.chatMapData[roleId] = {};
@@ -1149,7 +1298,9 @@ function triggerLocationShareArrivalConversation(roleId, travelMode) {
     const userPersona = window.userPersonas[roleId] || {};
     const modeCode = travelMode ? String(travelMode).toUpperCase() : '';
     const modeLabel = modeCode ? getLocationShareModeLabel(modeCode) : '';
-    const modeText = modeLabel ? `你刚刚一路以${modeLabel}（${modeCode}）的方式赶到用户面前，现在已经停在他面前。` : '你刚刚一路沿着地图导航赶到用户面前，现在已经停在他面前。';
+    const modeText = opts.immediate
+        ? '你和用户在实时位置共享中标记的位置完全重合，距离为 0 米；这说明你们已经站在彼此面前，不需要再赶路。'
+        : (modeLabel ? `你刚刚一路以${modeLabel}（${modeCode}）的方式赶到用户面前，现在已经停在他面前。` : '你刚刚一路沿着地图导航赶到用户面前，现在已经停在他面前。');
     const history = window.chatData[roleId] || [];
     const fullHistory = history.map(function (msg) { return ensureMessageContent({ ...msg }); });
     const cleanHistory = fullHistory.filter(function (msg) {
@@ -1160,7 +1311,7 @@ function triggerLocationShareArrivalConversation(roleId, travelMode) {
     });
     const headerTitle = document.getElementById('current-chat-name');
     const oldTitle = headerTitle ? headerTitle.innerText : "聊天中";
-    if (headerTitle) {
+    if (headerTitle && isLocationShareRoleVisible(roleId)) {
         headerTitle.innerText = "对方走到你面前";
     }
     const historyForApi = buildApiMemoryHistory(roleId, cleanHistory);
@@ -1171,6 +1322,7 @@ function triggerLocationShareArrivalConversation(roleId, travelMode) {
     const systemPrompt = typeof window.buildOfflineMeetingPromptV2 === 'function'
         ? window.buildOfflineMeetingPromptV2({
             roleId: roleId,
+            profile: profile,
             roleName: profile.nickName || roleId || 'TA',
             realName: profile.realName || profile.real_name || profile.nickName || roleId || 'TA',
             language: profile.language || profile.lang || '',
@@ -1290,7 +1442,7 @@ function handleLocationShareAIReply(rawReply, state, markers, chatBox, roleId) {
     if (moveCommand && moveCommand.kind === 'start') {
         if (state.travelStatus === 'idle') {
             const destination = state.userMarker ? state.userMarker : null;
-            startLocationShareTravel(state, moveCommand.mode, destination);
+            startLocationShareTravel(state, moveCommand.mode, destination, moveCommand.etaMinutes);
         }
     }
     saveData();
@@ -1504,16 +1656,32 @@ function appendLocationShareChatRow(chatBoxEl, role, text) {
     return row;
 }
 
-function buildLocationShareBaseSystemPrompt(roleId) {
+function buildLocationShareTravelDecisionRules(shareState, distanceMeters) {
+    const distance = Number(distanceMeters);
+    const hasDistance = isFinite(distance) && distance >= 0;
+    const distanceLine = hasDistance ? `当前直线距离约 ${Math.round(distance)} 米。` : '当前直线距离未知。';
+    return `【出行方式、路程时间与移动指令】
+${distanceLine}
+1. 你必须同时判断两件事：选择哪种出行方式，以及这段路大概需要多久。
+2. 时间必须根据实际距离估算，禁止套用固定模板，例如“公交走路二十分钟、开车十分钟”。距离很近时就应该是几十秒到几分钟；距离较远时才相应变久。
+3. 当直线距离为 0 米或已经重合时，不要规划路线；直接判断为你和用户正在见面。
+4. 当直线距离小于 600 米时，优先选择步行（WALK），除非人设和场景有非常明确的特殊理由。
+5. 当直线距离大于等于 600 米时，结合你的人设信息、当前状态、是否有车、是否着急、经济水平和地点环境，在步行（WALK）、骑行（BIKE）、公交（BUS）、开车（CAR）中选择最合理的一种。
+6. 一旦决定出发，必须在回复末尾追加指令：[[START_MOVE: MODE, MINUTES]]。MODE 必须是 WALK、BIKE、BUS、CAR 之一；MINUTES 是你估算的分钟数，可以是 0.5、1、3、8 这类数字。
+7. 对用户说话要自然，可以顺口说“我大概几分钟到”；不要向用户解释这些系统规则或技术细节。`;
+}
+
+function buildLocationShareBaseSystemPrompt(roleId, options) {
     const profile = window.charProfiles[roleId] || {};
     const layer = document.getElementById('location-share-layer');
-    const shareState = layer && layer._locationShareState ? layer._locationShareState : null;
-    let travelBlock = `【出行方式与移动指令】
-当你准备从当前地点前往用户所在位置时，必须先根据你与用户之间的距离和自身人设，选择合适的出行方式：
-1. 当直线距离小于 600 米时，只能选择步行（WALK）。
-2. 当直线距离大于等于 600 米时，必须结合你的人设信息（是否有车、是否着急、经济水平等），在骑行（BIKE）、公交（BUS）、开车（CAR）中选择一种最符合你人设的方式。
-3. 一旦你决定要出发，必须在回复末尾追加指令：[[START_MOVE: MODE]]，其中 MODE 必须是 WALK、BIKE、BUS、CAR 之一。
-4. 不要向用户解释这些规则或技术细节，只需要以自然对话的方式描述你将如何过去即可。`;
+    const rawShareState = layer && layer._locationShareState ? layer._locationShareState : null;
+    const shareState = rawShareState && String(rawShareState.roleId || '') === String(roleId || '') ? rawShareState : null;
+    const opts = options && typeof options === 'object' ? options : {};
+    const includeTravelRules = opts.includeTravelRules !== false;
+    const currentDistance = shareState && shareState.userMarker && shareState.aiMarker
+        ? computeLocationShareDistanceMeters(shareState.userMarker, shareState.aiMarker, shareState)
+        : null;
+    let travelBlock = includeTravelRules ? buildLocationShareTravelDecisionRules(shareState, currentDistance) : '';
     if (shareState && shareState.travelMode && shareState.travelStatus && shareState.travelStatus !== 'idle') {
         const modeCode = String(shareState.travelMode).toUpperCase();
         const modeLabel = getLocationShareModeLabel(modeCode);
@@ -1557,7 +1725,7 @@ function buildLocationShareBaseSystemPrompt(roleId) {
         if (wbPrompt) systemPrompt += wbPrompt;
     }
 
-    travelBlock = `\n\n【出行方式与移动指令】\n当你准备从当前地点前往用户所在位置时，必须先根据你与用户之间的距离和自身人设，选择合适的出行方式：\n1. 当直线距离小于 600 米时，只能选择步行（WALK）。\n2. 当直线距离大于等于 600 米时，必须结合你的人设信息（是否有车、是否着急、经济水平等），在骑行（BIKE）、公交（BUS）、开车（CAR）中选择一种最符合你人设的方式。\n3. 一旦你决定要出发，必须在回复末尾追加指令：[[START_MOVE: MODE]]，其中 MODE 必须是 WALK、BIKE、BUS、CAR 之一。\n4. 不要向用户解释这些规则或技术细节，只需要以自然对话的方式描述你将如何过去即可。`;
+    travelBlock = includeTravelRules ? ('\n\n' + buildLocationShareTravelDecisionRules(shareState, currentDistance)) : '';
     if (shareState && shareState.travelMode && shareState.travelStatus && shareState.travelStatus !== 'idle') {
         const modeCode = String(shareState.travelMode).toUpperCase();
         const modeLabel = getLocationShareModeLabel(modeCode);
@@ -1640,7 +1808,7 @@ async function startLocationShare(roleId) {
     });
     const historyForApi = buildApiMemoryHistory(roleId, cleanHistory);
 
-    let systemPrompt = buildLocationShareBaseSystemPrompt(roleId);
+    let systemPrompt = buildLocationShareBaseSystemPrompt(roleId, { includeTravelRules: false });
     systemPrompt += `\n\n用户发起了位置共享请求。请根据当前聊天上下文和你正在做的事，从以下地点列表中选择一个你当前所在的位置。\n\n地点列表：\n${placeNames.map(n => `- ${n}`).join('\n')}\n\n必须回复精确的地点名称，只输出地点名称本身。无法确定请回复：无法确定。`;
 
     if (typeof window.callAI !== 'function') {
@@ -1718,8 +1886,10 @@ function renderLocationShareUI(roleId, aiMarker) {
     const state = {
         roleId,
         sessionStartTs: Date.now(),
+        markers: markers,
         aiMarker: { x: Number(aiMarker.x), y: Number(aiMarker.y), name: String(aiMarker.name || '') },
         userMarker: null,
+        userLocationLocked: false,
         mapWidthMeters: 5000,
         mapHeightMeters: 5000,
         isSending: false,
@@ -1727,9 +1897,12 @@ function renderLocationShareUI(roleId, aiMarker) {
         travelStatus: 'idle',
         travelDurationMs: 0,
         travelStartTime: 0,
+        travelElapsedMs: 0,
+        travelLastTickAt: 0,
         travelTimerId: null,
         travelTotalDistanceMeters: null,
-        travelRemainingDistanceMeters: null
+        travelRemainingDistanceMeters: null,
+        travelFastForwardRequested: false
     };
     layer._locationShareState = state;
 
@@ -1737,11 +1910,73 @@ function renderLocationShareUI(roleId, aiMarker) {
     let isDragging = false;
     let dragStartX = 0, dragStartY = 0;
     let initialX = 0, initialY = 0;
+    let holdFastForwardTimerId = null;
+    let holdFastForwardActive = false;
+    let holdStartPoint = null;
     
     const dragHandle = layer.querySelector('.location-share-drag-handle');
+
+    const getPointerPoint = function (e) {
+        if (!e) return null;
+        if (e.touches && e.touches[0]) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+        if (e.changedTouches && e.changedTouches[0]) {
+            return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+        }
+        if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+            return { x: e.clientX, y: e.clientY };
+        }
+        return null;
+    };
+
+    const clearFastForwardHoldTimer = function () {
+        if (holdFastForwardTimerId) {
+            clearTimeout(holdFastForwardTimerId);
+            holdFastForwardTimerId = null;
+        }
+    };
+
+    const startFastForwardHold = function (e) {
+        if (!dragHandle || !e || e.target.closest('#ls-close-btn')) return;
+        const point = getPointerPoint(e);
+        clearFastForwardHoldTimer();
+        holdFastForwardActive = false;
+        holdStartPoint = point;
+        holdFastForwardTimerId = setTimeout(function () {
+            holdFastForwardTimerId = null;
+            holdFastForwardActive = true;
+            setLocationShareTravelFastForward(state, true);
+        }, LOCATION_SHARE_FAST_FORWARD_HOLD_MS);
+    };
+
+    const updateFastForwardHold = function (e) {
+        if (!holdStartPoint) return;
+        const point = getPointerPoint(e);
+        if (!point) return;
+        const moveDistance = Math.abs(point.x - holdStartPoint.x) + Math.abs(point.y - holdStartPoint.y);
+        if (moveDistance >= 12) {
+            clearFastForwardHoldTimer();
+            if (holdFastForwardActive) {
+                holdFastForwardActive = false;
+                setLocationShareTravelFastForward(state, false);
+            }
+            holdStartPoint = null;
+        }
+    };
+
+    const endFastForwardHold = function () {
+        clearFastForwardHoldTimer();
+        holdStartPoint = null;
+        if (holdFastForwardActive) {
+            holdFastForwardActive = false;
+            setLocationShareTravelFastForward(state, false);
+        }
+    };
     
     const onDragStart = (e) => {
         if (e.target.closest('#ls-close-btn')) return;
+        startFastForwardHold(e);
         isDragging = true;
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -1755,6 +1990,7 @@ function renderLocationShareUI(roleId, aiMarker) {
     
     const onDragMove = (e) => {
         if (!isDragging) return;
+        updateFastForwardHold(e);
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         
@@ -1771,6 +2007,7 @@ function renderLocationShareUI(roleId, aiMarker) {
     
     const onDragEnd = () => {
         isDragging = false;
+        endFastForwardHold();
     };
     
     dragHandle.addEventListener('mousedown', onDragStart);
@@ -1780,6 +2017,7 @@ function renderLocationShareUI(roleId, aiMarker) {
     dragHandle.addEventListener('touchstart', onDragStart, { passive: false });
     document.addEventListener('touchmove', onDragMove, { passive: false });
     document.addEventListener('touchend', onDragEnd);
+    document.addEventListener('touchcancel', onDragEnd);
 
     let mapPanCleanup = null;
     if (mapStage && mapViewport) {
@@ -1830,11 +2068,21 @@ function renderLocationShareUI(roleId, aiMarker) {
             // 🔥 关键修复：点击事件必须阻止冒泡，否则可能触发底图点击
             dot.addEventListener('click', function (e) {
                 e.stopPropagation();
+                if (state.userLocationLocked) return;
                 state.userMarker = { x: x, y: y, name: name };
+                state.userLocationLocked = true;
+                layer.classList.add('is-user-location-locked');
                 userWrap.style.left = String(x) + '%';
                 userWrap.style.top = String(y) + '%';
                 userWrap.style.display = 'block';
                 updateDistance(state.userMarker, state.aiMarker);
+                const pickedDistance = computeLocationShareDistanceMeters(state.userMarker, state.aiMarker, state);
+                if (pickedDistance === 0) {
+                    closeLocationShareLayer();
+                    showTopNotification('你们已经在同一位置');
+                    triggerLocationShareArrivalConversation(roleId, null, { immediate: true });
+                    return;
+                }
                 
                 if (state.isSending) return;
                 if (typeof window.callAI !== 'function') return;
@@ -1959,12 +2207,15 @@ function renderLocationShareUI(roleId, aiMarker) {
             clearInterval(state.travelTimerId);
             state.travelTimerId = null;
         }
+        endFastForwardHold();
+        setLocationShareTravelFastForward(state, false);
         if (closeBtn) closeBtn.replaceWith(closeBtn.cloneNode(true));
         
         document.removeEventListener('mousemove', onDragMove);
         document.removeEventListener('mouseup', onDragEnd);
         document.removeEventListener('touchmove', onDragMove);
         document.removeEventListener('touchend', onDragEnd);
+        document.removeEventListener('touchcancel', onDragEnd);
         
         if (typeof mapPanCleanup === 'function') {
             try { mapPanCleanup(); } catch (e) { }

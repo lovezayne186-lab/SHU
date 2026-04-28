@@ -946,6 +946,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const features = [
         { action: 'transfer', label: '转账', iconClass: 'bx bx-transfer' },
         { action: 'redpacket', label: '红包', iconClass: 'bx bx-envelope' },
+        { action: 'takeout', label: '外卖', iconClass: 'bx bx-bowl-hot' },
+        { action: 'gift', label: '礼物', iconClass: 'bx bx-gift' },
         { action: 'voicecall', label: '语音通话', iconClass: 'bx bx-phone-call' },
         { action: 'videocall', label: '视频通话', iconClass: 'bx bx-video' },
         { action: 'album', label: '相册', iconClass: 'bx bx-image' },
@@ -1451,33 +1453,23 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!pagesContainer || !dotsContainer) return;
         pagesContainer.innerHTML = '';
         dotsContainer.innerHTML = '';
-        const pageSize = 8;
-        const pageCount = Math.max(1, Math.ceil(features.length / pageSize));
-        for (let p = 0; p < pageCount; p++) {
-            const pageEl = document.createElement('div');
-            pageEl.className = 'more-page';
-            const grid = document.createElement('div');
-            grid.className = 'more-grid';
-            const start = p * pageSize;
-            const slice = features.slice(start, start + pageSize);
-            slice.forEach(item => {
-                const itemEl = document.createElement('div');
-                itemEl.className = 'more-item';
-                itemEl.setAttribute('data-action', item.action);
-                const iconHtml = item.iconClass ? `<i class="${item.iconClass}"></i>` : '';
-                itemEl.innerHTML = `
-                    <div class="more-icon">${iconHtml}</div>
-                    <div class="more-text">${item.label}</div>
-                `;
-                grid.appendChild(itemEl);
-            });
-            pageEl.appendChild(grid);
-            pagesContainer.appendChild(pageEl);
-            const dot = document.createElement('span');
-            dot.className = 'chat-more-dot' + (p === 0 ? ' active' : '');
-            dot.dataset.index = p;
-            dotsContainer.appendChild(dot);
-        }
+        const pageEl = document.createElement('div');
+        pageEl.className = 'more-page';
+        const grid = document.createElement('div');
+        grid.className = 'more-grid';
+        features.forEach(item => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'more-item';
+            itemEl.setAttribute('data-action', item.action);
+            const iconHtml = item.iconClass ? `<i class="${item.iconClass}"></i>` : '';
+            itemEl.innerHTML = `
+                <div class="more-icon">${iconHtml}</div>
+                <div class="more-text">${item.label}</div>
+            `;
+            grid.appendChild(itemEl);
+        });
+        pageEl.appendChild(grid);
+        pagesContainer.appendChild(pageEl);
     }
     function renderStickers() {
         renderStickerPanel();
@@ -1550,8 +1542,397 @@ document.addEventListener('DOMContentLoaded', function () {
         if (typeof window.uiConfirm === 'function') return window.uiConfirm(message, opts);
         return Promise.resolve(window.confirm(String(message || '')));
     }
+    function closeMorePanelState() {
+        if (panel) {
+            panel.classList.remove('show');
+            updateHistoryHeight(false);
+        }
+        closeStickerPanel();
+    }
+    function getCommerceUserName() {
+        try {
+            if (window.MineProfile && typeof window.MineProfile.getProfile === 'function') {
+                const profile = window.MineProfile.getProfile() || {};
+                const name = String(profile.name || '').trim();
+                if (name) return name;
+            }
+        } catch (e) { }
+        try {
+            const localName = String(localStorage.getItem('user_name') || '').trim();
+            if (localName) return localName;
+        } catch (e) { }
+        return '我';
+    }
+    function getCommercePeerName(roleId) {
+        const p = window.charProfiles && window.charProfiles[roleId] ? window.charProfiles[roleId] : {};
+        return String(p.remark || p.nickName || p.name || '对方').trim() || '对方';
+    }
+    function normalizeCommerceAmount(inputValue) {
+        const num = parseFloat(String(inputValue || '').trim());
+        if (!isFinite(num) || num <= 0) return '';
+        return num.toFixed(2);
+    }
+    function ensureCommerceComposerModal() {
+        let modal = document.getElementById('chat-commerce-composer');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'chat-commerce-composer';
+        modal.className = 'chat-commerce-composer';
+        modal.innerHTML = `
+            <div class="chat-commerce-backdrop" data-commerce-close="1"></div>
+            <div class="chat-commerce-sheet">
+                <button type="button" class="chat-commerce-close" data-commerce-close="1" aria-label="关闭">✕</button>
+                <div class="chat-commerce-sheet-body">
+                    <div class="chat-commerce-title" id="chat-commerce-title"></div>
+                    <div class="chat-commerce-subtitle" id="chat-commerce-subtitle"></div>
+                    <div class="chat-commerce-preview" id="chat-commerce-preview"></div>
+                    <label class="chat-commerce-field">
+                        <span class="chat-commerce-label" id="chat-commerce-item-label"></span>
+                        <input id="chat-commerce-item-input" class="chat-commerce-input" type="text" maxlength="40" autocomplete="off">
+                    </label>
+                    <label class="chat-commerce-field">
+                        <span class="chat-commerce-label">金额</span>
+                        <input id="chat-commerce-amount-input" class="chat-commerce-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="88.00">
+                    </label>
+                    <label class="chat-commerce-field" id="chat-commerce-remark-wrap" style="display:none;">
+                        <span class="chat-commerce-label">备注</span>
+                        <input id="chat-commerce-remark-input" class="chat-commerce-input" type="text" maxlength="60" autocomplete="off" placeholder="给对方的留言">
+                    </label>
+                    <label class="chat-commerce-switch" id="chat-commerce-anonymous-wrap" style="display:none;">
+                        <span>设置匿名包裹</span>
+                        <input id="chat-commerce-anonymous-input" type="checkbox">
+                    </label>
+                    <div class="chat-commerce-actions">
+                        <button type="button" class="chat-commerce-btn primary" id="chat-commerce-pay-btn"></button>
+                        <button type="button" class="chat-commerce-btn secondary" id="chat-commerce-request-btn"></button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            const closeTarget = e.target.closest('[data-commerce-close="1"]');
+            if (closeTarget) {
+                modal.classList.remove('show');
+            }
+        });
+        return modal;
+    }
+    function buildTakeoutComposerPreview(itemName, amount, peerName, payMode, userRemark) {
+        const safeEscape = typeof window.escapeHtmlText === 'function'
+            ? window.escapeHtmlText
+            : function (value) { return String(value || ''); };
+        const title = safeEscape(itemName || '还没想好吃什么');
+        const price = safeEscape(amount || '--');
+        const footerLabel = payMode === 'pay_on_behalf' ? '待付款' : '实付金额';
+        const footerPrice = payMode === 'pay_on_behalf' ? ('¥' + price) : ('¥' + price);
+        const remark = safeEscape(userRemark) || (payMode === 'pay_on_behalf' ? `向 ${safeEscape(peerName)} 发起代付` : `给 ${safeEscape(peerName)} 点的热乎乎一份`);
+        return `
+            <div class="takeout-receipt-card composer-preview-card">
+                <div class="takeout-receipt-header">
+                    <div class="takeout-receipt-top">
+                        <span class="takeout-order-number">${payMode === 'pay_on_behalf' ? '代付单' : '已下单'}</span>
+                        <span class="takeout-platform">外卖小票</span>
+                    </div>
+                    <div class="takeout-receipt-logo">
+                        <i class="bx bx-bowl-hot"></i>
+                        <div class="takeout-shop-name">${title}</div>
+                    </div>
+                    <div class="takeout-slogan">先让对方好好吃饭</div>
+                </div>
+                <div class="takeout-receipt-body">
+                    <div class="takeout-items-header">
+                        <span>商品名称</span>
+                        <span style="text-align:right;">数量</span>
+                    </div>
+                    <div class="takeout-items-list">
+                        <div class="takeout-item-row">
+                            <span class="takeout-item-name">${title}</span>
+                            <span class="takeout-item-qty">1</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="takeout-receipt-divider"></div>
+                <div class="takeout-receipt-footer">
+                    <div class="takeout-total-row">
+                        <span>合计</span>
+                        <span>¥${price}</span>
+                    </div>
+                    <div class="takeout-receipt-divider"></div>
+                    <div class="takeout-pay-row">
+                        <span>${footerLabel}</span>
+                        <span class="takeout-final-price">${footerPrice}</span>
+                    </div>
+                </div>
+                <div class="takeout-receipt-divider"></div>
+                <div class="takeout-receipt-remark">备注：${remark}</div>
+            </div>
+        `;
+    }
+    function buildGiftComposerPreview(itemName, amount, anonymous) {
+        const safeEscape = typeof window.escapeHtmlText === 'function'
+            ? window.escapeHtmlText
+            : function (value) { return String(value || ''); };
+        const title = anonymous ? '送你一份匿名心意' : '送你一份心意';
+        const detail = anonymous
+            ? '对方收到后，只会先知道这是一份匿名包裹。'
+            : ((itemName ? ('礼物名：' + safeEscape(itemName)) : '礼物名会显示在拆开后') + (amount ? (' · 价值 ¥' + safeEscape(amount)) : ''));
+        return `
+            <div class="gift-composer-preview">
+                <div class="gift-bubble starry-bg">
+                    <div class="bubble-main">
+                        <div class="gift-preview-bow" aria-hidden="true">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="bubble-title">${title}</div>
+                    </div>
+                    <div class="bubble-footer starry-bg">微信礼物</div>
+                </div>
+                <div class="gift-composer-note">${detail}</div>
+            </div>
+        `;
+    }
+    function pushCommerceCardMessage(roleId, type, payload, walletMeta) {
+        const now = Date.now();
+        if (!window.chatData[roleId]) window.chatData[roleId] = [];
+        const msg = {
+            role: 'me',
+            type: type,
+            content: JSON.stringify(payload),
+            timestamp: now,
+            status: payload && payload.paymentMode === 'pay_on_behalf' ? 'pending_pay' : 'sent'
+        };
+        window.chatData[roleId].push(msg);
+        appendMessageToDOM(msg);
+        saveData();
+        if (walletMeta && walletMeta.deduct === true && window.Wallet && typeof window.Wallet.addTransaction === 'function') {
+            window.Wallet.addTransaction('expense', walletMeta.title, walletMeta.amount, 'transfer', walletMeta.extra || {});
+        }
+        closeMorePanelState();
+        const modal = document.getElementById('chat-commerce-composer');
+        if (modal) modal.classList.remove('show');
+        if (msgInput) {
+            refocusChatInput(10);
+        }
+        if (typeof triggerAI === 'function') {
+            setTimeout(function () {
+                if (String(window.currentChatRole || '') === String(roleId || '')) {
+                    triggerAI();
+                }
+            }, 160);
+        }
+    }
+    async function openTakeoutComposer() {
+        const roleId = window.currentChatRole;
+        if (!roleId) return;
+        const peerName = getCommercePeerName(roleId);
+        const balance = window.Wallet && typeof window.Wallet.getData === 'function'
+            ? Number((window.Wallet.getData() || {}).totalAssets || 0)
+            : 0;
+        const modal = ensureCommerceComposerModal();
+        const titleEl = document.getElementById('chat-commerce-title');
+        const subtitleEl = document.getElementById('chat-commerce-subtitle');
+        const previewEl = document.getElementById('chat-commerce-preview');
+        const itemLabelEl = document.getElementById('chat-commerce-item-label');
+        const itemInput = document.getElementById('chat-commerce-item-input');
+        const amountInput = document.getElementById('chat-commerce-amount-input');
+        const anonymousWrap = document.getElementById('chat-commerce-anonymous-wrap');
+        const anonymousInput = document.getElementById('chat-commerce-anonymous-input');
+        const remarkWrap = document.getElementById('chat-commerce-remark-wrap');
+        const remarkInput = document.getElementById('chat-commerce-remark-input');
+        const payBtn = document.getElementById('chat-commerce-pay-btn');
+        const requestBtn = document.getElementById('chat-commerce-request-btn');
+        if (!titleEl || !subtitleEl || !previewEl || !itemLabelEl || !itemInput || !amountInput || !payBtn || !requestBtn) return;
+        if (anonymousWrap) anonymousWrap.style.display = 'none';
+        if (anonymousInput) anonymousInput.checked = false;
+        if (remarkWrap) remarkWrap.style.display = 'flex';
+        if (remarkInput) remarkInput.value = '';
+        titleEl.textContent = '外卖';
+        subtitleEl.textContent = `当前余额：¥${balance.toFixed(2)}`;
+        itemLabelEl.textContent = '食物名称';
+        itemInput.value = '';
+        itemInput.placeholder = '比如：小馄饨、芋泥奶茶';
+        amountInput.value = '';
+        amountInput.placeholder = '88.00';
+        payBtn.textContent = '给对方点';
+        requestBtn.textContent = '发起代付';
+        let currentMode = 'paid';
+        const refreshPreview = function () {
+            const itemName = String(itemInput.value || '').trim();
+            const amount = normalizeCommerceAmount(amountInput.value);
+            const userRemark = remarkInput && remarkInput.value ? String(remarkInput.value).trim() : '';
+            previewEl.innerHTML = buildTakeoutComposerPreview(itemName, amount || '--', peerName, currentMode, userRemark);
+        };
+        itemInput.oninput = refreshPreview;
+        amountInput.oninput = refreshPreview;
+        if (remarkInput) remarkInput.oninput = refreshPreview;
+        payBtn.onclick = function () {
+            currentMode = 'paid';
+            const itemName = String(itemInput.value || '').trim();
+            const amount = normalizeCommerceAmount(amountInput.value);
+            const userRemark = remarkInput && remarkInput.value ? String(remarkInput.value).trim() : '';
+            if (!itemName) {
+                chatUiAlert('请输入食物名称');
+                return;
+            }
+            if (!amount) {
+                chatUiAlert('请输入有效的金额');
+                return;
+            }
+            if (parseFloat(amount) > balance) {
+                chatUiAlert(`余额不足！你当前只有 ¥${balance.toFixed(2)}，无法支付 ¥${amount}。`);
+                return;
+            }
+            pushCommerceCardMessage(roleId, 'takeout_card', {
+                shopName: itemName,
+                foodName: itemName,
+                items: [itemName],
+                price: amount,
+                remark: userRemark || `给 ${peerName} 点的`,
+                paymentMode: 'paid',
+                senderName: getCommerceUserName(),
+                receiverName: peerName
+            }, {
+                deduct: true,
+                title: `给${peerName}点外卖`,
+                amount: amount,
+                extra: { peerName: peerName, peerRoleId: roleId, kind: 'takeout_card' }
+            });
+        };
+        requestBtn.onclick = function () {
+            currentMode = 'pay_on_behalf';
+            const itemName = String(itemInput.value || '').trim();
+            const amount = normalizeCommerceAmount(amountInput.value);
+            const userRemark = remarkInput && remarkInput.value ? String(remarkInput.value).trim() : '';
+            if (!itemName) {
+                chatUiAlert('请输入食物名称');
+                return;
+            }
+            if (!amount) {
+                chatUiAlert('请输入有效的金额');
+                return;
+            }
+            pushCommerceCardMessage(roleId, 'takeout_card', {
+                shopName: itemName,
+                foodName: itemName,
+                items: [itemName],
+                price: amount,
+                remark: userRemark || `向 ${peerName} 发起外卖代付`,
+                paymentMode: 'pay_on_behalf',
+                senderName: getCommerceUserName(),
+                receiverName: peerName
+            }, null);
+        };
+        refreshPreview();
+        modal.classList.add('show');
+        setTimeout(function () {
+            try { itemInput.focus(); } catch (e) { }
+        }, 40);
+    }
+    async function openGiftComposer() {
+        const roleId = window.currentChatRole;
+        if (!roleId) return;
+        const peerName = getCommercePeerName(roleId);
+        const balance = window.Wallet && typeof window.Wallet.getData === 'function'
+            ? Number((window.Wallet.getData() || {}).totalAssets || 0)
+            : 0;
+        const modal = ensureCommerceComposerModal();
+        const titleEl = document.getElementById('chat-commerce-title');
+        const subtitleEl = document.getElementById('chat-commerce-subtitle');
+        const previewEl = document.getElementById('chat-commerce-preview');
+        const itemLabelEl = document.getElementById('chat-commerce-item-label');
+        const itemInput = document.getElementById('chat-commerce-item-input');
+        const amountInput = document.getElementById('chat-commerce-amount-input');
+        const anonymousWrap = document.getElementById('chat-commerce-anonymous-wrap');
+        const anonymousInput = document.getElementById('chat-commerce-anonymous-input');
+        const remarkWrap = document.getElementById('chat-commerce-remark-wrap');
+        const remarkInput = document.getElementById('chat-commerce-remark-input');
+        const payBtn = document.getElementById('chat-commerce-pay-btn');
+        const requestBtn = document.getElementById('chat-commerce-request-btn');
+        if (!titleEl || !subtitleEl || !previewEl || !itemLabelEl || !itemInput || !amountInput || !payBtn || !requestBtn || !anonymousWrap || !anonymousInput) return;
+        anonymousWrap.style.display = 'flex';
+        if (remarkWrap) remarkWrap.style.display = 'none';
+        if (remarkInput) remarkInput.value = '';
+        titleEl.textContent = '礼物';
+        subtitleEl.textContent = `当前余额：¥${balance.toFixed(2)}`;
+        itemLabelEl.textContent = '商品名称';
+        itemInput.value = '';
+        itemInput.placeholder = '比如：小熊夜灯、香水、拍立得';
+        amountInput.value = '';
+        amountInput.placeholder = '188.00';
+        anonymousInput.checked = false;
+        payBtn.textContent = '给对方买';
+        requestBtn.textContent = '发起代付';
+        const refreshPreview = function () {
+            const itemName = String(itemInput.value || '').trim();
+            const amount = normalizeCommerceAmount(amountInput.value);
+            previewEl.innerHTML = buildGiftComposerPreview(itemName, amount || '--', anonymousInput.checked);
+        };
+        itemInput.oninput = refreshPreview;
+        amountInput.oninput = refreshPreview;
+        anonymousInput.onchange = refreshPreview;
+        payBtn.onclick = function () {
+            const itemName = String(itemInput.value || '').trim();
+            const amount = normalizeCommerceAmount(amountInput.value);
+            const anonymous = !!anonymousInput.checked;
+            if (!itemName) {
+                chatUiAlert('请输入礼物名称');
+                return;
+            }
+            if (!amount) {
+                chatUiAlert('请输入有效的金额');
+                return;
+            }
+            if (parseFloat(amount) > balance) {
+                chatUiAlert(`余额不足！你当前只有 ¥${balance.toFixed(2)}，无法支付 ¥${amount}。`);
+                return;
+            }
+            pushCommerceCardMessage(roleId, 'gift_card', {
+                itemName: itemName,
+                price: amount,
+                paymentMode: 'paid',
+                anonymous: anonymous,
+                senderName: getCommerceUserName(),
+                receiverName: peerName,
+                bubbleTitle: anonymous ? '送你一份匿名心意' : '送你一份心意'
+            }, {
+                deduct: true,
+                title: `给${peerName}买礼物`,
+                amount: amount,
+                extra: { peerName: peerName, peerRoleId: roleId, kind: 'gift_card' }
+            });
+        };
+        requestBtn.onclick = function () {
+            const itemName = String(itemInput.value || '').trim();
+            const amount = normalizeCommerceAmount(amountInput.value);
+            const anonymous = !!anonymousInput.checked;
+            if (!itemName) {
+                chatUiAlert('请输入礼物名称');
+                return;
+            }
+            if (!amount) {
+                chatUiAlert('请输入有效的金额');
+                return;
+            }
+            pushCommerceCardMessage(roleId, 'gift_card', {
+                itemName: itemName,
+                price: amount,
+                paymentMode: 'pay_on_behalf',
+                anonymous: anonymous,
+                senderName: getCommerceUserName(),
+                receiverName: peerName,
+                bubbleTitle: anonymous ? '送你一份匿名心意' : '送你一份心意'
+            }, null);
+        };
+        refreshPreview();
+        modal.classList.add('show');
+        setTimeout(function () {
+            try { itemInput.focus(); } catch (e) { }
+        }, 40);
+    }
     function updateDotsByScroll() {
         if (!pagesContainer || !dotsContainer) return;
+        if (!dotsContainer.children.length) return;
         const width = pagesContainer.clientWidth;
         if (!width) return;
         const index = Math.round(pagesContainer.scrollLeft / width);
@@ -1628,6 +2009,16 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 await chatUiAlert('位置功能未初始化，请刷新页面后重试');
             }
+            return;
+        }
+        if (action === 'takeout') {
+            closeMorePanelState();
+            openTakeoutComposer();
+            return;
+        }
+        if (action === 'gift') {
+            closeMorePanelState();
+            openGiftComposer();
             return;
         }
         if (action === 'album') {
@@ -2550,6 +2941,32 @@ function closeUserPersonaPresetSheet() {
     if (sheet) sheet.style.display = 'none';
 }
 
+function deleteUserPersonaPreset(presetId) {
+    const id = String(presetId || '');
+    if (!id) return;
+    const presets = readUserPersonaPresets();
+    const preset = presets.find(function (item) {
+        return item && String(item.id || '') === id;
+    });
+    if (!preset) {
+        renderUserPersonaPresetList();
+        return;
+    }
+
+    const title = String(preset.name || '').trim() || '未命名预设';
+    if (!confirm('确定要删除预设“' + title + '”吗？')) return;
+
+    const nextPresets = presets.filter(function (item) {
+        return item && String(item.id || '') !== id;
+    });
+    try {
+        writeUserPersonaPresets(nextPresets);
+        renderUserPersonaPresetList();
+    } catch (e) {
+        alert('删除预设失败，请稍后重试');
+    }
+}
+
 function renderUserPersonaPresetList() {
     const listEl = document.getElementById('user-persona-preset-list');
     if (!listEl) return;
@@ -2591,7 +3008,46 @@ function renderUserPersonaPresetList() {
                 + '<div style="font-size:12px; font-weight:700; color:#111; padding-top:2px; flex-shrink:0;">应用</div>'
                 + '</div>';
             card.addEventListener('click', function () {
+                if (card._personaLongPressTriggered) {
+                    card._personaLongPressTriggered = false;
+                    return;
+                }
                 applyUserPersonaPreset(String(preset.id || ''));
+            });
+            card.addEventListener('pointerdown', function () {
+                card._personaLongPressTriggered = false;
+                if (card._personaLongPressTimer) clearTimeout(card._personaLongPressTimer);
+                card._personaLongPressTimer = setTimeout(function () {
+                    card._personaLongPressTriggered = true;
+                    deleteUserPersonaPreset(String(preset.id || ''));
+                }, 650);
+            });
+            card.addEventListener('pointerup', function () {
+                if (card._personaLongPressTimer) {
+                    clearTimeout(card._personaLongPressTimer);
+                    card._personaLongPressTimer = null;
+                }
+            });
+            card.addEventListener('pointerleave', function () {
+                if (card._personaLongPressTimer) {
+                    clearTimeout(card._personaLongPressTimer);
+                    card._personaLongPressTimer = null;
+                }
+            });
+            card.addEventListener('pointercancel', function () {
+                if (card._personaLongPressTimer) {
+                    clearTimeout(card._personaLongPressTimer);
+                    card._personaLongPressTimer = null;
+                }
+            });
+            card.addEventListener('contextmenu', function (e) {
+                e.preventDefault();
+                if (card._personaLongPressTimer) {
+                    clearTimeout(card._personaLongPressTimer);
+                    card._personaLongPressTimer = null;
+                }
+                card._personaLongPressTriggered = true;
+                deleteUserPersonaPreset(String(preset.id || ''));
             });
             listEl.appendChild(card);
         });

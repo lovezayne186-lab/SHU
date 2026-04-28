@@ -4,6 +4,11 @@ const LEGACY_DEFAULT_MOMENTS_COVER = 'assets/images/beijing.jpg';
 const DEFAULT_MOMENTS_COVER = 'assets/chushibeijing.jpg';
 const DEFAULT_MOMENTS_AVATAR = 'assets/chushitouxiang.jpg';
 const DEFAULT_MOMENTS_NAME = '我';
+const ROLE_MOMENTS_PHOTO_POOL = [
+    'assets/pengyq1.jpg',
+    'assets/pengyq2.jpg',
+    'assets/pengyq3.jpg'
+];
 
 let momentsHydrationPromise = null;
 
@@ -185,6 +190,50 @@ function getAvatarByRoleId(roleId, data) {
     const profiles = window.charProfiles || {};
     const p = profiles[roleId] || {};
     return p.avatar || DEFAULT_MOMENTS_AVATAR;
+}
+
+function pickRoleMomentPhoto() {
+    if (!ROLE_MOMENTS_PHOTO_POOL.length) return '';
+    var index = Math.floor(Math.random() * ROLE_MOMENTS_PHOTO_POOL.length);
+    return ROLE_MOMENTS_PHOTO_POOL[index] || '';
+}
+
+function getMomentImageSrc(imageLike) {
+    if (!imageLike) return '';
+    if (typeof imageLike === 'string') return imageLike;
+    if (typeof imageLike === 'object') return String(imageLike.src || imageLike.url || imageLike.base64 || '').trim();
+    return '';
+}
+
+function getMomentImageDescription(post, imageLike, index) {
+    if (imageLike && typeof imageLike === 'object') {
+        var ownDesc = String(imageLike.description || imageLike.desc || imageLike.alt || '').trim();
+        if (ownDesc) return ownDesc;
+    }
+    var descriptions = post && Array.isArray(post.imageDescriptions) ? post.imageDescriptions : [];
+    return String(descriptions[index] || '').trim();
+}
+
+function getRoleMomentsPhotoStats(roleId, posts) {
+    var id = String(roleId || '').trim();
+    var list = Array.isArray(posts) ? posts : [];
+    var total = 0;
+    var withPhoto = 0;
+    for (var i = 0; i < list.length; i++) {
+        var post = list[i];
+        if (!post || String(post.roleId || '').trim() !== id) continue;
+        total++;
+        var images = Array.isArray(post.images) ? post.images : [];
+        if (images.some(function (item) { return !!getMomentImageSrc(item); })) {
+            withPhoto++;
+        }
+    }
+    return {
+        total: total,
+        withPhoto: withPhoto,
+        textOnly: Math.max(0, total - withPhoto),
+        ratio: total > 0 ? withPhoto / total : 0
+    };
 }
 
 function isMomentsGroupRole(roleId, profile) {
@@ -376,9 +425,9 @@ function renderMoments() {
         if (images.length > 0) {
             html += '      <div class="' + imagesClass + '">';
             for (let j = 0; j < images.length; j++) {
-                const src = images[j];
+                const src = getMomentImageSrc(images[j]);
                 if (!src) continue;
-                html += '          <img class="post-img" src="' + escapeHtml(src) + '" onclick="previewImage(\'' + escapeHtml(src) + '\')" alt="">';
+                html += '          <img class="post-img" src="' + escapeHtml(src) + '" onclick="previewMomentImage(\'' + escapeHtml(postId) + '\', ' + j + ')" alt="">';
             }
             html += '      </div>';
         }
@@ -687,7 +736,22 @@ function changeMomentsAvatar() {
     }, 0);
 }
 
-function previewImage(src) {
+function previewMomentImage(postId, imageIndex) {
+    var data = initMomentsData();
+    var posts = Array.isArray(data.posts) ? data.posts : [];
+    var post = posts.find(function (item) {
+        return item && String(item.id || '') === String(postId || '');
+    });
+    if (!post) return;
+    var images = Array.isArray(post.images) ? post.images : [];
+    var index = Number(imageIndex) || 0;
+    var imageLike = images[index];
+    var src = getMomentImageSrc(imageLike);
+    if (!src) return;
+    previewImage(src, getMomentImageDescription(post, imageLike, index));
+}
+
+function previewImage(src, description) {
     let overlay = document.getElementById('moments-image-preview');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -701,13 +765,32 @@ function previewImage(src) {
         overlay.style.display = 'flex';
         overlay.style.alignItems = 'center';
         overlay.style.justifyContent = 'center';
+        overlay.style.flexDirection = 'column';
+        overlay.style.padding = '24px';
+        overlay.style.boxSizing = 'border-box';
         overlay.style.zIndex = '9999';
         const img = document.createElement('img');
         img.id = 'moments-image-preview-img';
         img.style.maxWidth = '100%';
-        img.style.maxHeight = '100%';
+        img.style.maxHeight = '82%';
         img.style.objectFit = 'contain';
         overlay.appendChild(img);
+        const desc = document.createElement('div');
+        desc.id = 'moments-image-preview-desc';
+        desc.style.display = 'none';
+        desc.style.maxWidth = 'min(88vw, 520px)';
+        desc.style.marginTop = '14px';
+        desc.style.padding = '12px 14px';
+        desc.style.borderRadius = '12px';
+        desc.style.background = 'rgba(255,255,255,0.12)';
+        desc.style.color = '#fff';
+        desc.style.fontSize = '14px';
+        desc.style.lineHeight = '1.7';
+        desc.style.textAlign = 'left';
+        desc.style.whiteSpace = 'pre-wrap';
+        desc.style.maxHeight = '28vh';
+        desc.style.overflowY = 'auto';
+        overlay.appendChild(desc);
         overlay.addEventListener('click', function () {
             overlay.style.display = 'none';
         });
@@ -715,6 +798,12 @@ function previewImage(src) {
     }
     const imgEl = document.getElementById('moments-image-preview-img') || overlay.querySelector('img');
     if (imgEl) imgEl.src = src;
+    const descEl = document.getElementById('moments-image-preview-desc');
+    const descText = String(description || '').trim();
+    if (descEl) {
+        descEl.textContent = descText;
+        descEl.style.display = descText ? 'block' : 'none';
+    }
     overlay.style.display = 'flex';
 }
 
@@ -1916,6 +2005,7 @@ window.deletePost = deletePost;
 window.changeMomentsCover = changeMomentsCover;
 window.changeMomentsAvatar = changeMomentsAvatar;
 window.previewImage = previewImage;
+window.previewMomentImage = previewMomentImage;
 window.openMomentsPublisher = openMomentsPublisher;
 window.cleanupMomentsDataForRole = cleanupMomentsDataForRole;
 
@@ -2064,6 +2154,8 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
     var lastPostAt = roleState && typeof roleState.lastPostAt === 'number' ? roleState.lastPostAt : 0;
     var lastPostDesc = lastPostAt ? new Date(lastPostAt).toLocaleString() : '从未发过朋友圈';
     var nowStr = new Date().toLocaleString();
+    var photoStats = getRoleMomentsPhotoStats(roleId, postsForLimit);
+    var photoRatioText = photoStats.total > 0 ? Math.round(photoStats.ratio * 100) + '%' : '暂无历史';
 
     var rawHistory = window.chatData && Array.isArray(window.chatData[roleId]) ? window.chatData[roleId].slice() : [];
     var cleanHistory = rawHistory.filter(function (msg) {
@@ -2086,6 +2178,7 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
         '【当前时间】' + nowStr,
         '【今日已发朋友圈条数】' + String(todayCount),
         '【你上一次主动发朋友圈的时间】' + lastPostDesc,
+        '【你历史朋友圈带图比例】' + photoStats.withPhoto + '/' + photoStats.total + '（' + photoRatioText + '），长期目标约 60%',
         '【今天是否和用户聊天】' + (chatFocusContext.hasTodayChat ? '是' : '否'),
         '【今天聊天记录（带日期时间）】\n' + chatFocusContext.todayChatText
     ].join('\n');
@@ -2102,7 +2195,11 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
                 chatFocusContext.hasTodayChat
                     ? '如果今天和用户有聊天，朋友圈内容应优先围绕今天的互动、今天引发的情绪和今天的生活片段展开。'
                     : '如果今天没有和用户聊天，朋友圈内容应更像你在分享自己的生活，不要硬把几天前的聊天写成今天刚发生。',
-                '如果不适合发，就明确选择不发，不要为了完成任务硬凑一条朋友圈。'
+                '如果不适合发，就明确选择不发，不要为了完成任务硬凑一条朋友圈。',
+                '如果这条朋友圈只是表达当下心情、想法、独白或关系余温，post_type 选 thought，只发纯文字。',
+                '如果这条朋友圈更像在分享生活片段、地点、物件、状态、场景或可被看见的东西，post_type 选 share，系统会附带一张图片。',
+                'share 使用的是可点击查看说明的文字图占位，image_description 要写你真正想分享的画面，而不是描述占位图本身。',
+                '长期希望你的朋友圈里 share/带图动态约占 60%，thought/纯文字约占 40%。当两种表达都自然时，请参考当前历史比例做选择。'
             ].join('\n')
         })
         : ('你是微信里的 AI 角色「' + (profile.nickName || profile.name || roleId) + '」。你和用户正在微信里聊天。你需要根据自己的人设、世界书和对话记忆，决定现在要不要主动发一条朋友圈。');
@@ -2113,6 +2210,10 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
     msgParts.push('用户昵称：' + (userName || '用户'));
     msgParts.push('今日已发朋友圈条数：' + String(todayCount));
     msgParts.push('你上一次主动发朋友圈的时间：' + lastPostDesc);
+    msgParts.push('你历史朋友圈带图比例：' + photoStats.withPhoto + '/' + photoStats.total + '（' + photoRatioText + '），长期目标约 60%。');
+    msgParts.push('请先根据你此刻真正想表达的内容判断类型：只是表达心情/想法就选 thought；偏向分享生活片段/场景/物件/状态就选 share。');
+    msgParts.push('share 会显示为一张文字图占位，用户点击图片后会看到 image_description；所以 image_description 要详细写出你想分享的真实画面。');
+    msgParts.push('当 thought 和 share 都自然成立时，再参考 60% 带图目标微调选择。');
     msgParts.push('今天是否和用户聊天：' + (chatFocusContext.hasTodayChat ? '是' : '否'));
     if (chatFocusContext.hasTodayChat) {
         msgParts.push('如果今天有聊天，你发的这条朋友圈应优先围绕今天的互动、今天的心情余温或由今天聊天触发的生活感受来写。');
@@ -2132,14 +2233,18 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
     msgParts.push('请只输出一个 JSON 对象，格式如下：');
     msgParts.push('{');
     msgParts.push('  "should_post": true 或 false,');
+    msgParts.push('  "post_type": "thought 或 share",');
     msgParts.push('  "content": "如果要发，这里写朋友圈文案，控制在 50 字以内，纯文本一句话",');
+    msgParts.push('  "image_description": "post_type 为 share 时，写这张图的详细画面说明；post_type 为 thought 时留空",');
     msgParts.push('  "visibility": "public 或 private 或 friends",');
     msgParts.push('  "mood": "happy 或 neutral 或 sad"');
     msgParts.push('}');
     msgParts.push('要求：');
     msgParts.push('1. 严格只返回上面这个 JSON，不要在前后增加任何解释、思考过程或额外内容。');
-    msgParts.push('2. 如果你觉得现在不适合发朋友圈，就返回 {"should_post": false, "content": "", "visibility": "public", "mood": "neutral"}。');
+    msgParts.push('2. 如果你觉得现在不适合发朋友圈，就返回 {"should_post": false, "post_type": "thought", "content": "", "image_description": "", "visibility": "public", "mood": "neutral"}。');
     msgParts.push('3. "content" 必须是纯文本，不要包含表情代码、markdown、换行、JSON 或代码块。');
+    msgParts.push('4. post_type 为 thought 时，content 只表达心情或想法，不要提到照片、图片、自拍或配图。');
+    msgParts.push('5. post_type 为 share 时，content 像一条自然配图文案；image_description 要具体描述图片画面，方便用户点图查看。');
 
     var userMessage = msgParts.join('\n');
 
@@ -2170,6 +2275,17 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
             var content = obj.content != null ? String(obj.content) : '';
             content = sanitizeAIPlainText(content);
             if (!shouldPost || !content) return;
+            var postType = String(obj.post_type || '').trim().toLowerCase();
+            if (postType !== 'share' && postType !== 'thought') {
+                postType = obj.image_description ? 'share' : 'thought';
+            }
+            var shouldAttachPhoto = postType === 'share';
+            var imageDescription = obj.image_description != null ? String(obj.image_description) : '';
+            imageDescription = sanitizeAIPlainText(imageDescription);
+            if (shouldAttachPhoto && !imageDescription) {
+                shouldAttachPhoto = false;
+                postType = 'thought';
+            }
 
             var visibilityType = 'public';
             if (obj.visibility === 'private') {
@@ -2181,11 +2297,14 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
             var currentData = initMomentsData();
             var posts = Array.isArray(currentData.posts) ? currentData.posts : [];
             var nowTs = Date.now();
+            var roleMomentPhoto = shouldAttachPhoto ? pickRoleMomentPhoto() : '';
             var newPost = {
                 id: 'post_ai_' + roleId + '_' + nowTs,
                 roleId: roleId,
                 content: content,
-                images: [],
+                images: roleMomentPhoto ? [roleMomentPhoto] : [],
+                imageDescriptions: roleMomentPhoto ? [imageDescription] : [],
+                postType: postType,
                 timestamp: nowTs,
                 location: '',
                 mentions: [],
@@ -2197,6 +2316,9 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
             currentData.posts = posts;
             window.momentsData = currentData;
             saveMomentsData();
+            if (typeof renderMoments === 'function') {
+                try { renderMoments(); } catch (e3) { }
+            }
 
             var state = loadProactiveState();
             if (!state[roleId]) state[roleId] = {};

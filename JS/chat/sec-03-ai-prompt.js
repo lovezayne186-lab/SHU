@@ -689,27 +689,64 @@ function isLikelyForeignLanguageText(text) {
     return false;
 }
 
+function isLikelyForeignLocaleOrNationalityText(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return false;
+    const lower = raw.toLowerCase();
+    if (/(中国|中國|大陆|大陸|内地|內地|汉族|漢族|china|prc|cn|zh[-_ ]?(cn|hans)?)/i.test(lower)) {
+        return false;
+    }
+    if (/^(?:ko|kr|ja|jp|en|us|gb|fr|de|es|it|ru|ar|th|vi|pt|nl|pl)(?:[-_][a-z0-9]+)?$/i.test(lower)) {
+        return true;
+    }
+    return /(韩国|韓國|韩国人|韓國人|朝鲜|朝鮮|朝鲜人|朝鮮人|日本|日本人|美国|美國|美国人|美國人|英国|英國|英国人|英國人|法国|法國|法国人|法國人|德国|德國|德国人|德國人|西班牙|西班牙人|意大利|意大利人|俄罗斯|俄羅斯|俄罗斯人|俄羅斯人|阿拉伯|阿拉伯人|泰国|泰國|泰国人|泰國人|越南|越南人|葡萄牙|葡萄牙人|荷兰|荷蘭|荷兰人|荷蘭人|波兰|波蘭|波兰人|波蘭人|한국|대한민국|일본|미국|영국|프랑스|독일|러시아|태국|베트남|cantonese|korean|japanese|american|british|french|german|spanish|italian|russian|arabic|thai|vietnamese|portuguese|dutch|polish)/i.test(lower);
+}
+
+function isLikelyNonSimplifiedChineseText(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return false;
+    const lower = raw.toLowerCase();
+    const explicitMarkers = /(粤语|廣東話|广东话|白話|白话|方言|繁體|繁体|正體|正体|文言|文言文|古漢語|古汉语|台語|臺語|闽南语|閩南語|客家話|客家话|吳語|吴语|滬語|沪语|上海話|上海话|cantonese|traditional chinese|classical chinese|dialect|hokkien|hakka|zh[-_ ]?(hk|mo|tw|hant))/i;
+    if (explicitMarkers.test(lower)) {
+        return true;
+    }
+    const traditionalChars = (raw.match(/[這個們為來時後會說話讓還愛歡學習覺應實體點開關於與臺灣廣東電腦網頁貓車鐘鍾門裡見聽買麼嗎]/g) || []).length;
+    const dialectChars = (raw.match(/[係嘅咗喺嚟冇唔佢哋啲咩喎乜邊嗰諗睇咁]/g) || []).length;
+    return traditionalChars + dialectChars >= 2;
+}
+
 function isForeignLanguageRole(profile) {
     const p = profile && typeof profile === 'object' ? profile : {};
     const explicitFields = [
-        p.language,
-        p.lang,
-        p.nativeLanguage,
-        p.native_language,
-        p.spokenLanguage,
-        p.spoken_language,
-        p.locale,
-        p.nationality
+        { value: p.language, kind: 'language' },
+        { value: p.lang, kind: 'language' },
+        { value: p.nativeLanguage, kind: 'language' },
+        { value: p.native_language, kind: 'language' },
+        { value: p.spokenLanguage, kind: 'language' },
+        { value: p.spoken_language, kind: 'language' },
+        { value: p.locale, kind: 'locale' },
+        { value: p.nationality, kind: 'nationality' }
     ];
     for (let i = 0; i < explicitFields.length; i++) {
-        const hint = String(explicitFields[i] || '').trim();
+        const meta = explicitFields[i] || {};
+        const hint = String(meta.value || '').trim();
         if (!hint) continue;
-        if (!isLikelyForeignLanguageText(hint)) {
+        const isForeign = meta.kind === 'locale' || meta.kind === 'nationality'
+            ? isLikelyForeignLocaleOrNationalityText(hint) || isLikelyForeignLanguageText(hint)
+            : isLikelyForeignLanguageText(hint);
+        if (!isForeign) {
             return false;
         }
         return true;
     }
     const samples = [
+        p.realName,
+        p.real_name,
+        p.nickName,
+        p.name,
+        p.character_name,
+        p.characterName,
+        p.title,
         p.desc,
         p.description,
         p.persona,
@@ -730,32 +767,75 @@ function isForeignLanguageRole(profile) {
     return false;
 }
 
+function isNonSimplifiedChineseRole(profile) {
+    const p = profile && typeof profile === 'object' ? profile : {};
+    const candidates = [
+        p.language,
+        p.lang,
+        p.nativeLanguage,
+        p.native_language,
+        p.spokenLanguage,
+        p.spoken_language,
+        p.locale,
+        p.nationality,
+        p.desc,
+        p.description,
+        p.persona,
+        p.prompt,
+        p.system_prompt,
+        p.systemPrompt,
+        p.scenario,
+        p.first_mes,
+        p.mes_example,
+        p.creator_notes,
+        p.post_history_instructions,
+        Array.isArray(p.tags) ? p.tags.join(' ') : String(p.tags || '')
+    ];
+    for (let i = 0; i < candidates.length; i++) {
+        if (isLikelyNonSimplifiedChineseText(candidates[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function buildAutoTranslatePromptLayer(roleId, profile) {
     const rid = String(roleId || '').trim();
     if (!rid) return '';
-    if (!isAutoTranslateEnabledForRole(rid)) {
-        return formatPromptLayer('翻译模式边界层', [
-            '【自动翻译模式未开启】',
-            '当前聊天没有开启自动翻译模式，你必须完全按角色人设、语言设定和当下语境自然输出。',
-            '不要因为系统存在翻译功能，就主动套用“某某的消息：外文「中文」”或类似翻译包装格式。',
-            '如果角色人设本身明确要求“外语原文 + 中文括号/注释”，可以按人设执行；如果人设没有写，就只输出角色会说的语言。'
-        ].join('\n'));
-    }
-    if (!isForeignLanguageRole(profile)) return '';
+    if (!isAutoTranslateEnabledForRole(rid)) return '';
     const roleName = getRoleDisplayNameForTranslateMode(profile, rid);
     return formatPromptLayer('自动翻译层', [
         '【自动翻译模式（最高优先级）】',
-        `当你的角色的母语为中文以外的语言时，你的消息回复必须严格遵循翻译模式下的普通消息格式：{外语原文}（中文翻译），例如：Of course, I'd love to.（当然，我很乐意。）。`,
-        '中文翻译文本视为系统自翻译，不视为角色的原话。',
+        `自动翻译模式已经开启。无论你的角色设定写在语言、国籍、locale、标签、简介还是聊天风格里，你都必须遵守这一层规则。`,
+        `如果你本轮输出的是简体中文正文，就正常输出简体中文，不需要额外加括号翻译。`,
+        `如果你本轮输出的是中文以外的语言，或是非简体中文表达（例如韩语、日语、英语、繁体字、粤语、各类方言、文言等），你的消息回复必须严格遵循翻译模式下的普通消息格式：{原文}（简体中文翻译），例如：Of course, I'd love to.（当然，我很乐意。）、안녕.（你好。）或 我鍾意你呀。（我喜欢你呀。）。`,
+        '括号里的内容视为系统附带的简体中文翻译，不视为角色的原话。',
         `当你的角色想要说中文时，需要根据你的角色设定自行判断对于中文的熟悉程度来造句，并直接输出中文消息内容，不要添加“${roleName}的消息：”这类前缀。`,
         '这条规则的优先级非常高，请务必遵守。',
         '在主聊天场景里，`reply` 或 `reply_bubbles` 数组中的每一个普通文本气泡，都必须单独遵循这个格式。',
-        '绝对禁止把“外语原文”和“中文翻译”拆成两个相邻气泡，绝对禁止把翻译写成标题、说明、注释、括号外补充或 markdown 小标题。',
+        '只要这条消息里用了非简体中文原文，或用了中文以外语言，就必须立刻在原文后面紧跟一个简体中文括号翻译，格式必须是：原文（简体中文翻译）。',
+        '绝对不允许只输出原文而不附简体中文翻译，绝对不允许把“原文”和“简体中文翻译”拆成两个相邻气泡。',
+        '绝对不允许把翻译写成标题、说明、注释、括号外补充或 markdown 小标题；简体中文翻译只能直接跟在对应原文后面的括号里。',
         `绝对禁止输出“${roleName}的消息：”、"[${roleName}的消息：...]"、"【${roleName}的消息：...】" 或任何说话人包装。`,
         '绝对禁止输出诸如“下面是翻译”“回复如下”“## 回复”“格式说明”“不必要……而是……”这类解释性文字。',
         '如果你要连续发送 4 条文本气泡，那么这 4 条中的每一条都必须各自完整，不能只给前两条翻译、后两条不翻译。',
         '如果当前任务不是“说话内容”，例如纯决策、纯状态、纯系统事件或纯 JSON 结构化任务，请不要把这条格式强行套到无关字段上。',
         '在通话场景里，`lines` 数组中的每一条台词也必须遵循以上格式。'
+    ].join('\n'));
+}
+
+function buildForcedAutoTranslateFallbackLayer(roleId, profile) {
+    const rid = String(roleId || '').trim();
+    if (!rid || !isAutoTranslateEnabledForRole(rid)) return '';
+    const roleName = getRoleDisplayNameForTranslateMode(profile, rid);
+    return formatPromptLayer('自动翻译层', [
+        '【自动翻译模式（最高优先级）】',
+        '自动翻译模式已经开启，这一层为强制兜底层。',
+        '如果你本轮输出的是简体中文正文，就正常输出简体中文，不需要额外加括号翻译。',
+        '如果你本轮输出的是中文以外的语言，或是非简体中文表达（例如韩语、日语、英语、繁体字、粤语、各类方言、文言等），就必须写成：原文（简体中文翻译）。',
+        '绝对不允许只输出原文而不附简体中文翻译，绝对不允许把原文和翻译拆成两个相邻气泡。',
+        `绝对禁止输出“${roleName}的消息：”这类说话人包装。`,
+        '括号里的内容视为系统附带的简体中文翻译，不视为角色的原话。'
     ].join('\n'));
 }
 
@@ -839,7 +919,10 @@ function buildFullChatPrompt(scene, roleId, options) {
         memoryArchivePrompt,
         worldBookPromptText
     ]));
-    const translationLayer = buildAutoTranslatePromptLayer(rid, profile);
+    let translationLayer = buildAutoTranslatePromptLayer(rid, profile);
+    if (!translationLayer && isAutoTranslateEnabledForRole(rid)) {
+        translationLayer = buildForcedAutoTranslateFallbackLayer(rid, profile);
+    }
 
     const currentContextLayer = formatPromptLayer('当前情景层', joinPromptParts([
         `【当前系统时间】\n${new Date().toLocaleString('zh-CN', { hour12: false })}`,
@@ -881,6 +964,7 @@ function buildFullChatPrompt(scene, roleId, options) {
 
 function buildWechatPrivatePromptV2(options) {
     const opts = options && typeof options === 'object' ? options : {};
+    const sourceProfile = opts.profile && typeof opts.profile === 'object' ? opts.profile : {};
     const roleName = String(opts.roleName || 'TA').trim() || 'TA';
     const roleRealName = String(opts.realName || roleName).trim() || roleName;
     const roleDesc = String(opts.roleDesc || '').trim() || '你是一个真实的成年人角色，需要以自然微信聊天口吻回应用户。';
@@ -932,16 +1016,21 @@ function buildWechatPrivatePromptV2(options) {
         memoryArchivePrompt,
         worldBookPromptText
     ]));
-    const translationLayer = buildAutoTranslatePromptLayer(opts.roleId || '', {
+    const translationProfile = Object.assign({}, sourceProfile, {
         realName: roleRealName,
+        real_name: roleRealName,
         nickName: roleName,
         name: roleName,
         desc: roleDesc,
         style: roleStyle,
         schedule: roleSchedule,
-        language: opts.language || '',
-        lang: opts.lang || ''
+        language: opts.language || sourceProfile.language || '',
+        lang: opts.lang || sourceProfile.lang || ''
     });
+    let translationLayer = buildAutoTranslatePromptLayer(opts.roleId || '', translationProfile);
+    if (!translationLayer && isAutoTranslateEnabledForRole(opts.roleId || '')) {
+        translationLayer = buildForcedAutoTranslateFallbackLayer(opts.roleId || '', translationProfile);
+    }
 
     const currentContextLayer = formatPromptLayer('当前情景层', joinPromptParts([
         timePerceptionPrompt,
@@ -971,7 +1060,7 @@ function buildWechatPrivatePromptV2(options) {
         '【想象与分享】\n- 聊到画面感强的事物、地点或想让对方更有代入感时，可以主动发照片、位置或相关功能气泡，而不只是纯文字。',
         '【发送位置规则】\n- 如果你想向用户分享你的位置，或者你想约用户去某个地方、想让对方知道你现在在哪，请优先发位置卡片，而不是改成语音通话。\n- 你可以直接使用位置对象：`[{"type":"location","name":"地点名称","address":"详细地址"}]`。',
         '【位置卡片边界】\n- 用户单独发来的位置卡片，只代表分享了一个地点，不等于实时位置共享，也不等于你们已经线下见面。\n- 只有系统明确处于 `location_share` / `offline_meeting_v2` 场景，或用户在文本里明确说“已经到你面前/已经见到你了”，你才能按对应线下状态回应。',
-        '【金钱与好意】\n- 涉及转账、红包、亲属卡、点外卖、代付这类事时，你必须在下一轮及时回应，不能无视。\n- 是否接受、支付、拒绝，和具体金额，都必须由人设、关系阶段和你的财力设定共同决定。',
+        '【金钱与好意】\n- 涉及转账、红包、亲属卡、点外卖、送礼物、代付这类事时，你必须在下一轮及时回应，不能无视。\n- 是否接受、支付、拒绝，和具体金额，都必须由人设、关系阶段和你的财力设定共同决定。',
         '【状态与形象变化】\n- 当心情、关系、季节感或形象偏好发生变化时，你可以主动更新状态，必要时也可以更换头像，但必须有真实动机。',
         '【回应撤回】\n- 当系统提示用户撤回了消息时，你必须作出自然反应。可以好奇、打趣、体谅，但不能像没发生过一样。',
         '【位置与见面】\n- 当话题明确涉及具体地点，或者用户问你在哪、在干嘛、要不要见面时，你应优先评估是否要发送位置、触发见面链路或继续留在线上。'
@@ -995,6 +1084,7 @@ function buildWechatPrivatePromptV2(options) {
         '【发送照片】\n- 照片/图片和表情包是两种不同消息。照片/图片用于真实场景、自拍、饭、房间、窗外、路上、物品等画面分享，必须使用对象格式：`{"type":"photo","content":"照片画面描述"}`。\n- 绝对不要在文本里写“发了一张照片”。聊到穿搭、房间、窗外、饭、宠物、路上、天气、礼物或其他有画面感的内容时，可以主动分享照片对象，让对话更有生活感；不要每轮都发，也不要用照片替代所有回应。',
         '【发送位置】\n- 使用对象格式：`[{"type":"location","name":"地点名称","address":"详细地址"}]`。\n- 如果你想向用户分享你的位置，这是普通位置卡片；如果你想和用户见面或让对方来找你，必须优先触发实时位置共享邀请，不要混为一谈。\n- 角色只要有明确见面意图，也必须先触发实时位置共享邀请。',
         '【点外卖卡片（强制落地）】\n- 一旦你在语义上已经决定给用户点外卖、买吃的、点奶茶、买宵夜、叫跑腿送饭，就绝对不能只做口头承诺，必须在 `reply` 中实际输出一个外卖卡片对象：`{"type":"takeout_card","shopName":"店铺名称","items":["商品1","商品2"],"price":"总价","remark":"备注/留言"}`。\n- 换句话说，只要你说出了类似“我给你点”“我给你买”“我下单了”“我给你叫个外卖”这类意思，就必须真的发 `takeout_card`，不能只发安慰文字。\n- 典型触发场景：用户说自己没吃饭、饿了、胃不舒服、忙得顾不上吃、情绪低落，而你此刻有明显照顾、投喂、哄人、补偿的意图时，应优先考虑 `takeout_card`。\n- 推荐写法：先发 1 到 3 条情绪铺垫气泡，再发外卖卡片。示例：`["别嘴硬了。","先吃点热的。",{"type":"takeout_card","shopName":"海底捞外卖","items":["番茄锅底","肥牛卷"],"price":"68.00","remark":"给你点点热的"}]`。',
+        '【送礼物卡片】\n- 当你已经决定给用户买礼物、寄礼物、送一个实物心意、准备惊喜包裹时，不能只口头说“我给你买了”，必须在 `reply` 中实际输出一个礼物卡片对象：`{"type":"gift_card","itemName":"商品名称","price":"金额","anonymous":false,"paymentMode":"paid","bubbleTitle":"送你一份心意"}`。\n- `anonymous` 表示是否匿名包裹：如果你想制造惊喜、让用户先猜是什么，设为 true；普通礼物设为 false。匿名时 reply 文字也不要提前暴露具体商品名称。\n- `paymentMode` 默认用 "paid"，表示你已经买好送出；如果你想让用户替你代付，才用 "pay_on_behalf"。不要把代付和已购买混在一起。\n- 礼物金额必须符合你的人设财力和关系阶段。豪门/慷慨人设可以大方，普通/学生/拮据人设要克制。\n- 推荐写法：先发 1 到 3 条自然铺垫，再发礼物卡片。示例：`["别问，先收。","我挑了很久。",{"type":"gift_card","itemName":"小熊夜灯","price":"188.00","anonymous":true,"paymentMode":"paid","bubbleTitle":"送你一份匿名心意"}]`。',
         allowOfflineInvite
             ? '【见面触发】\n- 如果决定去找用户，先在 reply 中自然说出理由，再在 reply 数组的最后一个气泡使用纯文本 `:::ACTION_TRIGGER_LOCATION:::`。'
             : '【见面触发已关闭】\n- 当前禁止触发位置共享，不要输出 `:::ACTION_TRIGGER_LOCATION:::`。可使用 actions 返回 offlineMeeting。',
@@ -1003,7 +1093,7 @@ function buildWechatPrivatePromptV2(options) {
         '【撤回消息】\n- 如果你刚发出去的话明显说重了、说错了、暴露太多、或不符合当下人设，你可以在 `actions.recall` 中请求撤回自己的上一条消息。\n- 推荐写法：`{"recall": true}` 或 `{"recall":{"target":"self_last"}}`。撤回后你可以在后续气泡里立刻换一种更合适的说法。',
         '【主动视频/语音通话】\n- 绝对禁止无铺垫直接打通话！当你决定发起通话时，必须先在 `reply` 数组的前几个气泡中发文字或语音，然后再把通话指令 `"[[VIDEO_CALL_USER]]"` 或 `"[[CALL_USER]]"` 作为 `reply` 数组的最后一个元素。\n- 如果视频和语音都说得通，默认优先选择视频通话，只有在明显更适合只听声音时才用语音通话。\n- 但只要当前语境是“见面、想见你、来找你、去找你、约地点、我去找你、过去找你”这一类，默认不走通话，优先触发实时位置共享邀请。\n- 正确示范：`["你再这样我真生气了", "接电话！", "[[CALL_USER]]"]` 或 `[{"type":"voice","content":"我想见你..."}, "[[VIDEO_CALL_USER]]"]`。',
         '【一起听/骰子】\n- 接受一起听追加 `[[LISTEN_TOGETHER_ACCEPT:invite_id]]`；参与骰子追加 `[[DICE]]`。',
-        '【金钱能力】\n- 你主动给用户转账/发红包时，必须在 actions.transfer 中返回 `{ amount, remark, kind }`，并在 reply 中正常说人话解释给钱原因。禁止只给动作不说话。\n- 你收取用户发来的转账时，必须先在 reply 中自然回复，再在 actions.acceptTransfer 返回 true，或在 reply 最后追加 `[[ACCEPT_TRANSFER]]`。\n- 你拆开用户发来的红包时，必须先在 reply 中自然回复，再在 actions.openRedpacket 返回 true，或在 reply 最后追加 `[[OPEN_REDPACKET]]`。\n- 收取用户发来的转账/红包时，绝对不要创建新的转账卡片，也不要在 reply 里写 `[转账]3.00`、`[已收款1.00]`、`[红包]`、`[已领取红包]` 这类 UI 状态文本。\n- 转账和红包是两种不同卡片：说“转账/收钱/退回”时 kind 必须是 "transfer"；说“红包/恭喜发财/拆红包/压岁钱/利是”时 kind 必须是 "redpacket"。不要把红包写成转账。',
+        '【金钱能力】\n- 你主动给用户转账/发红包时，必须在 actions.transfer 中返回 `{ amount, remark, kind }`，并在 reply 中正常说人话解释给钱原因。禁止只给动作不说话。\n- 你主动点外卖或送礼物时，使用 reply 数组里的 `takeout_card` / `gift_card` 对象生成卡片，不要塞进 actions.transfer。\n- 你收取用户发来的转账时，必须先在 reply 中自然回复，再在 actions.acceptTransfer 返回 true，或在 reply 最后追加 `[[ACCEPT_TRANSFER]]`。\n- 你拆开用户发来的红包时，必须先在 reply 中自然回复，再在 actions.openRedpacket 返回 true，或在 reply 最后追加 `[[OPEN_REDPACKET]]`。\n- 收取用户发来的转账/红包时，绝对不要创建新的转账卡片，也不要在 reply 里写 `[转账]3.00`、`[已收款1.00]`、`[红包]`、`[已领取红包]` 这类 UI 状态文本。\n- 转账和红包是两种不同卡片：说“转账/收钱/退回”时 kind 必须是 "transfer"；说“红包/恭喜发财/拆红包/压岁钱/利是”时 kind 必须是 "redpacket"。不要把红包写成转账。',
         '【亲属卡】\n- 在 actions.family_card 中返回 `{ amount }`，并在 reply 中自然说人话。',
         '【礼物待办】\n- 如果当前有礼物抽卡待确认或礼物待办，你必须把它当成真实约定，不要当成一次性消息。\n- 当用户明确选中了某张礼物卡，并且提出执行时间或执行条件时，使用 `actions.gift_task` 创建或更新待办。\n- 当用户说“执行完了 / 做完了 / 取消 / 不做了”时，使用 `actions.gift_task` 完成或移除待办。\n- 推荐写法：`{"op":"schedule","cardId":"...","cardTitle":"摸头券","rarity":"SSR","executeAtText":"周六晚上八点","note":"周六晚上执行"}`；完成示例：`{"op":"complete","taskId":"gift_task_xxx"}`。',
         '【头像变更】\n- 仅当用户发图并要求时才设置 actions.changeAvatar。',
@@ -1015,7 +1105,7 @@ function buildWechatPrivatePromptV2(options) {
         '固定字段与职责如下：\n- `thought`: 你的内部思维链，必须每轮填写。它只用于分析上下文、人设承接点、关系温度和动作选择，不对用户可见，也绝不能复述到 reply。\n- `quoteId`: 可选且默认省略。只有需要挂引用回复时才填写，优先使用 `user_last`、`ai_last` 或 `last` 这类符号目标。\n- `status`: 角色状态对象，必须每轮填写；其中 `inner_monologue` 也必须每轮填写，长度保持在 50 到 100 个汉字之间。\n- `actions`: 机器动作对象；这里只放机器可执行动作，不要塞自然语言。除原有动作外，也允许 `offlineMeeting: { "start": true, "source": "direct_judgement" | "arrival" }` 与 `recall`。\n- `reply`: 用户可见内容；优先写成 JSON 数组，每个数组元素对应一个独立气泡。元素可以是普通文本字符串，也可以是带 `type` 的对象。\n- `system_event`: 仅在 `reply` 为 null 时填写灰字系统提示，否则填 null。',
         '【输出有效性】\n- 不允许只输出控制字段而没有可见回复，例如只给 `quoteId`、只给 `thought`、只给 `status`、只给 `actions` 都算错误。\n- 只要触发 actions、语音、照片、位置、表情包、转账、红包、头像变更、通话等功能，就必须同时给出自然的 `reply`，除非系统明确要求 reply 为 null。\n- 只要 `reply` 不为 null，就必须确保其中至少有 1 条真正会显示给用户的内容。\n- reply 里的每条文字都要直接说人话，禁止在行首加 `#`、`-`、`•`、`*`、`1.` 这类列表前缀。',
         '【礼物待办补充】\n- 当你在追问用户要执行哪一张礼物卡、或者在和用户约定执行时间时，必须把它当成“待办”而不是一次性聊天。\n- 如果用户已经明确选中某张卡并给了时间，优先使用 `actions.gift_task`。\n- 如果只是口头确认但还没约定时间，先正常追问，不要硬生成待办。\n- 完成后的待办会被系统从记忆里移除；未完成前必须一直保留。',
-        '推荐的 `reply` 写法：\n- 纯文字多气泡：`["刚到家。","你呢？","还没睡？"]`\n- 带功能气泡：`["想听你声音了。", {"type":"voice","content":"刚才一路都在想你"}, {"type":"photo","content":"刚拍的夜景"}]`\n- HTML 气泡：`[{"type":"html","content":"<div class=\\"note\\"><strong>标题</strong><p>正文</p></div>"}]`\n- 位置气泡：`[{"type":"location","name":"静安寺附近","address":"南京西路某咖啡店"}]`\n- 外卖气泡：`[{"type":"takeout_card","shopName":"海底捞外卖","items":["番茄锅底","肥牛卷"],"price":"68.00","remark":"给你点点热的"}]`\n- 主动通话：`["先接一下。","[[CALL_USER]]"]` 或 `["看着我说。","[[VIDEO_CALL_USER]]"]`\n- 引用回复：只有确实需要单独指向某条消息时，才在顶层加 `quoteId`，再正常输出 reply。',
+        '推荐的 `reply` 写法：\n- 纯文字多气泡：`["刚到家。","你呢？","还没睡？"]`\n- 带功能气泡：`["想听你声音了。", {"type":"voice","content":"刚才一路都在想你"}, {"type":"photo","content":"刚拍的夜景"}]`\n- HTML 气泡：`[{"type":"html","content":"<div class=\\"note\\"><strong>标题</strong><p>正文</p></div>"}]`\n- 位置气泡：`[{"type":"location","name":"静安寺附近","address":"南京西路某咖啡店"}]`\n- 外卖气泡：`[{"type":"takeout_card","shopName":"海底捞外卖","items":["番茄锅底","肥牛卷"],"price":"68.00","remark":"给你点点热的"}]`\n- 礼物气泡：`[{"type":"gift_card","itemName":"小熊夜灯","price":"188.00","anonymous":true,"paymentMode":"paid","bubbleTitle":"送你一份匿名心意"}]`\n- 主动通话：`["先接一下。","[[CALL_USER]]"]` 或 `["看着我说。","[[VIDEO_CALL_USER]]"]`\n- 引用回复：只有确实需要单独指向某条消息时，才在顶层加 `quoteId`，再正常输出 reply。',
         '建议格式：\n{\n  "thought": "理解: 我怎么理解用户刚刚这句话。｜气氛: 当前关系和氛围是什么。｜策略: 我准备怎么接这轮。｜动作: 要不要触发引用/语音/位置/通话/金钱等功能。",\n  "reply": ["第一条气泡","第二条气泡"],\n  "system_event": null,\n  "status": {\n    "mood": "当前心情",\n    "location": "当前地点",\n    "fantasy": "没有就写无",\n    "favorability": 0,\n    "jealousy": 0,\n    "possessiveness": 0,\n    "lust": 0,\n    "heart_rate": 80,\n    "inner_monologue": "我嘴上还在逗他，心里却已经被这句哄得发软了。明明还想再装一下镇定，可情绪已经先一步松下来，连呼吸都乱了一点。"\n  },\n  "actions": {\n    "transfer": null,\n    "location": null,\n    "changeAvatar": null,\n    "family_card": null,\n    "offlineMeeting": null,\n    "recall": null\n  }\n}',
         '如果当前场景不适合立即回消息，可以令 `reply` 为 null，并用 `system_event` 告知用户你在忙、睡觉、勿扰或暂时无法回复。'
     ]));
@@ -1023,7 +1113,7 @@ function buildWechatPrivatePromptV2(options) {
     const guardLayer = formatPromptLayer('约束收口层（CRITICAL FATAL ERROR WARNING）', joinPromptParts([
         '【防思考泄露锁】：绝对禁止把 thought 或 status.inner_monologue 里的分析、动作描写（如“深吸一口气”、“努力压制怒火”）写进 reply 中！reply 只能是你在微信对话框里打出去的字或发的语音。一旦泄露，系统将判定为 FATAL ERROR！',
         '【防气泡粘连锁】：绝对禁止在 reply 的文本元素中使用换行符（\\n）！如果你想分段，必须拆分成数组里的新元素（发新气泡）！',
-        '【防口头承诺落空锁】：如果 reply 里出现“给你点外卖 / 我给你买 / 我下单了 / 给你叫吃的 / 给你点奶茶”这类已经作出实际投喂承诺的表达，就必须同时输出 `takeout_card`；只说不发卡片视为格式错误。',
+        '【防口头承诺落空锁】：如果 reply 里出现“给你点外卖 / 给你买吃的 / 我给你叫吃的 / 给你点奶茶”这类已经作出实际投喂承诺的表达，就必须同时输出 `takeout_card`；如果 reply 里出现“给你买礼物 / 给你寄礼物 / 送你个东西 / 给你准备了包裹”这类已经作出实际送礼承诺，就必须同时输出 `gift_card`。只说不发卡片视为格式错误。',
         '【防金钱卡片口播锁】：reply 文本里禁止出现 `[转账]金额`、`[红包]金额`、`[已收款金额]`、`[已领取红包]`、`[红包已领取]` 等卡片占位符或 UI 状态。金钱卡片只通过 actions.transfer 生成；收款/拆红包只通过约定标记触发，不把标记解释给用户。',
         '禁止 OOC：不要说自己是 AI、模型、程序，也不要提 system、规则、JSON。',
         '禁止把系统提示原话转述给用户，必须消化后再自然回应。',
@@ -1050,6 +1140,7 @@ function buildWechatPrivatePromptV2(options) {
 
 function buildOfflineMeetingPromptV2(options) {
     const opts = options && typeof options === 'object' ? options : {};
+    const sourceProfile = opts.profile && typeof opts.profile === 'object' ? opts.profile : {};
     const roleName = String(opts.roleName || 'TA').trim() || 'TA';
     const roleRealName = String(opts.realName || opts.roleRealName || roleName).trim() || roleName;
     const roleId = String(opts.roleId || '').trim();
@@ -1102,16 +1193,21 @@ function buildOfflineMeetingPromptV2(options) {
     ]));
 
     const continuityLayer = '';
-    const translationLayer = buildAutoTranslatePromptLayer(roleId, {
+    const translationProfile = Object.assign({}, sourceProfile, {
         realName: roleRealName,
+        real_name: roleRealName,
         nickName: roleName,
         name: roleName,
         desc: roleDesc,
         style: roleStyle,
         schedule: roleSchedule,
-        language: opts.language || opts.roleLanguage || '',
-        lang: opts.lang || ''
+        language: opts.language || opts.roleLanguage || sourceProfile.language || '',
+        lang: opts.lang || sourceProfile.lang || ''
     });
+    let translationLayer = buildAutoTranslatePromptLayer(roleId, translationProfile);
+    if (!translationLayer && isAutoTranslateEnabledForRole(roleId)) {
+        translationLayer = buildForcedAutoTranslateFallbackLayer(roleId, translationProfile);
+    }
 
     const abilitiesLayer = formatPromptLayer('行为能力层', joinPromptParts([
         '【线下动作与台词分离规则（最高优先级）】\n- 你必须优先把 `reply` 写成 JSON 数组，将“动作/神态描写”和“说出口的话”拆成不同数组元素！\n- 动作必须用 `{ "type": "offline_action", "content": "..." }` 表示。\n- 台词必须用普通字符串或 `{ "type": "text", "content": "..." }` 表示。\n- 绝对禁止把动作和台词写在同一个字符串里！绝对禁止使用换行符 `\\n` 拼接！\n- 台词文本开头不要带 `#`、`-`、`•`、`*`、`1.` 这类列表前缀。',
@@ -1167,7 +1263,13 @@ function buildRoleLitePrompt(scene, roleId, options) {
             bundle.userPersona.name ? `- 用户名字：${bundle.userPersona.name}` : '',
             bundle.userPersona.setting ? `- 用户背景：${bundle.userPersona.setting}` : ''
         ].filter(Boolean).join('\n')),
-        buildAutoTranslatePromptLayer(roleId, bundle.profile),
+        (function () {
+            const layer = buildAutoTranslatePromptLayer(roleId, bundle.profile);
+            if (layer) return layer;
+            return isAutoTranslateEnabledForRole(roleId)
+                ? buildForcedAutoTranslateFallbackLayer(roleId, bundle.profile)
+                : '';
+        })(),
         formatPromptLayer('角色核心层', joinPromptParts([
             `【角色基础人设】\n${String(bundle.profile.desc || '你是一个真实的成年人角色。').trim()}`,
             bundle.profile.style ? `【聊天风格】\n${String(bundle.profile.style).trim()}` : '',
@@ -1279,6 +1381,14 @@ async function triggerAI() {
         return;
     }
     const isRerollRequest = typeof window !== 'undefined' && window.__chatRerollRequested === true;
+    if (!isRerollRequest &&
+        typeof window.isLocationShareActive === 'function' &&
+        window.isLocationShareActive(roleId) &&
+        typeof window.replyToLocationSharePending === 'function') {
+        if (window.replyToLocationSharePending(roleId)) {
+            return;
+        }
+    }
     const currentBusyActivity = typeof window.getBusyReplyUserActivity === 'function'
         ? Number(window.getBusyReplyUserActivity(roleId) || 0)
         : 0;
@@ -1560,6 +1670,53 @@ async function triggerAI() {
     // 🔥 核心修复：时间感知移入 System Prompt（AI的内部感知）
     // =========================================================
 
+    function formatPreciseElapsedDuration(startTs, endTs) {
+        const start = Number(startTs) || 0;
+        const end = Number(endTs) || 0;
+        const diffMs = Math.max(0, end - start);
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const days = Math.floor(totalMinutes / 1440);
+        const hours = Math.floor((totalMinutes % 1440) / 60);
+        const minutes = totalMinutes % 60;
+        const parts = [];
+        if (days > 0) parts.push(days + '天');
+        if (hours > 0) parts.push(hours + '小时');
+        if (minutes > 0) parts.push(minutes + '分钟');
+        if (!parts.length) parts.push('不到1分钟');
+        return {
+            diffMs: diffMs,
+            totalMinutes: totalMinutes,
+            days: days,
+            hours: hours,
+            minutes: minutes,
+            preciseText: parts.join('')
+        };
+    }
+
+    function buildTimePerceptionContext(startTs, endTs) {
+        const elapsed = formatPreciseElapsedDuration(startTs, endTs);
+        let timeContext = '';
+        if (elapsed.totalMinutes < 1) {
+            timeContext = '用户几乎是秒回了你的消息。';
+        } else if (elapsed.totalMinutes < 3) {
+            timeContext = '用户很快就接上了这轮对话。';
+        } else if (elapsed.totalMinutes < 10) {
+            timeContext = '用户过了一小会儿才回来，像是短暂离开后又接上了你。';
+        } else if (elapsed.totalMinutes < 30) {
+            timeContext = '用户隔了一阵才回复，像是处理中途的事后又回来找你。';
+        } else if (elapsed.totalMinutes < 120) {
+            timeContext = '用户隔了挺长一段时间才回复，这轮聊天已经不是无缝连着的。';
+        } else if (elapsed.days >= 1) {
+            timeContext = '这已经是隔了几天后的续聊，不要按刚刚中断几小时的语气去接。';
+        } else {
+            timeContext = '用户隔了好几个小时才回来，这轮对话已经明显放凉过一阵。';
+        }
+        return {
+            elapsed: elapsed,
+            timeContext: timeContext
+        };
+    }
+
     let aiLastMsg = null;
     let aiLastIndex = -1;
     for (let i = cleanHistory.length - 1; i >= 0; i--) {
@@ -1584,32 +1741,13 @@ async function triggerAI() {
 
         if (userReplyMsg && userReplyMsg.timestamp) {
             const userTime = userReplyMsg.timestamp;
-            const gapMinutes = Math.floor((userTime - aiTime) / 60000);
-
-            // 🔥 关键改动：用自然语言描述，不暴露具体数字
-            let timeContext = "";
-
-            if (gapMinutes < 1) {
-                timeContext = "用户几乎是秒回了你的消息";
-            } else if (gapMinutes < 3) {
-                timeContext = "用户很快就回复了（不到3分钟）";
-            } else if (gapMinutes < 10) {
-                timeContext = "用户过了一小会儿才回复（约5-10分钟）";
-            } else if (gapMinutes < 30) {
-                timeContext = "用户隔了一段时间才回复（约10-30分钟），可能在忙别的事";
-            } else if (gapMinutes < 120) {
-                timeContext = "用户隔了挺长时间才回复（约半小时到2小时），可能刚忙完手头的事";
-            } else if (gapMinutes < 360) {
-                timeContext = "用户隔了几个小时才回复（2-6小时），期间可能去做了其他事情";
-            } else if (gapMinutes < 720) {
-                timeContext = "用户隔了很长时间才回复（半天左右），可能中间有事耽搁了";
-            } else {
-                const hours = Math.floor(gapMinutes / 60);
-                timeContext = `用户隔了很久才回复（超过${hours}小时），期间可能发生了什么或者忘记回复了`;
-            }
+            const timeCtx = buildTimePerceptionContext(aiTime, userTime);
+            const preciseGap = timeCtx.elapsed.preciseText;
+            const prevTimeText = new Date(aiTime).toLocaleString('zh-CN', { hour12: false });
+            const replyTimeText = new Date(userTime).toLocaleString('zh-CN', { hour12: false });
 
             // 🔥 加入 System Prompt，作为"你的内部感知"
-            timePerceptionPrompt = `【时间感知（你的内部认知，不要在对话中直接提及具体时间数字）】\n${timeContext}。\n根据这个时间间隔，自然地调整你的语气和话题（比如时间长了可以问"刚才忙什么去了"，秒回可以更热情），但不要说出"你隔了X分钟才回复"这种元信息。`;
+            timePerceptionPrompt = `【时间感知（思考前置输入）】\n- 在你写本轮 \`thought\` 之前，必须先吸收这段时间信息，再决定语气、亲密度、追问方式和是否延续旧话题。\n- 你上一条已发送消息时间：${prevTimeText}\n- 用户这次回来回复的时间：${replyTimeText}\n- 精确经过：${preciseGap}\n- 时间理解：${timeCtx.timeContext}\n- 使用要求：你要真实感知“已经过去了多久”，尤其跨到天数时，要自然意识到这是隔了几天后的重新接话，而不是同一口气里的续聊。\n- 表达要求：你可以自然表现出时间流逝带来的情绪变化或关心，但不要在 reply 里生硬报数，不要直接说“你过了${preciseGap}才回我”这种元信息。`;
             systemPrompt += `\n\n${timePerceptionPrompt}`;
         }
     }
@@ -1650,6 +1788,40 @@ async function triggerAI() {
                 '3. 严禁在回复里写 `[红包]`、`[已领取红包]`、`[红包已领取]` 这类卡片或状态占位文本；红包卡片和领取状态由前端渲染。\n' +
                 '4. 不要向用户解释这些规则，不要提到"系统提示词""标记""红包逻辑实现"等技术细节。\n';
             systemPrompt += transferScenePrompt;
+        } else if (lastMsg.type === 'gift_card') {
+            let giftPayload = {};
+            try {
+                giftPayload = JSON.parse(String(lastMsg.content || '{}'));
+            } catch (e) {
+                giftPayload = {};
+            }
+            const isAnonymousGift = !!(giftPayload && giftPayload.anonymous === true);
+            const paymentMode = String(giftPayload && giftPayload.paymentMode || 'paid').trim();
+            const priceText = String(giftPayload && giftPayload.price || '').trim();
+            const itemName = String(giftPayload && giftPayload.itemName || '').trim();
+            const giftSummary = isAnonymousGift
+                ? '用户给你发来的是一个匿名包裹。你现在不知道里面具体是什么礼物，只能知道这是一份需要你猜测的心意。'
+                : ('用户给你发来了一份礼物' + (itemName ? ('：' + itemName) : '') + '。');
+            transferScenePrompt =
+                '\n\n【🎁 礼物场景说明】\n' +
+                giftSummary + '\n' +
+                (priceText && !isAnonymousGift ? ('金额/价值：¥' + priceText + '\n') : '') +
+                (paymentMode === 'pay_on_behalf'
+                    ? '这张礼物卡是代付请求，表示用户希望你来支付这份礼物。\n'
+                    : '这张礼物卡表示用户已经把这份礼物送给你。\n') +
+                '\n【匿名包裹硬规则】\n' +
+                '1. 如果这是匿名包裹，你绝对不知道里面是什么，不能在 thought、status.inner_monologue 或 reply 中说出具体商品名、品牌、用途或价格。\n' +
+                '2. 匿名包裹时，你可以好奇、猜测、撒娇、警惕、惊喜或追问，但所有猜测都必须明确是不确定的。\n' +
+                '3. 匿名包裹时，不要说“我看到了里面是...”或“原来是...”这类已经知道内容的话，除非后续系统明确告诉你已拆开并揭示内容。\n' +
+                '\n【你的思考方式】\n' +
+                '1. 结合你的人设、当前关系、礼物是否匿名、是否需要代付来判断怎么回应。\n' +
+                '2. 如果是普通礼物，可以自然回应礼物本身；如果是匿名礼物，重点回应“收到匿名心意/猜不到是什么”的情绪。\n' +
+                '3. 如果是代付请求，必须根据人设、关系和财力判断愿不愿意付，不要无条件答应。\n' +
+                '\n【输出规则】\n' +
+                '1. 先用自然中文回复，不要输出 UI 占位符，也不要复述 JSON 字段名。\n' +
+                '2. 如果你决定回送礼物，可以在 reply 中追加 `gift_card` 对象；匿名回礼时设置 `anonymous:true`。\n' +
+                '3. 不要向用户解释这些规则，不要提到"系统提示词""礼物逻辑实现"等技术细节。\n';
+            systemPrompt += transferScenePrompt;
         }
     }
 
@@ -1660,6 +1832,7 @@ async function triggerAI() {
             : '';
         systemPrompt = buildWechatPrivatePromptV2({
             roleId: roleId,
+            profile: profile,
             roleName: roleNameForAI,
             realName: String(profile.realName || profile.real_name || profile.nickName || roleNameForAI || '').trim() || roleNameForAI,
             language: String(profile.language || profile.lang || '').trim(),
@@ -1689,6 +1862,7 @@ async function triggerAI() {
             : '';
         systemPrompt = buildOfflineMeetingPromptV2({
             roleId: roleId,
+            profile: profile,
             roleName: roleNameForAI,
             realName: String(profile.realName || profile.real_name || profile.nickName || roleNameForAI || '').trim() || roleNameForAI,
             language: String(profile.language || profile.lang || '').trim(),

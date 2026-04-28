@@ -1421,6 +1421,7 @@
     border-bottom: 1px solid #eee;
     user-select: none;
     touch-action: none;
+    transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
 #location-share-layer.is-floating-window .ls-drag-header .ls-avatars {
@@ -1446,12 +1447,22 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    transition: color 0.18s ease;
 }
 
 #location-share-layer.is-floating-window .ls-drag-header .ls-close {
     font-size: 18px;
     color: #999;
     cursor: pointer;
+}
+
+#location-share-layer.is-fast-forwarding .ls-drag-header {
+    background: #e8f2ff;
+    box-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.18);
+}
+
+#location-share-layer.is-fast-forwarding .ls-drag-header .ls-distance {
+    color: #005fcb;
 }
 
 #location-share-layer.is-floating-window .location-share-marker {
@@ -1629,6 +1640,10 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     z-index: 5;
     pointer-events: auto;
+}
+
+#location-share-layer.is-user-location-locked .location-share-marker {
+    cursor: default;
 }
 
 /* 3. 底部对话框区：改为悬浮卡片 */
@@ -3570,26 +3585,28 @@
 }
 
 .chat-more-pages {
-    height: calc(100% - 18px);
-    overflow-x: auto;
-    display: flex;
-    scroll-snap-type: x mandatory;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: block;
     -webkit-overflow-scrolling: touch;
+    padding-right: 4px;
 }
 
 .more-page {
-    flex: 0 0 100%;
-    scroll-snap-align: start;
     box-sizing: border-box;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    min-height: 100%;
 }
 
 .more-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 18px 12px;
+    width: 100%;
+    align-content: start;
 }
 
 .more-item {
@@ -4834,11 +4851,7 @@
 }
 
 .chat-more-dots {
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
+    display: none;
 }
 
 .chat-more-dot {
@@ -5244,6 +5257,13 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.location-share-float-window.is-fast-forwarding {
+    background: #0b66d4;
+    box-shadow: 0 8px 18px rgba(11, 102, 212, 0.34);
+    transform: scale(1.03);
 }
 
 #map-creator-layer {
@@ -7557,6 +7577,513 @@
     color: #666;
     margin-top: 6px; /* Reduced from 8px */
     word-break: break-word;
+}
+
+.takeout-pay-row.is-pending {
+    color: #c46a00;
+}
+
+.composer-preview-card {
+    margin-bottom: 14px;
+}
+
+.chat-commerce-composer {
+    position: fixed;
+    inset: 0;
+    z-index: 18000;
+    display: none;
+}
+
+.chat-commerce-composer.show {
+    display: block;
+}
+
+.chat-commerce-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(2px);
+}
+
+.chat-commerce-sheet {
+    position: absolute;
+    left: 50%;
+    right: auto;
+    bottom: 0;
+    width: min(100%, 430px);
+    max-height: min(84vh, 760px);
+    transform: translateX(-50%);
+    background: #f5f5f5;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+
+.chat-commerce-sheet-body {
+    padding: 20px 18px 24px;
+    overflow-y: auto;
+    max-height: min(84vh, 760px);
+}
+
+.chat-commerce-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.88);
+    color: #666;
+    font-size: 16px;
+    z-index: 2;
+}
+
+.chat-commerce-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #222;
+    line-height: 1.2;
+}
+
+.chat-commerce-subtitle {
+    margin-top: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #7a7a7a;
+}
+
+.chat-commerce-preview {
+    margin-bottom: 14px;
+}
+
+.chat-commerce-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.chat-commerce-label {
+    font-size: 13px;
+    color: #666;
+}
+
+.chat-commerce-input {
+    width: 100%;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 14px 16px;
+    font-size: 15px;
+    color: #222;
+    box-sizing: border-box;
+}
+
+.chat-commerce-switch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.96);
+    color: #444;
+    font-size: 14px;
+    margin-bottom: 14px;
+}
+
+.chat-commerce-switch input {
+    width: 18px;
+    height: 18px;
+    accent-color: #6c7278;
+}
+
+.chat-commerce-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.chat-commerce-btn {
+    border: none;
+    border-radius: 16px;
+    padding: 14px 12px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.chat-commerce-btn.primary {
+    background: #07c160;
+    color: #fff;
+}
+
+.chat-commerce-btn.secondary {
+    background: #fff;
+    color: #444;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.starry-bg {
+    background-image:
+        radial-gradient(circle at 15% 20%, rgba(255,255,255,0.6) 1px, transparent 1px),
+        radial-gradient(circle at 80% 30%, rgba(255,255,255,0.4) 1px, transparent 1px),
+        radial-gradient(circle at 40% 70%, rgba(255,255,255,0.5) 1.5px, transparent 1.5px),
+        radial-gradient(circle at 75% 85%, rgba(255,255,255,0.3) 1px, transparent 1px),
+        radial-gradient(circle at 25% 90%, rgba(255,255,255,0.7) 1px, transparent 1px),
+        linear-gradient(135deg, #6a6f75, #474b50);
+}
+
+.msg-bubble.gift-message-bubble {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    max-width: 250px;
+}
+
+.gift-bubble {
+    width: 240px;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.14);
+}
+
+.bubble-main {
+    padding: 18px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.bubble-copy {
+    min-width: 0;
+}
+
+.bubble-title {
+    color: #e6d5b8;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+}
+
+.gift-bubble-hint {
+    margin-top: 5px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.78);
+    line-height: 1.4;
+}
+
+.bubble-footer {
+    padding: 7px 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.72);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gift-preview-bow {
+    position: relative;
+    width: 60px;
+    height: 100%;
+    flex: 0 0 60px;
+}
+
+.gift-preview-bow span {
+    position: absolute;
+    display: block;
+    background: #e6d5b8;
+}
+
+.gift-preview-bow span:nth-child(1) {
+    left: 28px;
+    top: -6px;
+    width: 4px;
+    height: 48px;
+    border-radius: 999px;
+}
+
+.gift-preview-bow span:nth-child(2) {
+    left: 0;
+    top: 12px;
+    width: 28px;
+    height: 12px;
+    border-radius: 999px 12px 12px 999px;
+    border: none;
+}
+
+.gift-preview-bow span:nth-child(3) {
+    right: 0;
+    top: 12px;
+    width: 28px;
+    height: 12px;
+    border-radius: 12px 999px 999px 12px;
+    border: none;
+}
+
+.gift-preview-bow span:nth-child(4) {
+    left: 4px;
+    top: 18px;
+    width: 20px;
+    height: 12px;
+    border-radius: 999px 12px 12px 999px;
+    border: none;
+}
+
+.gift-preview-bow span:nth-child(5) {
+    right: 4px;
+    top: 18px;
+    width: 20px;
+    height: 12px;
+    border-radius: 12px 999px 999px 12px;
+    border: none;
+}
+
+.gift-composer-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gift-composer-note {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #6f6f6f;
+}
+
+.gift-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 19000;
+    background: rgba(0, 0, 0, 0.62);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.gift-modal-overlay.show {
+    display: flex;
+}
+
+.gift-card-full {
+    width: min(320px, 100%);
+    height: 470px;
+    border-radius: 24px;
+    position: relative;
+    overflow: hidden;
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.32);
+}
+
+.gift-modal-overlay.show .gift-card-full {
+    transform: scale(1) translateY(0);
+}
+
+.card-header {
+    position: absolute;
+    top: 44px;
+    width: 100%;
+    text-align: center;
+    color: #e6d5b8;
+    font-size: 18px;
+    letter-spacing: 1px;
+    z-index: 10;
+    padding: 0 18px;
+    box-sizing: border-box;
+}
+
+.diagonal-ribbon {
+    position: absolute;
+    top: 64%;
+    left: -20%;
+    width: 140%;
+    height: 8px;
+    background-color: #e6d5b8;
+    transform: translateY(-50%) rotate(-25deg);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.open-btn-wrapper {
+    position: absolute;
+    top: 64%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 82px;
+    height: 82px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+}
+
+.open-bg-layer1,
+.open-bg-layer2 {
+    position: absolute;
+    width: 70px;
+    height: 70px;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.5s ease;
+}
+
+.open-bg-layer1 {
+    transform: rotate(15deg);
+    background: linear-gradient(135deg, #e6d5b8, #c4b59d);
+}
+
+.open-bg-layer2 {
+    transform: rotate(60deg);
+    background: linear-gradient(135deg, #f0dfbf, #d0c0a5);
+}
+
+.open-circle {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    background-color: #e6d5b8;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #3a3d42;
+    font-size: 32px;
+    font-family: "STKaiti", "KaiTi", serif;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.8), 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.gift-modal-overlay.is-opened .open-bg-layer1 {
+    transform: rotate(195deg);
+}
+
+.gift-modal-overlay.is-opened .open-bg-layer2 {
+    transform: rotate(240deg);
+}
+
+.gift-modal-overlay.is-opened .open-circle {
+    transform: scale(0.92);
+}
+
+.gift-reveal-content {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: 34px;
+    padding: 18px 18px 20px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.gift-modal-overlay.is-opened .gift-reveal-content {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.gift-reveal-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #e6d5b8;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.gift-reveal-name {
+    margin-top: 14px;
+    font-size: 24px;
+    font-weight: 700;
+    color: #fffaf3;
+    line-height: 1.3;
+}
+
+.gift-reveal-price {
+    margin-top: 8px;
+    font-size: 18px;
+    color: #f5e6cb;
+    font-weight: 600;
+}
+
+.gift-reveal-note {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.gift-pay-on-behalf-card {
+    width: min(300px, 100%);
+    border-radius: 24px;
+    position: relative;
+    overflow: hidden;
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.32);
+    padding: 44px 24px 32px;
+    text-align: center;
+}
+
+.gift-modal-overlay.show .gift-pay-on-behalf-card {
+    transform: scale(1) translateY(0);
+}
+
+.gift-pay-header {
+    color: #e6d5b8;
+    font-size: 18px;
+    letter-spacing: 1px;
+    margin-bottom: 24px;
+}
+
+.gift-pay-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: #fffaf3;
+    line-height: 1.3;
+    margin-bottom: 8px;
+}
+
+.gift-pay-price {
+    font-size: 18px;
+    color: #f5e6cb;
+    font-weight: 600;
+    margin-bottom: 32px;
+}
+
+.gift-pay-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.gift-pay-btn {
+    padding: 12px 24px;
+    border-radius: 999px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.gift-pay-btn:hover {
+    transform: scale(1.04);
+}
+
+.gift-pay-btn.accept {
+    background: #e6d5b8;
+    color: #3a3d42;
+}
+
+.gift-pay-btn.decline {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
 }
 
 /* =================================

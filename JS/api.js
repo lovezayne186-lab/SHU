@@ -3046,11 +3046,25 @@ try {
                 return place ? `[系统通知：${actor}发送了位置：${place}]` : `[系统通知：${actor}发送了位置]`;
             }
             if (type === 'takeout_card') {
-                const shopName = typeof item.shopName === 'string' ? item.shopName.trim() : '';
+                const shopName = typeof item.foodName === 'string' && item.foodName.trim()
+                    ? item.foodName.trim()
+                    : (typeof item.shopName === 'string' ? item.shopName.trim() : '');
                 const items = Array.isArray(item.items) ? item.items.filter(v => typeof v === 'string' && v.trim()).join('、') : '';
                 const price = typeof item.price === 'string' ? item.price.trim() : '';
+                const payMode = typeof item.paymentMode === 'string' ? item.paymentMode.trim() : 'paid';
+                const modeLabel = payMode === 'pay_on_behalf' ? '外卖代付卡片' : '外卖卡片';
                 const summary = [shopName, items, price ? `¥${price}` : ''].filter(Boolean).join(' / ');
-                return summary ? `[系统通知：${actor}发送了外卖卡片：${summary}]` : `[系统通知：${actor}发送了外卖卡片]`;
+                return summary ? `[系统通知：${actor}发送了${modeLabel}：${summary}]` : `[系统通知：${actor}发送了${modeLabel}]`;
+            }
+            if (type === 'gift_card') {
+                const itemName = typeof item.itemName === 'string' ? item.itemName.trim() : '';
+                const price = typeof item.price === 'string' ? item.price.trim() : '';
+                const anonymous = item.anonymous === true;
+                const payMode = typeof item.paymentMode === 'string' ? item.paymentMode.trim() : 'paid';
+                const modeLabel = payMode === 'pay_on_behalf' ? '礼物代付卡片' : '礼物卡片';
+                const summaryName = anonymous ? '匿名包裹' : itemName;
+                const summary = [summaryName, price ? `¥${price}` : ''].filter(Boolean).join(' / ');
+                return summary ? `[系统通知：${actor}发送了${modeLabel}：${summary}]` : `[系统通知：${actor}发送了${modeLabel}]`;
             }
             if (type === 'sticker') {
                 const meta = typeof window.resolveStickerMetaByUrl === 'function'
@@ -3091,6 +3105,7 @@ try {
         redpacket: true,
         family_card: true,
         takeout_card: true,
+        gift_card: true,
         ai_secret_photo: true,
         voice: true,
         listen_invite_accepted: true,
@@ -3133,6 +3148,27 @@ try {
         if (isMe) return `[用户发送了${label}]`;
         if (isAi) return `[你发送了${label}]`;
         return `[发送了${label}]`;
+    }
+
+    if (type === 'takeout_card' || type === 'gift_card') {
+        let item = {};
+        try {
+            item = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {});
+        } catch (e) {
+            item = {};
+        }
+        const actor = isMe ? '用户' : (isAi ? '你' : '对方');
+        if (type === 'takeout_card') {
+            const foodName = String(item.foodName || item.shopName || '').trim() || '外卖';
+            const payMode = String(item.paymentMode || 'paid').trim();
+            const label = payMode === 'pay_on_behalf' ? '外卖代付卡片' : '外卖卡片';
+            return `[系统通知：${actor}发送了${label}：${foodName}]`;
+        }
+        const anonymous = item.anonymous === true;
+        const payMode = String(item.paymentMode || 'paid').trim();
+        const label = payMode === 'pay_on_behalf' ? '礼物代付卡片' : '礼物卡片';
+        const giftName = anonymous ? '匿名包裹（内容未知）' : (String(item.itemName || '').trim() || '礼物');
+        return `[系统通知：${actor}发送了${label}：${giftName}]`;
     }
 
     // 3. 🔥 核心修复：清洗 AI 的历史记忆 (防止内心独白污染)

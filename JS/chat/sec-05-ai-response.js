@@ -77,6 +77,8 @@ function getAiMessageNotificationPreview(msg) {
             return '[位置]';
         }
     }
+    if (type === 'takeout_card') return '[外卖卡片]';
+    if (type === 'gift_card') return '[礼物卡片]';
     if (type === 'offline_action') {
         const text = String(msg.content || '').trim();
         return text ? ('（' + text + '）') : '';
@@ -91,6 +93,286 @@ function escapeHtmlText(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function parseCommerceCardPayload(rawValue) {
+    if (!rawValue) return {};
+    if (typeof rawValue === 'object') return rawValue || {};
+    try {
+        const parsed = JSON.parse(String(rawValue || '{}'));
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function renderTakeoutCardBubble(payload, msgStatus) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const title = escapeHtmlText(String(data.foodName || data.shopName || '').trim() || '外卖');
+    const items = Array.isArray(data.items) ? data.items : [];
+    const priceText = escapeHtmlText(String(data.price || '').trim() || '--');
+    const remark = escapeHtmlText(String(data.remark || '').trim());
+    const paymentMode = String(data.paymentMode || 'paid').trim();
+    const isPayOnBehalf = paymentMode === 'pay_on_behalf';
+    const isPaid = msgStatus === 'paid';
+    let platformText, payLabel, orderNumber;
+    if (isPayOnBehalf && isPaid) {
+        const payerName = escapeHtmlText(String(data.payerName || '').trim() || '对方');
+        platformText = '外卖代付';
+        payLabel = payerName + ' 已完成支付';
+        orderNumber = '代付单';
+    } else if (isPayOnBehalf) {
+        platformText = '外卖代付';
+        payLabel = '待付款';
+        orderNumber = '代付单';
+    } else {
+        platformText = '外卖订单';
+        payLabel = '实付金额';
+        orderNumber = '已下单';
+    }
+    const itemsHtml = items.length
+        ? items.map(function (item) {
+            return `
+                <div class="takeout-item-row">
+                    <span class="takeout-item-name">${escapeHtmlText(item)}</span>
+                    <span class="takeout-item-qty">1</span>
+                </div>
+            `;
+        }).join('')
+        : `
+            <div class="takeout-item-row">
+                <span class="takeout-item-name">${title}</span>
+                <span class="takeout-item-qty">1</span>
+            </div>
+        `;
+    const payRowClass = (isPayOnBehalf && !isPaid) ? 'takeout-pay-row is-pending' : 'takeout-pay-row';
+    return `
+        <div class="msg-bubble takeout-bubble custom-bubble-content">
+            <div class="takeout-receipt-card">
+                <div class="takeout-receipt-header">
+                    <div class="takeout-receipt-top">
+                        <span class="takeout-order-number">${orderNumber}</span>
+                        <span class="takeout-platform">${platformText}</span>
+                    </div>
+                    <div class="takeout-receipt-logo">
+                        <i class="bx bx-bowl-hot"></i>
+                        <div class="takeout-shop-name">${title}</div>
+                    </div>
+                    <div class="takeout-slogan">喜悦发生于热爱生活的瞬间</div>
+                </div>
+                <div class="takeout-receipt-body">
+                    <div class="takeout-items-header">
+                        <span>商品名称</span>
+                        <span style="text-align: right;">数量</span>
+                    </div>
+                    <div class="takeout-items-list">
+                        ${itemsHtml}
+                    </div>
+                </div>
+                <div class="takeout-receipt-divider"></div>
+                <div class="takeout-receipt-footer">
+                    <div class="takeout-total-row">
+                        <span>合计</span>
+                        <span>¥${priceText}</span>
+                    </div>
+                    <div class="takeout-receipt-divider"></div>
+                    <div class="${payRowClass}">
+                        <span>${payLabel}</span>
+                        <span class="takeout-final-price">¥${priceText}</span>
+                    </div>
+                </div>
+                ${remark ? `<div class="takeout-receipt-divider"></div><div class="takeout-receipt-remark">备注：${remark}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderGiftCardBubble(payload, msgStatus) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const anonymous = data.anonymous === true;
+    const paymentMode = String(data.paymentMode || 'paid').trim();
+    const isPayOnBehalf = paymentMode === 'pay_on_behalf';
+    const isPaid = msgStatus === 'paid';
+    let bubbleTitle, giftHint, footerText;
+    if (isPayOnBehalf && isPaid) {
+        const payerName = escapeHtmlText(String(data.payerName || '').trim() || '对方');
+        bubbleTitle = payerName + ' 已完成支付';
+        giftHint = '';
+        footerText = '微信礼物 · 代付已完成';
+    } else if (isPayOnBehalf) {
+        bubbleTitle = '请求支付一件商品';
+        giftHint = anonymous ? '匿名包裹，先猜猜看里面是什么' : '点开看看我给你准备了什么';
+        footerText = '微信礼物 · 待对方代付';
+    } else {
+        bubbleTitle = escapeHtmlText(String(data.bubbleTitle || '').trim() || (anonymous ? '送你一份匿名心意' : '送你一份心意'));
+        giftHint = anonymous ? '匿名包裹，先猜猜看里面是什么' : '点开看看我给你准备了什么';
+        footerText = '微信礼物';
+    }
+    const hintHtml = giftHint ? `<div class="gift-bubble-hint">${giftHint}</div>` : '';
+    return `
+        <div class="msg-bubble gift-message-bubble custom-bubble-content" data-gift-openable="1">
+            <div class="gift-bubble starry-bg">
+                <div class="bubble-main">
+                    <div class="gift-preview-bow" aria-hidden="true">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <div class="bubble-copy">
+                        <div class="bubble-title">${bubbleTitle}</div>
+                        ${hintHtml}
+                    </div>
+                </div>
+                <div class="bubble-footer starry-bg">${footerText}</div>
+            </div>
+        </div>
+    `;
+}
+
+function ensureGiftRevealModal() {
+    let modal = document.getElementById('chat-gift-reveal-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'chat-gift-reveal-modal';
+    modal.className = 'gift-modal-overlay';
+    modal.innerHTML = `
+        <div class="gift-card-full starry-bg">
+            <div class="card-header" id="gift-modal-header"></div>
+            <div class="diagonal-ribbon"></div>
+            <div class="open-btn-wrapper" id="gift-modal-open-btn">
+                <div class="open-bg-layer1"></div>
+                <div class="open-bg-layer2"></div>
+                <div class="open-circle">开</div>
+            </div>
+            <div class="gift-reveal-content" id="gift-reveal-content">
+                <div class="gift-reveal-tag">礼物详情</div>
+                <div class="gift-reveal-name" id="gift-reveal-name"></div>
+                <div class="gift-reveal-price" id="gift-reveal-price"></div>
+                <div class="gift-reveal-note" id="gift-reveal-note"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+            modal.classList.remove('show');
+            modal.classList.remove('is-opened');
+        }
+    });
+    const openBtn = modal.querySelector('#gift-modal-open-btn');
+    if (openBtn) {
+        openBtn.addEventListener('click', function (e) {
+            if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+            modal.classList.add('is-opened');
+        });
+    }
+    return modal;
+}
+
+function openGiftRevealModal(msg) {
+    const payload = parseCommerceCardPayload(msg && msg.content);
+    const modal = ensureGiftRevealModal();
+    const headerEl = document.getElementById('gift-modal-header');
+    const nameEl = document.getElementById('gift-reveal-name');
+    const priceEl = document.getElementById('gift-reveal-price');
+    const noteEl = document.getElementById('gift-reveal-note');
+    if (!modal || !headerEl || !nameEl || !priceEl || !noteEl) return;
+    const senderName = String(payload.senderName || (msg && msg.role === 'me' ? '我' : 'Ta')).trim() || 'Ta';
+    const anonymous = payload.anonymous === true;
+    const paymentMode = String(payload.paymentMode || 'paid').trim();
+    const amountText = String(payload.price || '').trim();
+    headerEl.textContent = senderName + '：' + (anonymous ? '送你一份匿名心意' : '送你一份心意');
+    nameEl.textContent = String(payload.itemName || '').trim() || (anonymous ? '匿名包裹' : '一份心意');
+    priceEl.textContent = amountText ? ('¥' + amountText) : '';
+    if (paymentMode === 'pay_on_behalf') {
+        noteEl.textContent = anonymous ? '这是一份匿名包裹，同时附带了代付请求。' : '这份礼物附带了代付请求。';
+    } else {
+        noteEl.textContent = anonymous ? '拆开之前，对方只能先猜测里面是什么。' : '这份心意已经送达。';
+    }
+    modal.classList.remove('is-opened');
+    modal.classList.add('show');
+}
+
+function ensureGiftPayOnBehalfModal() {
+    let modal = document.getElementById('chat-gift-pay-on-behalf-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'chat-gift-pay-on-behalf-modal';
+    modal.className = 'gift-modal-overlay';
+    modal.innerHTML = `
+        <div class="gift-pay-on-behalf-card starry-bg">
+            <div class="gift-pay-header" id="gift-pay-header"></div>
+            <div class="gift-pay-name" id="gift-pay-name"></div>
+            <div class="gift-pay-price" id="gift-pay-price"></div>
+            <div class="gift-pay-actions">
+                <button type="button" class="gift-pay-btn accept" id="gift-pay-accept-btn">同意代付</button>
+                <button type="button" class="gift-pay-btn decline" id="gift-pay-decline-btn">拒绝</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+            modal.classList.remove('show');
+        }
+    });
+    return modal;
+}
+
+function openGiftPayOnBehalfModal(msg) {
+    const payload = parseCommerceCardPayload(msg && msg.content);
+    const modal = ensureGiftPayOnBehalfModal();
+    const headerEl = document.getElementById('gift-pay-header');
+    const nameEl = document.getElementById('gift-pay-name');
+    const priceEl = document.getElementById('gift-pay-price');
+    const acceptBtn = document.getElementById('gift-pay-accept-btn');
+    const declineBtn = document.getElementById('gift-pay-decline-btn');
+    if (!modal || !headerEl || !nameEl || !priceEl || !acceptBtn || !declineBtn) return;
+    const senderName = String(payload.senderName || (msg && msg.role === 'me' ? '我' : 'Ta')).trim() || 'Ta';
+    const anonymous = payload.anonymous === true;
+    const amountText = String(payload.price || '').trim();
+    headerEl.textContent = senderName + ' 请求你代付一件礼物';
+    nameEl.textContent = anonymous ? '匿名包裹' : String(payload.itemName || '').trim() || '一份心意';
+    priceEl.textContent = amountText ? ('¥' + amountText) : '';
+
+    const newAcceptBtn = acceptBtn.cloneNode(true);
+    const newDeclineBtn = declineBtn.cloneNode(true);
+    acceptBtn.parentNode.replaceChild(newAcceptBtn, acceptBtn);
+    declineBtn.parentNode.replaceChild(newDeclineBtn, declineBtn);
+
+    newAcceptBtn.addEventListener('click', function (e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        const roleId = window.currentChatRole;
+        if (!roleId || !msg) {
+            modal.classList.remove('show');
+            return;
+        }
+        const profile = window.charProfiles && window.charProfiles[roleId] ? window.charProfiles[roleId] : {};
+        const payerName = String(profile.remark || profile.nickName || profile.name || '对方').trim() || '对方';
+        msg.status = 'paid';
+        let parsed = null;
+        try {
+            parsed = JSON.parse(msg.content);
+        } catch (e) {}
+        if (parsed && typeof parsed === 'object') {
+            parsed.payerName = payerName;
+            msg.content = JSON.stringify(parsed);
+        }
+        saveData();
+        const row = document.querySelector('.msg-row[data-timestamp="' + msg.timestamp + '"]');
+        if (row) {
+            const bubble = row.querySelector('.gift-message-bubble');
+            if (bubble) {
+                bubble.outerHTML = renderGiftCardBubble(parseCommerceCardPayload(msg.content), msg.status);
+            }
+        }
+        modal.classList.remove('show');
+    });
+
+    newDeclineBtn.addEventListener('click', function (e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        modal.classList.remove('show');
+    });
+
+    modal.classList.add('show');
 }
 
 function sanitizeChatBubbleHtml(rawHtml) {
@@ -231,6 +513,53 @@ function isForeignHeavyText(text) {
     return false;
 }
 
+function countRegexMatches(text, pattern) {
+    const raw = String(text || '');
+    if (!raw || !pattern) return 0;
+    const matches = raw.match(pattern);
+    return matches ? matches.length : 0;
+}
+
+function getNonSimplifiedChineseScore(text) {
+    const raw = String(text || '').trim();
+    if (!raw || !isChineseHeavyText(raw)) return 0;
+    const keywordScore = countRegexMatches(raw, /(粤语|廣東話|广东话|白話|白话|方言|繁體|繁体|正體|正体|文言|文言文|古漢語|古汉语|台語|臺語|闽南语|閩南語|客家話|客家话|吳語|吴语|滬語|沪语|上海話|上海话)/g);
+    const traditionalScore = countRegexMatches(raw, /[這個們為來時後會說話讓還愛歡學習覺應實體點開關於與臺灣廣東電腦網頁貓車鐘鍾門裡見聽買麼嗎]/g);
+    const dialectScore = countRegexMatches(raw, /[係嘅咗喺嚟冇唔佢哋啲咩喎乜邊嗰諗睇咁]/g);
+    return keywordScore * 4 + traditionalScore * 2 + dialectScore * 3;
+}
+
+function getSimplifiedChineseScore(text) {
+    const raw = String(text || '').trim();
+    if (!raw || !isChineseHeavyText(raw)) return 0;
+    return countRegexMatches(raw, /[这们为来说话让还欢学习觉应实体点开关于与台湾广东电脑网页猫车钟门里见听买吗]/g) * 2;
+}
+
+function isLikelyNonSimplifiedChineseText(text) {
+    return getNonSimplifiedChineseScore(text) >= 2;
+}
+
+function isLikelyAutoTranslateOriginalText(text) {
+    return isForeignHeavyText(text) || isLikelyNonSimplifiedChineseText(text);
+}
+
+function isLikelyAutoTranslatePair(originalText, translationText) {
+    const original = String(originalText || '').trim();
+    const translation = String(translationText || '').trim();
+    if (!original || !translation || original === translation) return false;
+    if (isForeignHeavyText(original)) {
+        return isChineseHeavyText(translation);
+    }
+    if (!isLikelyNonSimplifiedChineseText(original) || !isChineseHeavyText(translation)) {
+        return false;
+    }
+    const originalNonSimplified = getNonSimplifiedChineseScore(original);
+    const translationNonSimplified = getNonSimplifiedChineseScore(translation);
+    const originalSimplified = getSimplifiedChineseScore(original);
+    const translationSimplified = getSimplifiedChineseScore(translation);
+    return translationNonSimplified < originalNonSimplified || translationSimplified > originalSimplified || !isLikelyNonSimplifiedChineseText(translation);
+}
+
 function isAutoTranslateBubbleEnabledForRole(roleId) {
     const rid = String(roleId || '').trim();
     if (!rid) return false;
@@ -310,6 +639,51 @@ function unwrapParentheticalTranslationText(text) {
     return inner;
 }
 
+function normalizeAutoTranslateForeignCandidateText(text) {
+    let out = stripMarkdownDisplayArtifacts(text);
+    if (!out) return '';
+    out = stripLeadingChatNoise(out);
+    out = out.replace(/^(?:原文|外文|外语|英文原文|日文原文|韩文原文|法文原文|德文原文|西语原文|俄语原文|泰语原文|source|original|foreign|message)\s*[:：\-]\s*/i, '');
+    out = out.replace(/^[「“"'`]+/, '').replace(/[」”"'`]+$/, '');
+    return out.trim();
+}
+
+function normalizeAutoTranslateChineseCandidateText(text) {
+    let out = stripMarkdownDisplayArtifacts(text);
+    if (!out) return '';
+    out = stripLeadingChatNoise(out);
+    out = out.replace(/^(?:中文翻译|中文|翻译|译文|中译|意思是|意思|含义|translation)\s*[:：\-]\s*/i, '');
+    out = unwrapParentheticalTranslationText(out);
+    out = out.replace(/^[「“"'`]+/, '').replace(/[」”"'`]+$/, '');
+    return out.trim();
+}
+
+function extractLabeledTranslatedParts(text) {
+    const cleanedDisplay = stripMarkdownDisplayArtifacts(text);
+    if (!cleanedDisplay) return null;
+
+    const inlineMatch = cleanedDisplay.match(/^([\s\S]*?)(?:\s+|[\r\n]+)(?:中文翻译|中文|翻译|译文|中译|意思是|意思|含义|translation)\s*[:：]\s*([\s\S]+)$/i);
+    if (inlineMatch) {
+        const foreignInline = normalizeAutoTranslateForeignCandidateText(inlineMatch[1]);
+        const translationInline = normalizeAutoTranslateChineseCandidateText(inlineMatch[2]);
+        if (isLikelyAutoTranslatePair(foreignInline, translationInline)) {
+            return { foreignText: foreignInline, translationText: translationInline };
+        }
+    }
+
+    const lines = cleanedDisplay.split(/\n+/).map(function (line) {
+        return stripMarkdownDisplayArtifacts(line);
+    }).filter(Boolean);
+    for (let i = 0; i < lines.length - 1; i++) {
+        const foreignLine = normalizeAutoTranslateForeignCandidateText(lines[i]);
+        const translationLine = normalizeAutoTranslateChineseCandidateText(lines[i + 1]);
+        if (isLikelyAutoTranslatePair(foreignLine, translationLine)) {
+            return { foreignText: foreignLine, translationText: translationLine };
+        }
+    }
+    return null;
+}
+
 function buildWrappedTranslatedText(roleId, foreignText, translationText) {
     const foreign = String(foreignText || '').trim();
     const translation = String(translationText || '').trim();
@@ -332,6 +706,11 @@ function normalizeSingleTranslatedText(rawText, roleId) {
         return buildWrappedTranslatedText(roleId, parsed.foreignText, parsed.translationText);
     }
 
+    const labeledParts = extractLabeledTranslatedParts(cleanedDisplay);
+    if (labeledParts) {
+        return buildWrappedTranslatedText(roleId, labeledParts.foreignText, labeledParts.translationText);
+    }
+
     const lines = cleanedDisplay.split(/\n+/).map(function (line) {
         return stripMarkdownDisplayArtifacts(line);
     }).filter(Boolean);
@@ -340,12 +719,14 @@ function normalizeSingleTranslatedText(rawText, roleId) {
         let translationLine = '';
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            if (!foreignLine && isForeignHeavyText(line)) {
-                foreignLine = line;
+            const foreignCandidate = normalizeAutoTranslateForeignCandidateText(line);
+            if (!foreignLine && isLikelyAutoTranslateOriginalText(foreignCandidate)) {
+                foreignLine = foreignCandidate;
                 continue;
             }
-            if (foreignLine && isChineseHeavyText(line)) {
-                translationLine = line;
+            const translationCandidate = normalizeAutoTranslateChineseCandidateText(line);
+            if (foreignLine && isLikelyAutoTranslatePair(foreignLine, translationCandidate)) {
+                translationLine = translationCandidate;
                 break;
             }
         }
@@ -355,7 +736,7 @@ function normalizeSingleTranslatedText(rawText, roleId) {
     }
 
     const fullParenMatch = cleanedDisplay.match(/^(.*?)\s*[（(]\s*([\u4e00-\u9fff][\s\S]*?)\s*[）)]\s*$/);
-    if (fullParenMatch && isForeignHeavyText(fullParenMatch[1]) && isChineseHeavyText(fullParenMatch[2])) {
+    if (fullParenMatch && isLikelyAutoTranslatePair(fullParenMatch[1], fullParenMatch[2])) {
         return buildWrappedTranslatedText(
             roleId,
             stripMarkdownDisplayArtifacts(fullParenMatch[1]),
@@ -391,14 +772,37 @@ function normalizeAutoTranslateReplySegments(segments, roleId) {
             continue;
         }
 
-        const next = source[i + 1];
-        if (next && next.kind === 'text') {
-            const nextText = String(next.text || '').trim();
-            const normalizedForeign = stripMarkdownDisplayArtifacts(currentText);
-            const normalizedTranslation = unwrapParentheticalTranslationText(stripMarkdownDisplayArtifacts(nextText));
-            if (isForeignHeavyText(normalizedForeign) && isChineseHeavyText(normalizedTranslation)) {
-                out.push({ kind: 'text', text: buildWrappedTranslatedText(rid, normalizedForeign, normalizedTranslation) });
-                i += 1;
+        const normalizedForeign = normalizeAutoTranslateForeignCandidateText(currentText);
+        if (isLikelyAutoTranslateOriginalText(normalizedForeign)) {
+            let merged = false;
+            for (let step = 1; step <= 2; step++) {
+                const candidate = source[i + step];
+                if (!candidate || candidate.kind !== 'text') break;
+                const candidateText = String(candidate.text || '').trim();
+                if (!candidateText) continue;
+
+                const candidateBilingual = extractLabeledTranslatedParts(candidateText);
+                if (candidateBilingual && !isLikelyAutoTranslateOriginalText(normalizeAutoTranslateForeignCandidateText(candidateText))) {
+                    out.push({ kind: 'text', text: buildWrappedTranslatedText(rid, normalizedForeign, candidateBilingual.translationText) });
+                    i += step;
+                    merged = true;
+                    break;
+                }
+
+                const normalizedTranslation = normalizeAutoTranslateChineseCandidateText(candidateText);
+                if (isLikelyAutoTranslatePair(normalizedForeign, normalizedTranslation)) {
+                    out.push({ kind: 'text', text: buildWrappedTranslatedText(rid, normalizedForeign, normalizedTranslation) });
+                    i += step;
+                    merged = true;
+                    break;
+                }
+
+                const candidateForeign = normalizeAutoTranslateForeignCandidateText(candidateText);
+                if (isLikelyAutoTranslateOriginalText(candidateForeign)) {
+                    break;
+                }
+            }
+            if (merged) {
                 continue;
             }
         }
@@ -445,10 +849,18 @@ function parseTranslatedBubbleText(rawText) {
         if (parenOpen !== -1 && parenClose > parenOpen) {
             const maybeForeign = stripMarkdownDisplayArtifacts(body.slice(0, parenOpen));
             const maybeTranslation = stripMarkdownDisplayArtifacts(body.slice(parenOpen + 1, parenClose));
-            if (isForeignHeavyText(maybeForeign) && isChineseHeavyText(maybeTranslation)) {
+            if (isLikelyAutoTranslatePair(maybeForeign, maybeTranslation)) {
                 foreignText = maybeForeign;
                 translationText = maybeTranslation;
             }
+        }
+    }
+
+    if (!(foreignText && translationText)) {
+        const labeledParts = extractLabeledTranslatedParts(body);
+        if (labeledParts) {
+            foreignText = labeledParts.foreignText;
+            translationText = labeledParts.translationText;
         }
     }
 
@@ -458,7 +870,7 @@ function parseTranslatedBubbleText(rawText) {
         }).filter(Boolean);
         if (lines.length >= 2) {
             for (let i = 0; i < lines.length - 1; i++) {
-                if (isForeignHeavyText(lines[i]) && isChineseHeavyText(lines[i + 1])) {
+                if (isLikelyAutoTranslatePair(lines[i], lines[i + 1])) {
                     foreignText = lines[i];
                     translationText = lines[i + 1];
                     break;
@@ -673,6 +1085,7 @@ function buildModernChatJsonPromptForEvent(roleId, eventPrompt) {
             const timePrompt = '【当前系统时间】\n' + new Date().toLocaleString('zh-CN', { hour12: false });
             return window.buildWechatPrivatePromptV2({
                 roleId: rid,
+                profile: profile,
                 roleName: bundle.roleName || profile.nickName || profile.name || 'TA',
                 realName: String(profile.realName || profile.real_name || profile.nickName || profile.name || bundle.roleName || 'TA').trim() || 'TA',
                 language: String(profile.language || profile.lang || '').trim(),
@@ -996,8 +1409,8 @@ function stripPromptLeakageText(text) {
     s = s.replace(/(?:^|\n)\s*#{1,6}\s*.*(?:回复|回应|回答|翻译|格式|说明|示例|message|output|response)[^\n]*/gi, '\n');
     s = s.replace(/(?:^|\n)\s*(?:[#＊*]+\s*)?(?:【)?(?:输出格式铁律|角色扮演核心规则|指令使用原则与动机|个人状态的动态管理|元数据铁律|你的角色设定|对话者的角色设定|当前情景|世界观|长期记忆|关系与身份档案|可用表情包|可用指令列表|情景感知|可用资源)(?:】)?[^\n]*\n?/gi, '\n');
     s = s.replace(/(?:^|\n)\s*(?:"?reply"?|回复|content|内容|thought|思考链|思考|inner_monologue|内心独白|status|actions|system_event|系统提示|quoteId|quote_id|reply_to|update_thoughts)\s*[:：][^\n]*/gi, '\n');
-    s = s.replace(/(?:^|\n)\s*[\[【](?:内心独白|思考链|思考|引用回复|语音消息|语音|发送照片|发送图片|发送位置|见面触发(?:已关闭)?|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）)[\]】]\s*[:：]?\s*/gi, '\n');
-    s = s.replace(/(?:^|\n)\s*【(?:引用回复|语音消息|发送照片|发送位置|见面触发(?:已关闭)?|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）)】\s*[:：]?\s*/gi, '\n');
+    s = s.replace(/(?:^|\n)\s*[\[【](?:内心独白|思考链|思考|引用回复|语音消息|语音|发送照片|发送图片|发送位置|见面触发(?:已关闭)?|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）|送礼物卡片)[\]】]\s*[:：]?\s*/gi, '\n');
+    s = s.replace(/(?:^|\n)\s*【(?:引用回复|语音消息|发送照片|发送位置|见面触发(?:已关闭)?|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）|送礼物卡片)】\s*[:：]?\s*/gi, '\n');
     s = s.replace(/(?:^|\n)\s*-\s*(?:你的回复必须是一个JSON数组|数组中的每个对象都必须包含|第一个元素必须是|不要输出Markdown|不要输出代码块|不要输出任何解释|禁止泄露|禁止输出任何思考过程|只输出JSON|只输出上述格式).*$/gmi, '\n');
     s = s.replace(/(?:^|\n)\s*[（(].*(?:不必要|而是|应该|必须|格式|翻译|原文|中文|外语|消息|回复).*[）)]\s*/g, '\n');
     s = s.replace(/(?:^|\n)\s*(?:quoteId|quote_id|reply_to|thought|system_event|inner_monologue|status|actions)\s*[:：][^\n]*/gi, '\n');
@@ -1304,9 +1717,22 @@ function normalizeStructuredReplySegments(replyValue, options) {
         if (rawType === 'takeout_card') {
             pushObject('takeout_card', {
                 shopName: String(item.shopName || '').trim(),
+                foodName: String(item.foodName || '').trim(),
                 items: Array.isArray(item.items) ? item.items : [],
                 price: String(item.price || '').trim(),
-                remark: String(item.remark || '').trim()
+                remark: String(item.remark || '').trim(),
+                paymentMode: String(item.paymentMode || '').trim()
+            });
+            return true;
+        }
+        if (rawType === 'gift_card' || rawType === 'giftcard' || rawType === 'gift' || rawType === 'send_gift') {
+            const anonymousValue = item.anonymous != null ? item.anonymous : item.isAnonymous;
+            pushObject('gift_card', {
+                itemName: String(item.itemName || item.name || '').trim(),
+                price: String(item.price || item.amount || '').trim(),
+                paymentMode: String(item.paymentMode || '').trim(),
+                anonymous: anonymousValue === true || String(anonymousValue || '').toLowerCase() === 'true',
+                bubbleTitle: String(item.bubbleTitle || '').trim()
             });
             return true;
         }
@@ -1389,8 +1815,8 @@ function extractVisibleReplyFromLooseText(rawText) {
         .replace(/(?:^|\n)\s*(?:"?thought"?|思考链|思考|内心独白|inner_monologue)\s*[:：][^\n]*/gi, '')
         .replace(/(?:^|\n)\s*(?:"?system_event"?|system event|系统提示)\s*[:：][^\n]*/gi, '')
         .replace(/(?:^|\n)\s*[\[【](?:内心独白|思考链|思考|引用回复)[^\]\n】]*[\]】][^\n]*/gi, '')
-        .replace(/(?:^|\n)\s*[\[【](?:语音消息|语音|发送照片|发送图片|发送位置|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）)[\]】]\s*[:：]?/gi, '\n')
-        .replace(/(?:^|\n)\s*【(?:引用回复|语音消息|发送照片|发送位置|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）)】\s*[:：]?/gi, '\n')
+        .replace(/(?:^|\n)\s*[\[【](?:语音消息|语音|发送照片|发送图片|发送位置|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）|送礼物卡片)[\]】]\s*[:：]?/gi, '\n')
+        .replace(/(?:^|\n)\s*【(?:引用回复|语音消息|发送照片|发送位置|主动视频(?:\/语音)?通话|主动语音通话|一起听(?:邀请|\/骰子)?|骰子互动|金钱能力|亲属卡|头像变更|微信气泡拆分规则(?:（最高优先级）)?|点外卖卡片（强制落地）|送礼物卡片)】\s*[:：]?/gi, '\n')
         .trim();
     return stripPromptLeakageText(cleaned);
 }
@@ -2237,7 +2663,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         continue;
                     }
 
-                    if (segment.kind === 'voice' || segment.kind === 'photo' || segment.kind === 'location' || segment.kind === 'sticker' || segment.kind === 'takeout_card' || segment.kind === 'html') {
+                    if (segment.kind === 'voice' || segment.kind === 'photo' || segment.kind === 'location' || segment.kind === 'sticker' || segment.kind === 'takeout_card' || segment.kind === 'gift_card' || segment.kind === 'html') {
                         let directMsgType = 'text';
                         let directContent = '';
                         if (segment.kind === 'voice') {
@@ -2262,12 +2688,23 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                             directMsgType = 'takeout_card';
                             directContent = JSON.stringify({
                                 shopName: String(segment.shopName || '').trim(),
+                                foodName: String(segment.foodName || '').trim(),
                                 items: Array.isArray(segment.items) ? segment.items : [],
                                 price: String(segment.price || '').trim(),
-                                remark: String(segment.remark || '').trim()
+                                remark: String(segment.remark || '').trim(),
+                                paymentMode: String(segment.paymentMode || '').trim()
+                            });
+                        } else if (segment.kind === 'gift_card') {
+                            directMsgType = 'gift_card';
+                            directContent = JSON.stringify({
+                                itemName: String(segment.itemName || '').trim(),
+                                price: String(segment.price || '').trim(),
+                                paymentMode: String(segment.paymentMode || '').trim(),
+                                anonymous: segment.anonymous === true,
+                                bubbleTitle: String(segment.bubbleTitle || '').trim()
                             });
                         }
-                        if (directContent || directMsgType === 'location' || directMsgType === 'takeout_card') {
+                        if (directContent || directMsgType === 'location' || directMsgType === 'takeout_card' || directMsgType === 'gift_card') {
                             const directMsg = {
                                 role: 'ai',
                                 content: directContent,
@@ -3180,7 +3617,7 @@ function appendMessageToDOM(msg) {
     let displayContent = content;
     let shouldTriggerLocationShare = false;
     let locationTriggerBlockedBySettings = false;
-    if (msg && msg.role === 'me' && (msg.type === undefined || msg.type === 'text')) {
+    if (msg && msg.role === 'me' && (msg.type === undefined || msg.type === 'text' || msg.type === 'location_share')) {
         displayContent = stripLocationSharePrefix(content);
     }
 
@@ -3538,66 +3975,9 @@ function appendMessageToDOM(msg) {
             </div>
         `;
     } else if (msg.type === 'takeout_card') {
-        let shopName = '外卖';
-        let items = [];
-        let price = '';
-        let remark = '';
-        try {
-            const obj = JSON.parse(content || '{}');
-            if (obj && typeof obj === 'object') {
-                shopName = String(obj.shopName || '').trim() || '外卖';
-                items = Array.isArray(obj.items) ? obj.items : [];
-                price = String(obj.price || '').trim();
-                remark = String(obj.remark || '').trim();
-            }
-        } catch (e) { }
-        
-        let itemsHtml = items.map(item => `
-            <div class="takeout-item-row">
-                <span class="takeout-item-name">${item}</span>
-                <span class="takeout-item-qty">1</span>
-            </div>
-        `).join('');
-
-        bubbleHtml = `
-            <div class="msg-bubble takeout-bubble custom-bubble-content">
-                <div class="takeout-receipt-card">
-                    <div class="takeout-receipt-header">
-                        <div class="takeout-receipt-top">
-                            <span class="takeout-order-number">${Math.floor(Math.random()*100).toString().padStart(3, '0')}</span>
-                            <span class="takeout-platform">外卖订单</span>
-                        </div>
-                        <div class="takeout-receipt-logo">
-                            <i class="bx bx-store-alt"></i>
-                            <div class="takeout-shop-name">${shopName}</div>
-                        </div>
-                        <div class="takeout-slogan">喜悦发生于热爱生活的瞬间</div>
-                    </div>
-                    <div class="takeout-receipt-body">
-                        <div class="takeout-items-header">
-                            <span>商品名称</span>
-                            <span style="text-align: right;">数量</span>
-                        </div>
-                        <div class="takeout-items-list">
-                            ${itemsHtml}
-                        </div>
-                    </div>
-                    <div class="takeout-receipt-divider"></div>
-                    <div class="takeout-receipt-footer">
-                        <div class="takeout-total-row">
-                            <span>合计</span>
-                            <span>${price}</span>
-                        </div>
-                        <div class="takeout-receipt-divider"></div>
-                        <div class="takeout-pay-row">
-                            <span>实付金额</span>
-                            <span class="takeout-final-price">${price}</span>
-                        </div>
-                    </div>
-                    ${remark ? `<div class="takeout-receipt-divider"></div><div class="takeout-receipt-remark">备注：${remark}</div>` : ''}
-                </div>
-            </div>
-        `;
+        bubbleHtml = renderTakeoutCardBubble(parseCommerceCardPayload(content), msg.status);
+    } else if (msg.type === 'gift_card') {
+        bubbleHtml = renderGiftCardBubble(parseCommerceCardPayload(content), msg.status);
     } else if (msg.type === 'location') {
         let name = '';
         let address = '';
@@ -3725,7 +4105,7 @@ function appendMessageToDOM(msg) {
 
     // --- 5. 组合最终 HTML ---
     const row = document.createElement('div');
-    const isPlainTextMessage = !msg.type || String(msg.type || '') === 'text';
+    const isPlainTextMessage = !msg.type || String(msg.type || '') === 'text' || String(msg.type || '') === 'location_share';
     row.className = isMe
         ? 'msg-row msg-right custom-bubble-container is-me' + (isPlainTextMessage ? ' msg-plain-bubble' : '')
         : 'msg-row msg-left custom-bubble-container is-other' + (isPlainTextMessage ? ' msg-plain-bubble' : '');
@@ -3895,6 +4275,26 @@ function appendMessageToDOM(msg) {
                     row: row,
                     roleId: window.currentChatRole
                 });
+            });
+        }
+    }
+
+    if (msg.type === 'gift_card') {
+        const bubble = row.querySelector('.gift-message-bubble');
+        if (bubble) {
+            bubble.addEventListener('click', function (e) {
+                if (e && typeof e.stopPropagation === 'function') {
+                    e.stopPropagation();
+                }
+                const payload = parseCommerceCardPayload(msg && msg.content);
+                const paymentMode = String(payload.paymentMode || 'paid').trim();
+                const isPayOnBehalf = paymentMode === 'pay_on_behalf';
+                const isPaid = msg.status === 'paid';
+                if (isPayOnBehalf && !isPaid) {
+                    openGiftPayOnBehalfModal(msg);
+                } else {
+                    openGiftRevealModal(msg);
+                }
             });
         }
     }
