@@ -1180,7 +1180,7 @@
                                         <div class="aes-bubble-row">
                                             <div class="aes-bubble" contenteditable="true" id="aes-editable-text"
                                                 onblur="saveAesText()">
-                                                love yourself. 💕
+                                                love yourself.
                                             </div>
                                         </div>
 
@@ -2076,7 +2076,7 @@
                 <div id="msg-context-menu">
                     <div class="menu-grid">
                         <!-- 第一行 -->
-                        <div class="menu-item" onclick="menuAction('edit')">
+                        <div class="menu-item" data-menu-action="edit" onclick="menuAction('edit')">
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -2085,7 +2085,7 @@
                             </div>
                             <div>编辑</div>
                         </div>
-                        <div class="menu-item" onclick="menuAction('copy')"> <!-- 补充一个复制，很常用 -->
+                        <div class="menu-item" data-menu-action="copy" onclick="menuAction('copy')"> <!-- 补充一个复制，很常用 -->
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2" />
@@ -2094,7 +2094,7 @@
                             </div>
                             <div>复制</div>
                         </div>
-                        <div class="menu-item" onclick="menuAction('quote')">
+                        <div class="menu-item" data-menu-action="quote" onclick="menuAction('quote')">
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M7 11a4 4 0 0 1 4-4h1v6H9a2 2 0 0 1-2-2v0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
@@ -2103,7 +2103,7 @@
                             </div>
                             <div>引用</div>
                         </div>
-                        <div class="menu-item" onclick="menuAction('recall')">
+                        <div class="menu-item" data-menu-action="recall" onclick="menuAction('recall')">
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M9 10H4V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -2114,7 +2114,7 @@
                         </div>
 
                         <!-- 第二行 -->
-                        <div class="menu-item" onclick="menuAction('delete')">
+                        <div class="menu-item" data-menu-action="delete" onclick="menuAction('delete')">
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -2126,7 +2126,7 @@
                             </div>
                             <div>删除</div>
                         </div>
-                        <div class="menu-item" onclick="menuAction('forward')">
+                        <div class="menu-item" data-menu-action="forward" onclick="menuAction('forward')">
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M14 9l7 3-7 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -2135,7 +2135,7 @@
                             </div>
                             <div>转发</div>
                         </div>
-                        <div class="menu-item" onclick="menuAction('fav')">
+                        <div class="menu-item" data-menu-action="fav" onclick="menuAction('fav')">
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M12 17.3l-5.4 3 1-6.1-4.4-4.3 6.1-.9L12 3l2.7 5.9 6.1.9-4.4 4.3 1 6.1-5.4-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
@@ -2143,7 +2143,7 @@
                             </div>
                             <div>收藏</div>
                         </div>
-                        <div class="menu-item" onclick="menuAction('multi')">
+                        <div class="menu-item" data-menu-action="multi" onclick="menuAction('multi')">
                             <div class="menu-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M8 6h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -2211,25 +2211,33 @@
 
     <div id="offline-mode-overlay" class="offline-overlay" style="display:none;">
         <div class="offline-topbar">
-            <button id="offline-exit-btn" type="button" class="offline-topbar-btn secondary" aria-label="关闭长叙事模式">
+            <button id="offline-exit-btn" type="button" class="offline-topbar-btn secondary" aria-label="返回角色列表">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M15 6L9 12L15 18"></path>
                 </svg>
             </button>
             <div class="offline-topbar-title">长叙事模式</div>
-            <button id="offline-settings-btn" type="button" class="offline-topbar-btn" aria-label="打开长叙事设置">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3.2"></circle>
-                    <path d="M12 3.8V6"></path>
-                    <path d="M12 18V20.2"></path>
-                    <path d="M20.2 12H18"></path>
-                    <path d="M6 12H3.8"></path>
-                    <path d="M17.8 6.2L16.2 7.8"></path>
-                    <path d="M7.8 16.2L6.2 17.8"></path>
-                    <path d="M17.8 17.8L16.2 16.2"></path>
-                    <path d="M7.8 7.8L6.2 6.2"></path>
-                </svg>
-            </button>
+            <div class="offline-topbar-actions">
+                <button id="offline-settings-btn" type="button" class="offline-topbar-btn" aria-label="打开长叙事设置">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="3.2"></circle>
+                        <path d="M12 3.8V6"></path>
+                        <path d="M12 18V20.2"></path>
+                        <path d="M20.2 12H18"></path>
+                        <path d="M6 12H3.8"></path>
+                        <path d="M17.8 6.2L16.2 7.8"></path>
+                        <path d="M7.8 16.2L6.2 17.8"></path>
+                        <path d="M17.8 17.8L16.2 16.2"></path>
+                        <path d="M7.8 7.8L6.2 6.2"></path>
+                    </svg>
+                </button>
+                <button id="offline-close-btn" type="button" class="offline-topbar-btn" aria-label="结束长叙事并返回聊天室">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 7L17 17"></path>
+                        <path d="M17 7L7 17"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <div class="offline-body">

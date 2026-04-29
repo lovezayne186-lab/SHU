@@ -42,7 +42,18 @@ function getAiMessageNotificationPreview(msg) {
         }
         return String(msg.content || '').replace(/<[^>]*>/g, '').trim();
     }
+    if (type === 'translated_text') {
+        const parsed = parseTranslatedTextPayload(msg.content);
+        return String(parsed.translationText || parsed.foreignText || parsed.bodyText || '').trim();
+    }
     if (type === 'text') {
+        const structuredCandidate = normalizeStructuredTranslatedCandidate(msg.content);
+        if (structuredCandidate.mode === 'translated_text') {
+            return String(structuredCandidate.translation || structuredCandidate.foreign || '').trim();
+        }
+        if (structuredCandidate.mode === 'text' && structuredCandidate.text) {
+            return structuredCandidate.text;
+        }
         const parsed = shouldRenderTranslatedBubble(window.currentChatRole || msg.roleId || '', msg)
             ? parseTranslatedBubbleText(msg.content)
             : null;
@@ -104,6 +115,50 @@ function parseCommerceCardPayload(rawValue) {
     } catch (e) {
         return {};
     }
+}
+
+function parseTranslatedTextPayload(rawValue) {
+    let payload = {};
+    let rawText = '';
+    if (rawValue && typeof rawValue === 'object') {
+        payload = rawValue || {};
+    } else {
+        rawText = String(rawValue == null ? '' : rawValue).trim();
+        if (rawText) {
+            try {
+                const parsed = JSON.parse(rawText);
+                if (parsed && typeof parsed === 'object') {
+                    payload = parsed;
+                }
+            } catch (e) { }
+        }
+    }
+
+    const foreignValue = payload.foreign != null
+        ? payload.foreign
+        : (payload.original != null
+            ? payload.original
+            : (payload.source != null
+                ? payload.source
+                : (payload.text != null ? payload.text : payload.content)));
+    const translationValue = payload.translation != null
+        ? payload.translation
+        : (payload.chinese != null
+            ? payload.chinese
+            : (payload.zh != null ? payload.zh : payload.translationText));
+    const bodyFallback = payload.body != null ? payload.body : payload.bodyText;
+    const bodyText = stripMarkdownDisplayArtifacts(String(bodyFallback != null ? bodyFallback : rawText).trim());
+    const foreignText = stripMarkdownDisplayArtifacts(String(foreignValue != null ? foreignValue : '').trim()) || bodyText;
+    const translationText = stripMarkdownDisplayArtifacts(String(translationValue != null ? translationValue : '').trim()) || foreignText;
+
+    return {
+        rawText: rawText,
+        speakerName: '',
+        bodyText: foreignText || bodyText,
+        foreignText: foreignText,
+        translationText: translationText,
+        hasTranslation: !!(foreignText && translationText)
+    };
 }
 
 function renderTakeoutCardBubble(payload, msgStatus) {
@@ -560,6 +615,38 @@ function isLikelyAutoTranslatePair(originalText, translationText) {
     return translationNonSimplified < originalNonSimplified || translationSimplified > originalSimplified || !isLikelyNonSimplifiedChineseText(translation);
 }
 
+function shouldUseStructuredTranslatedBubble(foreignText, translationText) {
+    const foreign = String(foreignText || '').trim();
+    const translation = String(translationText || '').trim();
+    if (!foreign || !translation || foreign === translation) return false;
+    return isLikelyAutoTranslateOriginalText(foreign) && isChineseHeavyText(translation);
+}
+
+function normalizeStructuredTranslatedCandidate(rawValue) {
+    const parsedPayload = parseTranslatedTextPayload(rawValue);
+    const foreignText = stripPromptLeakageText(stripControlDirectivesFromText(parsedPayload.foreignText || parsedPayload.bodyText || ''));
+    const translationText = stripPromptLeakageText(stripControlDirectivesFromText(parsedPayload.translationText || parsedPayload.foreignText || ''));
+    const normalizedForeign = String(foreignText || translationText || '').trim();
+    const normalizedTranslation = String(translationText || foreignText || '').trim();
+    if (!(normalizedForeign || normalizedTranslation)) {
+        return { mode: 'empty', text: '', foreign: '', translation: '' };
+    }
+    if (shouldUseStructuredTranslatedBubble(normalizedForeign, normalizedTranslation)) {
+        return {
+            mode: 'translated_text',
+            text: normalizedForeign,
+            foreign: normalizedForeign,
+            translation: normalizedTranslation
+        };
+    }
+    return {
+        mode: 'text',
+        text: normalizedForeign || normalizedTranslation,
+        foreign: normalizedForeign,
+        translation: normalizedTranslation
+    };
+}
+
 function isAutoTranslateBubbleEnabledForRole(roleId) {
     const rid = String(roleId || '').trim();
     if (!rid) return false;
@@ -755,60 +842,29 @@ function normalizeAutoTranslateReplySegments(segments, roleId) {
     if (!enabled) return Array.isArray(segments) ? segments : [];
 
     const source = Array.isArray(segments) ? segments : [];
-    const out = [];
-    for (let i = 0; i < source.length; i++) {
-        const seg = source[i];
-        if (!seg || seg.kind !== 'text') {
-            out.push(seg);
-            continue;
-        }
-        const currentText = String(seg.text || '').trim();
-        if (!currentText) continue;
-
-        const normalizedCurrent = normalizeSingleTranslatedText(currentText, rid);
-        const parsedCurrent = parseTranslatedBubbleText(normalizedCurrent);
-        if (parsedCurrent && parsedCurrent.hasTranslation) {
-            out.push({ kind: 'text', text: normalizedCurrent });
-            continue;
-        }
-
-        const normalizedForeign = normalizeAutoTranslateForeignCandidateText(currentText);
-        if (isLikelyAutoTranslateOriginalText(normalizedForeign)) {
-            let merged = false;
-            for (let step = 1; step <= 2; step++) {
-                const candidate = source[i + step];
-                if (!candidate || candidate.kind !== 'text') break;
-                const candidateText = String(candidate.text || '').trim();
-                if (!candidateText) continue;
-
-                const candidateBilingual = extractLabeledTranslatedParts(candidateText);
-                if (candidateBilingual && !isLikelyAutoTranslateOriginalText(normalizeAutoTranslateForeignCandidateText(candidateText))) {
-                    out.push({ kind: 'text', text: buildWrappedTranslatedText(rid, normalizedForeign, candidateBilingual.translationText) });
-                    i += step;
-                    merged = true;
-                    break;
-                }
-
-                const normalizedTranslation = normalizeAutoTranslateChineseCandidateText(candidateText);
-                if (isLikelyAutoTranslatePair(normalizedForeign, normalizedTranslation)) {
-                    out.push({ kind: 'text', text: buildWrappedTranslatedText(rid, normalizedForeign, normalizedTranslation) });
-                    i += step;
-                    merged = true;
-                    break;
-                }
-
-                const candidateForeign = normalizeAutoTranslateForeignCandidateText(candidateText);
-                if (isLikelyAutoTranslateOriginalText(candidateForeign)) {
-                    break;
-                }
+    return source.map(function (seg) {
+        if (!seg || typeof seg !== 'object') return seg;
+        if (seg.kind === 'translated_text') {
+            const normalized = normalizeStructuredTranslatedCandidate(seg);
+            if (normalized.mode === 'translated_text') {
+                return {
+                    kind: 'translated_text',
+                    foreign: normalized.foreign,
+                    translation: normalized.translation
+                };
             }
-            if (merged) {
-                continue;
+            if (normalized.mode === 'text' && normalized.text) {
+                return { kind: 'text', text: normalized.text };
             }
+            return null;
         }
-        out.push({ kind: 'text', text: normalizedCurrent });
-    }
-    return out;
+        if (seg.kind === 'text') {
+            const currentText = stripPromptLeakageText(stripControlDirectivesFromText(seg.text || ''));
+            if (!currentText || isProtocolNoiseText(currentText)) return null;
+            return { kind: 'text', text: currentText };
+        }
+        return seg;
+    }).filter(Boolean);
 }
 
 function parseTranslatedBubbleText(rawText) {
@@ -926,6 +982,8 @@ function bindTranslatedBubbleToggle(bubbleEl) {
 
 window.escapeHtmlText = escapeHtmlText;
 window.sanitizeChatBubbleHtml = sanitizeChatBubbleHtml;
+window.parseTranslatedTextPayload = parseTranslatedTextPayload;
+window.normalizeStructuredTranslatedCandidate = normalizeStructuredTranslatedCandidate;
 window.parseTranslatedBubbleText = parseTranslatedBubbleText;
 window.buildTranslatedBubbleInnerHtml = buildTranslatedBubbleInnerHtml;
 window.bindTranslatedBubbleToggle = bindTranslatedBubbleToggle;
@@ -968,7 +1026,29 @@ function pushRoleMessageToDataAndActiveView(roleId, msg) {
     }
     if (!window.chatData) window.chatData = {};
     if (!window.chatData[rid]) window.chatData[rid] = [];
-    if (msg.role === 'ai' && (!msg.type || msg.type === 'text')) {
+    if (msg.role === 'ai' && msg.type === 'translated_text') {
+        const normalized = normalizeStructuredTranslatedCandidate(msg.content);
+        if (normalized.mode === 'empty') {
+            try {
+                window.__lastAiMessagePushDebug = {
+                    roleId: rid,
+                    reason: 'translated_text_empty_or_noise',
+                    at: Date.now(),
+                    originalContent: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || {})
+                };
+            } catch (e) { }
+            return false;
+        }
+        if (normalized.mode === 'translated_text') {
+            msg.content = JSON.stringify({
+                foreign: normalized.foreign,
+                translation: normalized.translation
+            });
+        } else {
+            msg.type = 'text';
+            msg.content = normalized.text;
+        }
+    } else if (msg.role === 'ai' && (!msg.type || msg.type === 'text')) {
         const cleanedContent = stripPromptLeakageText(stripControlDirectivesFromText(msg.content || ''));
         if (!cleanedContent || isProtocolNoiseText(cleanedContent)) {
             try {
@@ -982,7 +1062,28 @@ function pushRoleMessageToDataAndActiveView(roleId, msg) {
             } catch (e) { }
             return false;
         }
-        msg.content = normalizeSingleTranslatedText(cleanedContent, rid);
+        const autoTranslateEnabled = isAutoTranslateBubbleEnabledForRole(rid);
+        if (autoTranslateEnabled) {
+            const compact = cleanedContent.trim();
+            if (compact.startsWith('{') && compact.endsWith('}')) {
+                const structuredCandidate = normalizeStructuredTranslatedCandidate(compact);
+                if (structuredCandidate.mode === 'translated_text') {
+                    msg.type = 'translated_text';
+                    msg.content = JSON.stringify({
+                        foreign: structuredCandidate.foreign,
+                        translation: structuredCandidate.translation
+                    });
+                } else if (structuredCandidate.mode === 'text' && structuredCandidate.text) {
+                    msg.content = structuredCandidate.text;
+                } else {
+                    msg.content = cleanedContent;
+                }
+            } else {
+                msg.content = cleanedContent;
+            }
+        } else {
+            msg.content = cleanedContent;
+        }
     }
     ensureChatMessageId(msg);
     window.chatData[rid].push(msg);
@@ -1667,8 +1768,33 @@ function normalizeStructuredReplySegments(replyValue, options) {
         }
 
         const rawType = String(item.type || item.kind || '').trim().toLowerCase();
+        const looksLikeTranslatedPayload = item.foreign != null || item.translation != null || item.original != null || item.source != null || item.chinese != null || item.zh != null || item.translationText != null;
+        if ((!rawType || rawType === 'text') && looksLikeTranslatedPayload) {
+            const normalized = normalizeStructuredTranslatedCandidate(item);
+            if (normalized.mode === 'translated_text') {
+                pushObject('translated_text', {
+                    foreign: normalized.foreign,
+                    translation: normalized.translation
+                });
+            } else if (normalized.mode === 'text' && normalized.text) {
+                pushText(normalized.text);
+            }
+            return true;
+        }
         if (!rawType || rawType === 'text') {
             pushText(item.content != null ? item.content : item.text);
+            return true;
+        }
+        if (rawType === 'translated_text' || rawType === 'translated') {
+            const normalized = normalizeStructuredTranslatedCandidate(item);
+            if (normalized.mode === 'translated_text') {
+                pushObject('translated_text', {
+                    foreign: normalized.foreign,
+                    translation: normalized.translation
+                });
+            } else if (normalized.mode === 'text' && normalized.text) {
+                pushText(normalized.text);
+            }
             return true;
         }
         if (rawType === 'html') {
@@ -1826,6 +1952,7 @@ function serializeReplySegmentsForDirectiveParsing(segments) {
     return list.map(function (seg) {
         if (!seg) return '';
         if (seg.kind === 'text') return String(seg.text || '');
+        if (seg.kind === 'translated_text') return String(seg.translation || seg.foreign || '');
         return '';
     }).filter(Boolean).join('|||');
 }
@@ -2503,6 +2630,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         return replySegments.map(function (seg) {
                             if (!seg) return '';
                             if (seg.kind === 'text') return String(seg.text || '');
+                            if (seg.kind === 'translated_text') return String(seg.translation || seg.foreign || '');
                             if (seg.kind === 'html') return String(seg.content || '');
                             if (seg.kind === 'voice' || seg.kind === 'photo' || seg.kind === 'sticker') return String(seg.content || '');
                             if (seg.kind === 'location') return String(seg.name || '') + ' ' + String(seg.address || '');
@@ -2663,12 +2791,18 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         continue;
                     }
 
-                    if (segment.kind === 'voice' || segment.kind === 'photo' || segment.kind === 'location' || segment.kind === 'sticker' || segment.kind === 'takeout_card' || segment.kind === 'gift_card' || segment.kind === 'html') {
+                    if (segment.kind === 'voice' || segment.kind === 'photo' || segment.kind === 'location' || segment.kind === 'sticker' || segment.kind === 'takeout_card' || segment.kind === 'gift_card' || segment.kind === 'html' || segment.kind === 'translated_text') {
                         let directMsgType = 'text';
                         let directContent = '';
                         if (segment.kind === 'voice') {
                             directMsgType = 'voice';
                             directContent = String(segment.content || '').trim();
+                        } else if (segment.kind === 'translated_text') {
+                            directMsgType = 'translated_text';
+                            directContent = JSON.stringify({
+                                foreign: String(segment.foreign || '').trim(),
+                                translation: String(segment.translation || '').trim()
+                            });
                         } else if (segment.kind === 'html') {
                             directMsgType = 'html';
                             directContent = String(segment.content || '').trim();
@@ -3490,6 +3624,40 @@ function compressImageFileToDataUrl(file, maxSize) {
 function appendMessageToDOM(msg) {
     const historyBox = document.getElementById('chat-history');
     if (!historyBox) return;
+    function appendSystemRow(sysMsg, reasonTag) {
+        try {
+            window.__lastAiRenderDecision = {
+                at: Date.now(),
+                reason: reasonTag,
+                msgType: String(sysMsg && sysMsg.type || ''),
+                role: String(sysMsg && sysMsg.role || ''),
+                preview: String(sysMsg && sysMsg.content || '').slice(0, 200)
+            };
+        } catch (e) { }
+        const text = sysMsg && sysMsg.content !== undefined ? sysMsg.content : "";
+        const sysRow = typeof window.buildSystemMessageRowElement === 'function'
+            ? window.buildSystemMessageRowElement(sysMsg, msgId)
+            : (function () {
+                const row = document.createElement('div');
+                row.className = 'sys-msg-row';
+                if (msgId) {
+                    row.setAttribute('data-msg-id', msgId);
+                }
+                if (sysMsg && sysMsg.role) {
+                    row.setAttribute('data-role', String(sysMsg.role));
+                }
+                if (sysMsg && sysMsg.type) {
+                    row.setAttribute('data-type', String(sysMsg.type));
+                }
+                if (sysMsg && sysMsg.timestamp) {
+                    row.setAttribute('data-timestamp', String(sysMsg.timestamp));
+                }
+                row.innerHTML = `<span class="sys-msg-text">${text}</span>`;
+                return row;
+            })();
+        historyBox.appendChild(sysRow);
+        historyBox.scrollTop = historyBox.scrollHeight;
+    }
 
     if (msg && msg.hidden) {
         try {
@@ -3537,27 +3705,7 @@ function appendMessageToDOM(msg) {
     }
 
     if (msg && msg.type === 'system_event') {
-        try {
-            window.__lastAiRenderDecision = {
-                at: Date.now(),
-                reason: 'system_event',
-                msgType: String(msg.type || ''),
-                role: String(msg.role || ''),
-                preview: String(msg.content || '').slice(0, 200)
-            };
-        } catch (e) { }
-        const text = msg && msg.content !== undefined ? msg.content : "";
-        const sysRow = document.createElement('div');
-        sysRow.className = 'sys-msg-row';
-        if (msgId) {
-            sysRow.setAttribute('data-msg-id', msgId);
-        }
-        if (msg.timestamp) {
-            sysRow.setAttribute('data-timestamp', String(msg.timestamp));
-        }
-        sysRow.innerHTML = `<span class="sys-msg-text">${text}</span>`;
-        historyBox.appendChild(sysRow);
-        historyBox.scrollTop = historyBox.scrollHeight;
+        appendSystemRow(msg, 'system_event');
         return;
     }
     if (msg && msg.type === 'offline_action') {
@@ -3589,27 +3737,7 @@ function appendMessageToDOM(msg) {
         return;
     }
     if (msg && msg.type === 'system') {
-        try {
-            window.__lastAiRenderDecision = {
-                at: Date.now(),
-                reason: 'system',
-                msgType: String(msg.type || ''),
-                role: String(msg.role || ''),
-                preview: String(msg.content || '').slice(0, 200)
-            };
-        } catch (e) { }
-        const text = msg && msg.content !== undefined ? msg.content : "";
-        const sysRow = document.createElement('div');
-        sysRow.className = 'sys-msg-row';
-        if (msgId) {
-            sysRow.setAttribute('data-msg-id', msgId);
-        }
-        if (msg.timestamp) {
-            sysRow.setAttribute('data-timestamp', String(msg.timestamp));
-        }
-        sysRow.innerHTML = `<span class="sys-msg-text">${text}</span>`;
-        historyBox.appendChild(sysRow);
-        historyBox.scrollTop = historyBox.scrollHeight;
+        appendSystemRow(msg, 'system');
         return;
     }
 
@@ -3630,39 +3758,59 @@ function appendMessageToDOM(msg) {
             shouldTriggerLocationShare = allowOfflineInvite;
             locationTriggerBlockedBySettings = !allowOfflineInvite;
             const stripped = content.replace(/:::ACTION_TRIGGER_LOCATION:::/g, '').trim();
-            msg.content = stripped;
-            displayContent = stripped;
+            if (stripped) {
+                msg.content = stripped;
+                displayContent = stripped;
+            } else {
+                msg.type = 'system_event';
+                msg.content = '我发起了位置共享';
+                msg.systemEventKind = 'location_share_invite';
+                msg.includeInAI = false;
+                displayContent = msg.content;
+            }
         }
+    }
+
+    if (msg && (msg.type === 'system_event' || msg.type === 'system')) {
+        appendSystemRow(msg, String(msg.type || 'system'));
+        if (shouldTriggerLocationShare) {
+            try {
+                const rid = window.currentChatRole;
+                if (rid) {
+                    showIncomingLocationShareUI(rid);
+                }
+            } catch (e) { }
+        }
+        if (locationTriggerBlockedBySettings) {
+            try {
+                saveData();
+            } catch (e) { }
+        }
+        return;
     }
 
     // === 🔥 核心改进：精确识别系统消息 ===
     const isSysMsg = detectSystemMessage(msg, content);
 
     if (isSysMsg && msg.role === 'ai') {
-        try {
-            window.__lastAiRenderDecision = {
-                at: Date.now(),
-                reason: 'detectSystemMessage',
-                msgType: String(msg.type || ''),
-                role: String(msg.role || ''),
-                preview: String(content || '').slice(0, 200)
-            };
-        } catch (e) { }
-        const sysRow = document.createElement('div');
-        sysRow.className = 'sys-msg-row';
-        if (msg.timestamp) {
-            sysRow.setAttribute('data-timestamp', String(msg.timestamp));
-        }
-        sysRow.innerHTML = `<span class="sys-msg-text">${content}</span>`;
-        historyBox.appendChild(sysRow);
-        historyBox.scrollTop = historyBox.scrollHeight;
+        appendSystemRow({
+            role: msg.role,
+            type: msg.type || 'text',
+            content: content,
+            timestamp: msg.timestamp,
+            systemEventKind: msg.systemEventKind || ''
+        }, 'detectSystemMessage');
         return;
     }
 
     // --- 1. 时间显示逻辑 ---
     const msgTime = msg.timestamp || 0;
     if (msgTime > 0) {
-        if (window.lastRenderedTime === 0 || (msgTime - window.lastRenderedTime > 300000)) {
+        const roleForDivider = String(window.currentChatRole || '');
+        const hiddenDivider = typeof window.isChatTimeDividerHidden === 'function'
+            ? window.isChatTimeDividerHidden(roleForDivider, msgTime)
+            : false;
+        if ((window.lastRenderedTime === 0 || (msgTime - window.lastRenderedTime > 300000)) && !hiddenDivider) {
             const timeLabel = typeof createChatTimeDividerElement === 'function'
                 ? createChatTimeDividerElement(msgTime)
                 : document.createElement('div');
@@ -4031,7 +4179,18 @@ function appendMessageToDOM(msg) {
         } else {
             const msgType = String(msg.type || 'text').trim();
             const isHtmlBubble = msg.role === 'ai' && msgType === 'html';
-            const translatedPayload = !isHtmlBubble && shouldRenderTranslatedBubble(roleId, msg) ? parseTranslatedBubbleText(displayContent) : null;
+            const inlineStructuredCandidate = msgType === 'text'
+                ? normalizeStructuredTranslatedCandidate(displayContent)
+                : null;
+            const isStructuredTranslatedBubble = msgType === 'translated_text' || (inlineStructuredCandidate && inlineStructuredCandidate.mode === 'translated_text');
+            const translatedPayload = msgType === 'translated_text'
+                ? parseTranslatedTextPayload(content)
+                : (inlineStructuredCandidate && inlineStructuredCandidate.mode === 'translated_text'
+                    ? parseTranslatedTextPayload({
+                        foreign: inlineStructuredCandidate.foreign,
+                        translation: inlineStructuredCandidate.translation
+                    })
+                    : (!isHtmlBubble && shouldRenderTranslatedBubble(roleId, msg) ? parseTranslatedBubbleText(displayContent) : null));
             let quoteBlockHtml = "";
             if (msg.quote && msg.quote.text) {
                 let shortQuote = msg.quote.text;
@@ -4062,7 +4221,11 @@ function appendMessageToDOM(msg) {
                 </div>
             `;
             } else {
-                const bubbleText = translatedPayload ? translatedPayload.bodyText : displayContent;
+                const bubbleText = translatedPayload
+                    ? translatedPayload.bodyText
+                    : (inlineStructuredCandidate && inlineStructuredCandidate.mode === 'text'
+                        ? inlineStructuredCandidate.text
+                        : displayContent);
                 const safeBubbleText = isHtmlBubble
                     ? sanitizeChatBubbleHtml(bubbleText)
                     : escapeHtmlText(bubbleText || '');
@@ -4105,7 +4268,7 @@ function appendMessageToDOM(msg) {
 
     // --- 5. 组合最终 HTML ---
     const row = document.createElement('div');
-    const isPlainTextMessage = !msg.type || String(msg.type || '') === 'text' || String(msg.type || '') === 'location_share';
+    const isPlainTextMessage = !msg.type || String(msg.type || '') === 'text' || String(msg.type || '') === 'translated_text' || String(msg.type || '') === 'location_share';
     row.className = isMe
         ? 'msg-row msg-right custom-bubble-container is-me' + (isPlainTextMessage ? ' msg-plain-bubble' : '')
         : 'msg-row msg-left custom-bubble-container is-other' + (isPlainTextMessage ? ' msg-plain-bubble' : '');
@@ -4495,6 +4658,14 @@ function buildEditableDraftForMessage(roleId, msg) {
             content: String(m.content || '')
         }, null, 2);
     }
+    if (type === 'translated_text') {
+        const payload = parseTranslatedTextPayload(m.content);
+        return JSON.stringify({
+            type: 'translated_text',
+            foreign: String(payload.foreignText || payload.bodyText || '').trim(),
+            translation: String(payload.translationText || payload.foreignText || '').trim()
+        }, null, 2);
+    }
     if (type === 'voice') {
         return JSON.stringify({
             type: 'voice',
@@ -4583,6 +4754,18 @@ function applyManualStructuredObjectToMessage(roleId, msg, parsedValue, rawInput
         }
         return true;
     }
+    if (rawType === 'translated_text' || rawType === 'translated') {
+        const parsed = parseTranslatedTextPayload(obj);
+        const foreignText = String(parsed.foreignText || parsed.bodyText || '').trim();
+        const translationText = String(parsed.translationText || parsed.foreignText || '').trim();
+        if (!(foreignText || translationText)) return false;
+        msg.type = 'translated_text';
+        msg.content = JSON.stringify({
+            foreign: foreignText || translationText,
+            translation: translationText || foreignText
+        });
+        return true;
+    }
     if (rawType === 'html') {
         msg.type = 'html';
         msg.content = String(obj.content != null ? obj.content : (obj.html != null ? obj.html : obj.text || '')).trim();
@@ -4660,6 +4843,14 @@ function applyEditedMessageContent(roleId, msg, rawInput) {
         msg.type = 'voice';
         msg.content = String(first.content || '').trim();
         msg.duration = calcVoiceDurationSeconds(msg.content);
+        return { ok: true, changedType: true, type: msg.type };
+    }
+    if (first.kind === 'translated_text') {
+        msg.type = 'translated_text';
+        msg.content = JSON.stringify({
+            foreign: String(first.foreign || '').trim(),
+            translation: String(first.translation || '').trim()
+        });
         return { ok: true, changedType: true, type: msg.type };
     }
     if (first.kind === 'location') {

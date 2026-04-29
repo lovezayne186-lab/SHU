@@ -959,6 +959,253 @@ document.addEventListener('DOMContentLoaded', function () {
         { action: 'card', label: '抽卡', iconClass: 'bx bx-id-card' },
         { action: 'dice', label: '骰子', iconClass: 'bx bx-dice-1' }
     ];
+    const MORE_FEATURE_ORDER_KEY = 'chat_more_feature_order_v1';
+    let moreFeatureDragState = null;
+    let moreFeatureReorderMode = false;
+    let moreFeatureIgnorePointerUntil = 0;
+    let suppressMoreItemClickUntil = 0;
+
+    function readMoreFeatureOrder() {
+        try {
+            const raw = localStorage.getItem(MORE_FEATURE_ORDER_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(parsed)) return [];
+            const seen = new Set();
+            return parsed.map(function (action) {
+                return String(action || '').trim();
+            }).filter(function (action) {
+                if (!action || seen.has(action)) return false;
+                seen.add(action);
+                return true;
+            });
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveMoreFeatureOrder(actions) {
+        try {
+            const seen = new Set();
+            const normalized = (Array.isArray(actions) ? actions : []).map(function (action) {
+                return String(action || '').trim();
+            }).filter(function (action) {
+                if (!action || seen.has(action)) return false;
+                seen.add(action);
+                return true;
+            });
+            localStorage.setItem(MORE_FEATURE_ORDER_KEY, JSON.stringify(normalized));
+        } catch (e) { }
+    }
+
+    function getOrderedMoreFeatures() {
+        const actionMap = new Map(features.map(function (item) { return [item.action, item]; }));
+        const savedOrder = readMoreFeatureOrder();
+        const ordered = savedOrder.map(function (action) {
+            return actionMap.get(action);
+        }).filter(Boolean);
+        const used = new Set(ordered.map(function (item) { return item.action; }));
+        const missing = features.filter(function (item) { return !used.has(item.action); });
+        return ordered.concat(missing);
+    }
+
+    function persistMoreFeatureOrderFromDom() {
+        const grid = pagesContainer ? pagesContainer.querySelector('.more-grid') : null;
+        if (!grid) return;
+        const actions = Array.from(grid.querySelectorAll('.more-item[data-action]')).map(function (item) {
+            return item.getAttribute('data-action') || '';
+        });
+        saveMoreFeatureOrder(actions);
+    }
+
+    function clearMoreFeatureDragTimer() {
+        if (moreFeatureDragState && moreFeatureDragState.timer) {
+            clearTimeout(moreFeatureDragState.timer);
+            moreFeatureDragState.timer = null;
+        }
+    }
+
+    function renderMorePanelFooter() {
+        if (!dotsContainer) return;
+        if (!moreFeatureReorderMode) {
+            dotsContainer.innerHTML = '';
+            return;
+        }
+        dotsContainer.innerHTML = `
+            <div class="chat-more-reorder-bar">
+                <div class="chat-more-reorder-hint">拖动图标调整顺序</div>
+                <button type="button" class="chat-more-reorder-done" data-more-reorder-done="1">完成</button>
+            </div>
+        `;
+    }
+
+    function setMoreFeatureReorderMode(enabled) {
+        moreFeatureReorderMode = !!enabled;
+        if (panel) {
+            panel.classList.toggle('more-reorder-active', moreFeatureReorderMode);
+        }
+        document.body.classList.toggle('chat-more-reorder-active', moreFeatureReorderMode);
+        if (!moreFeatureReorderMode) {
+            clearMoreFeatureDragTimer();
+            if (moreFeatureDragState && moreFeatureDragState.item) {
+                moreFeatureDragState.item.classList.remove('more-item-dragging');
+            }
+            moreFeatureDragState = null;
+        }
+        renderMorePanelFooter();
+    }
+
+    function beginMoreFeatureDrag(item, pointerId) {
+        if (!moreFeatureDragState || moreFeatureDragState.item !== item) return;
+        moreFeatureDragState.active = true;
+        item.classList.add('more-item-dragging');
+        suppressMoreItemClickUntil = Date.now() + 800;
+        if (navigator.vibrate) {
+            try { navigator.vibrate(18); } catch (e) { }
+        }
+        if (moreFeatureDragState.pointerTarget && typeof moreFeatureDragState.pointerTarget.setPointerCapture === 'function') {
+            try { moreFeatureDragState.pointerTarget.setPointerCapture(pointerId); } catch (e) { }
+        }
+    }
+
+    function activateMoreFeatureReorderMode() {
+        setMoreFeatureReorderMode(true);
+        suppressMoreItemClickUntil = Date.now() + 700;
+        if (navigator.vibrate) {
+            try { navigator.vibrate(18); } catch (e) { }
+        }
+        if (typeof window.uiToast === 'function') {
+            window.uiToast('已进入排序模式');
+        }
+    }
+
+    function startMoreFeatureDrag(item, event) {
+        const grid = item ? item.closest('.more-grid') : null;
+        if (!item || !grid || !event) return;
+        moreFeatureDragState = {
+            item: item,
+            grid: grid,
+            pointerId: event.pointerId,
+            pointerTarget: item,
+            startX: event.clientX,
+            startY: event.clientY,
+            active: false,
+            moved: false,
+            timer: null
+        };
+        beginMoreFeatureDrag(item, event.pointerId);
+    }
+
+    function makeMoreFeatureEventPayload(item, clientX, clientY, pointerId, pointerTarget) {
+        return {
+            item: item,
+            clientX: clientX,
+            clientY: clientY,
+            pointerId: pointerId,
+            pointerTarget: pointerTarget || item
+        };
+    }
+
+    function scheduleMoreFeatureReorderMode(payload) {
+        if (!payload || !payload.item) return;
+        moreFeatureDragState = {
+            item: payload.item,
+            grid: payload.item.closest('.more-grid'),
+            pointerId: payload.pointerId,
+            pointerTarget: payload.pointerTarget || payload.item,
+            startX: payload.clientX,
+            startY: payload.clientY,
+            active: false,
+            moved: false,
+            timer: setTimeout(function () {
+                activateMoreFeatureReorderMode();
+                clearMoreFeatureDragTimer();
+                moreFeatureDragState = null;
+            }, 380)
+        };
+    }
+
+    function scheduleMoreFeatureDragStart(payload, delayMs) {
+        if (!payload || !payload.item) return;
+        moreFeatureDragState = {
+            item: payload.item,
+            grid: payload.item.closest('.more-grid'),
+            pointerId: payload.pointerId,
+            pointerTarget: payload.pointerTarget || payload.item,
+            startX: payload.clientX,
+            startY: payload.clientY,
+            active: false,
+            moved: false,
+            timer: setTimeout(function () {
+                beginMoreFeatureDrag(payload.item, payload.pointerId);
+            }, Math.max(0, Number(delayMs) || 0))
+        };
+    }
+
+    function getMoreFeatureDragTarget(grid, draggingItem, clientX, clientY) {
+        const items = Array.from(grid.querySelectorAll('.more-item')).filter(function (item) {
+            return item !== draggingItem;
+        });
+        let best = null;
+        let bestDistance = Number.POSITIVE_INFINITY;
+        items.forEach(function (item) {
+            const box = item.getBoundingClientRect();
+            const cx = box.left + box.width / 2;
+            const cy = box.top + box.height / 2;
+            const dx = clientX - cx;
+            const dy = clientY - cy;
+            const distance = dx * dx + dy * dy;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = item;
+            }
+        });
+        return best;
+    }
+
+    function moveMoreFeatureItem(clientX, clientY) {
+        if (!moreFeatureDragState || !moreFeatureDragState.active) return;
+        const state = moreFeatureDragState;
+        const grid = state.grid;
+        if (!grid) return;
+
+        const overItem = getMoreFeatureDragTarget(grid, state.item, clientX, clientY);
+        if (!overItem || !grid.contains(overItem)) {
+            const gridBox = grid.getBoundingClientRect();
+            if (clientY > gridBox.bottom - 16 || clientX > gridBox.right - 16) {
+                grid.appendChild(state.item);
+            }
+            return;
+        }
+
+        const box = overItem.getBoundingClientRect();
+        const insertBefore = clientY < box.top + box.height / 2 || (
+            Math.abs(clientY - (box.top + box.height / 2)) < box.height / 2 &&
+            clientX < box.left + box.width / 2
+        );
+        if (insertBefore) {
+            grid.insertBefore(state.item, overItem);
+        } else {
+            grid.insertBefore(state.item, overItem.nextSibling);
+        }
+    }
+
+    function finishMoreFeatureDrag(event) {
+        if (!moreFeatureDragState) return;
+        const state = moreFeatureDragState;
+        if (event && state.pointerId !== event.pointerId) return;
+        clearMoreFeatureDragTimer();
+        if (state.pointerTarget && typeof state.pointerTarget.releasePointerCapture === 'function') {
+            try { state.pointerTarget.releasePointerCapture(state.pointerId); } catch (e) { }
+        }
+        if (state.item) state.item.classList.remove('more-item-dragging');
+        if (state.active && state.moved) {
+            persistMoreFeatureOrderFromDom();
+            suppressMoreItemClickUntil = Date.now() + 500;
+            if (typeof window.uiToast === 'function') window.uiToast('更多面板顺序已保存');
+        }
+        moreFeatureDragState = null;
+    }
+
     let currentStickerCategory = 'mine';
     let currentStickerFilter = 'all';
     let stickerManageMode = false;
@@ -1452,15 +1699,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderMorePanel() {
         if (!pagesContainer || !dotsContainer) return;
         pagesContainer.innerHTML = '';
-        dotsContainer.innerHTML = '';
         const pageEl = document.createElement('div');
         pageEl.className = 'more-page';
         const grid = document.createElement('div');
         grid.className = 'more-grid';
-        features.forEach(item => {
+        getOrderedMoreFeatures().forEach(item => {
             const itemEl = document.createElement('div');
             itemEl.className = 'more-item';
             itemEl.setAttribute('data-action', item.action);
+            itemEl.setAttribute('title', '长按拖动排序');
             const iconHtml = item.iconClass ? `<i class="${item.iconClass}"></i>` : '';
             itemEl.innerHTML = `
                 <div class="more-icon">${iconHtml}</div>
@@ -1470,6 +1717,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         pageEl.appendChild(grid);
         pagesContainer.appendChild(pageEl);
+        renderMorePanelFooter();
     }
     function renderStickers() {
         renderStickerPanel();
@@ -2285,7 +2533,135 @@ document.addEventListener('DOMContentLoaded', function () {
         pagesContainer.addEventListener('scroll', function () {
             updateDotsByScroll();
         });
+        pagesContainer.addEventListener('pointerdown', function (e) {
+            if (Date.now() < moreFeatureIgnorePointerUntil) return;
+            const item = e.target.closest('.more-item');
+            if (!item) return;
+            clearMoreFeatureDragTimer();
+            if (moreFeatureReorderMode) {
+                startMoreFeatureDrag(item, makeMoreFeatureEventPayload(item, e.clientX, e.clientY, e.pointerId, item));
+                return;
+            }
+            scheduleMoreFeatureReorderMode(makeMoreFeatureEventPayload(item, e.clientX, e.clientY, e.pointerId, item));
+        });
+        pagesContainer.addEventListener('touchstart', function (e) {
+            const item = e.target.closest('.more-item');
+            if (!item) return;
+            const touch = e.changedTouches && e.changedTouches[0];
+            if (!touch) return;
+            moreFeatureIgnorePointerUntil = Date.now() + 900;
+            clearMoreFeatureDragTimer();
+            const payload = makeMoreFeatureEventPayload(
+                item,
+                touch.clientX,
+                touch.clientY,
+                'touch:' + String(touch.identifier),
+                item
+            );
+            if (moreFeatureReorderMode) {
+                scheduleMoreFeatureDragStart(payload, 140);
+                return;
+            }
+            scheduleMoreFeatureReorderMode(payload);
+        });
+        pagesContainer.addEventListener('contextmenu', function (e) {
+            const item = e.target.closest('.more-item');
+            if (!item) return;
+            if (moreFeatureDragState || moreFeatureReorderMode) {
+                e.preventDefault();
+            }
+        });
+        document.addEventListener('pointermove', function (e) {
+            if (!moreFeatureDragState || moreFeatureDragState.pointerId !== e.pointerId) return;
+            const dx = e.clientX - moreFeatureDragState.startX;
+            const dy = e.clientY - moreFeatureDragState.startY;
+            if (!moreFeatureDragState.active && Math.sqrt(dx * dx + dy * dy) > 12) {
+                if (moreFeatureReorderMode) {
+                    beginMoreFeatureDrag(moreFeatureDragState.item, e.pointerId);
+                } else {
+                    clearMoreFeatureDragTimer();
+                    moreFeatureDragState = null;
+                }
+            }
+            if (moreFeatureDragState && moreFeatureReorderMode && moreFeatureDragState.active) {
+                if (Math.sqrt(dx * dx + dy * dy) > 6) {
+                    moreFeatureDragState.moved = true;
+                }
+                e.preventDefault();
+                moveMoreFeatureItem(e.clientX, e.clientY);
+            }
+        }, { passive: false });
+        document.addEventListener('pointerup', function (e) {
+            if (!moreFeatureDragState || moreFeatureDragState.pointerId !== e.pointerId) return;
+            if (!moreFeatureReorderMode) {
+                clearMoreFeatureDragTimer();
+                moreFeatureDragState = null;
+                return;
+            }
+            finishMoreFeatureDrag(e);
+        });
+        document.addEventListener('pointercancel', function (e) {
+            if (!moreFeatureDragState || moreFeatureDragState.pointerId !== e.pointerId) return;
+            if (!moreFeatureReorderMode) {
+                clearMoreFeatureDragTimer();
+                moreFeatureDragState = null;
+                return;
+            }
+            finishMoreFeatureDrag(e);
+        });
+        pagesContainer.addEventListener('touchmove', function (e) {
+            if (!moreFeatureDragState) return;
+            const touch = Array.from(e.changedTouches || []).find(function (t) {
+                return ('touch:' + String(t.identifier)) === moreFeatureDragState.pointerId;
+            });
+            if (!touch) return;
+            const dx = touch.clientX - moreFeatureDragState.startX;
+            const dy = touch.clientY - moreFeatureDragState.startY;
+            if (!moreFeatureDragState.active && Math.sqrt(dx * dx + dy * dy) > 12) {
+                clearMoreFeatureDragTimer();
+                moreFeatureDragState = null;
+                return;
+            }
+            if (moreFeatureDragState && moreFeatureReorderMode && moreFeatureDragState.active) {
+                if (Math.sqrt(dx * dx + dy * dy) > 6) {
+                    moreFeatureDragState.moved = true;
+                }
+                e.preventDefault();
+                moveMoreFeatureItem(touch.clientX, touch.clientY);
+            }
+        }, { passive: false });
+        pagesContainer.addEventListener('touchend', function (e) {
+            if (!moreFeatureDragState) return;
+            const touch = Array.from(e.changedTouches || []).find(function (t) {
+                return ('touch:' + String(t.identifier)) === moreFeatureDragState.pointerId;
+            });
+            if (!touch) return;
+            if (!moreFeatureReorderMode) {
+                clearMoreFeatureDragTimer();
+                moreFeatureDragState = null;
+                return;
+            }
+            finishMoreFeatureDrag({ pointerId: moreFeatureDragState.pointerId });
+        });
+        pagesContainer.addEventListener('touchcancel', function (e) {
+            if (!moreFeatureDragState) return;
+            const touch = Array.from(e.changedTouches || []).find(function (t) {
+                return ('touch:' + String(t.identifier)) === moreFeatureDragState.pointerId;
+            });
+            if (!touch) return;
+            if (!moreFeatureReorderMode) {
+                clearMoreFeatureDragTimer();
+                moreFeatureDragState = null;
+                return;
+            }
+            finishMoreFeatureDrag({ pointerId: moreFeatureDragState.pointerId });
+        });
         pagesContainer.addEventListener('click', function (e) {
+            if (moreFeatureReorderMode || Date.now() < suppressMoreItemClickUntil) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             const item = e.target.closest('.more-item');
             if (!item) return;
             const action = item.getAttribute('data-action');
@@ -2294,6 +2670,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (dotsContainer && pagesContainer) {
         dotsContainer.addEventListener('click', function (e) {
+            const doneBtn = e.target.closest('[data-more-reorder-done]');
+            if (doneBtn) {
+                e.preventDefault();
+                setMoreFeatureReorderMode(false);
+                return;
+            }
+            if (moreFeatureReorderMode) return;
             const dot = e.target.closest('.chat-more-dot');
             if (!dot) return;
             const index = parseInt(dot.dataset.index || '0', 10);
@@ -2305,6 +2688,10 @@ document.addEventListener('DOMContentLoaded', function () {
         moreBtn.addEventListener('click', function () {
             const showing = panel.classList.contains('show');
             if (showing) {
+                if (moreFeatureReorderMode) {
+                    setMoreFeatureReorderMode(false);
+                    return;
+                }
                 panel.classList.remove('show');
                 updateHistoryHeight(false);
                 closeStickerPanel();
@@ -2316,6 +2703,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (msgInput && panel) {
         msgInput.addEventListener('focus', function () {
+            setMoreFeatureReorderMode(false);
             panel.classList.remove('show');
             // 修复：点击输入框时强制滚动到底部，类似微信效果
             updateHistoryHeight(false, { preserveScroll: false, keepBottom: true });
@@ -2341,6 +2729,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const panelWasOpen = panel.classList.contains('show');
             const stickerWasOpen = stickerPanel && stickerPanel.classList.contains('show');
             if (!panelWasOpen && !stickerWasOpen) return;
+            setMoreFeatureReorderMode(false);
             panel.classList.remove('show');
             updateHistoryHeight(false, { preserveScroll: true, keepBottom: false });
             closeStickerPanel();
@@ -3307,8 +3696,28 @@ async function clearChatHistory() {
         : confirm("确定清空聊天记录吗？");
     if (!ok) return;
     const roleId = window.currentChatRole;
+    if (!roleId) return;
     window.chatData[roleId] = [];
-    saveData();
+    if (typeof window.clearRoleConversationArtifacts === 'function') {
+        try {
+            await window.clearRoleConversationArtifacts(roleId, {
+                preserveFavorites: true,
+                preserveWallet: true,
+                preserveMoments: true,
+                preserveCoupleSpace: true
+            });
+        } catch (e) {
+            console.warn('清空聊天记录时同步清理记忆失败', e);
+        }
+    }
+    try {
+        await saveData();
+        if (typeof window.flushSaveDataImmediately === 'function') {
+            await window.flushSaveDataImmediately();
+        }
+    } catch (e2) {
+        console.warn('保存清空后的聊天记录失败', e2);
+    }
     enterChat(roleId);
     closeSettingsMenu();
 }

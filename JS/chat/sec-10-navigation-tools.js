@@ -155,6 +155,53 @@ function promptOfflineSessionName(defaultName) {
     return Promise.resolve(window.prompt('请为当前剧情存档命名：', fallbackName));
 }
 
+const OFFLINE_AUTO_RESUME_KEY = 'offline_auto_resume_targets_v1';
+
+function loadOfflineAutoResumeTargets() {
+    try {
+        const raw = localStorage.getItem(OFFLINE_AUTO_RESUME_KEY) || '';
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveOfflineAutoResumeTargets(map) {
+    try {
+        localStorage.setItem(OFFLINE_AUTO_RESUME_KEY, JSON.stringify(map && typeof map === 'object' ? map : {}));
+    } catch (e) { }
+}
+
+function rememberOfflineAutoResumeTarget(roleId, sessionId) {
+    const rid = String(roleId || '').trim();
+    const sid = String(sessionId || '').trim();
+    if (!rid || !sid) return;
+    const map = loadOfflineAutoResumeTargets();
+    map[rid] = {
+        roleId: rid,
+        sessionId: sid,
+        updatedAt: Date.now()
+    };
+    saveOfflineAutoResumeTargets(map);
+}
+
+function clearOfflineAutoResumeTarget(roleId) {
+    const rid = String(roleId || '').trim();
+    if (!rid) return;
+    const map = loadOfflineAutoResumeTargets();
+    if (!map[rid]) return;
+    delete map[rid];
+    saveOfflineAutoResumeTargets(map);
+}
+
+function getOfflineAutoResumeTarget(roleId) {
+    const rid = String(roleId || '').trim();
+    if (!rid) return null;
+    const map = loadOfflineAutoResumeTargets();
+    return map[rid] && typeof map[rid] === 'object' ? map[rid] : null;
+}
+
 function tryParseCoupleInviteDecision(rawText) {
     const raw = typeof rawText === 'string' ? rawText.trim() : '';
     if (!raw) return null;
@@ -866,14 +913,138 @@ document.addEventListener('DOMContentLoaded', function () {
 
 let longPressTimer;
 let currentSelectedMsgDiv = null; // 记录当前长按的是哪个气泡元素
+const CHAT_HIDDEN_TIME_DIVIDER_KEY = 'wechat_hidden_time_dividers_v1';
+
+function getChatRowKind(row) {
+    if (!row || !row.classList) return '';
+    if (row.classList.contains('chat-time-label')) return 'time-divider';
+    if (row.classList.contains('sys-msg-row')) return 'system-row';
+    if (row.classList.contains('msg-row')) return 'message-row';
+    return '';
+}
+
+function readHiddenTimeDividerMap() {
+    try {
+        const raw = localStorage.getItem(CHAT_HIDDEN_TIME_DIVIDER_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function writeHiddenTimeDividerMap(map) {
+    try {
+        localStorage.setItem(CHAT_HIDDEN_TIME_DIVIDER_KEY, JSON.stringify(map || {}));
+    } catch (e) { }
+}
+
+function isChatTimeDividerHidden(roleId, timestamp) {
+    const rid = String(roleId || '').trim();
+    const ts = Number(timestamp) || 0;
+    if (!rid || !ts) return false;
+    const map = readHiddenTimeDividerMap();
+    const list = Array.isArray(map[rid]) ? map[rid] : [];
+    return list.indexOf(ts) !== -1;
+}
+
+function hideChatTimeDivider(roleId, timestamp) {
+    const rid = String(roleId || '').trim();
+    const ts = Number(timestamp) || 0;
+    if (!rid || !ts) return false;
+    const map = readHiddenTimeDividerMap();
+    const list = Array.isArray(map[rid]) ? map[rid].slice() : [];
+    if (list.indexOf(ts) === -1) {
+        list.push(ts);
+        list.sort(function (a, b) { return a - b; });
+        map[rid] = list;
+        writeHiddenTimeDividerMap(map);
+    }
+    return true;
+}
+
+function buildSystemMessageRowElement(msg, msgId) {
+    const row = document.createElement('div');
+    row.className = 'sys-msg-row';
+    if (msgId) {
+        row.setAttribute('data-msg-id', msgId);
+    }
+    if (msg && msg.role) {
+        row.setAttribute('data-role', String(msg.role));
+    }
+    if (msg && msg.type) {
+        row.setAttribute('data-type', String(msg.type));
+    }
+    if (msg && msg.timestamp) {
+        row.setAttribute('data-timestamp', String(msg.timestamp));
+    }
+    const text = msg && msg.content !== undefined ? String(msg.content) : '';
+    const kind = String(msg && msg.systemEventKind || '').trim();
+    if (kind === 'location_share_invite') {
+        row.innerHTML = '<span class="sys-msg-text location-share-invite-text"><i class="bx bx-map-pin" aria-hidden="true"></i><span>' + text + '</span></span>';
+    } else {
+        row.innerHTML = '<span class="sys-msg-text">' + text + '</span>';
+    }
+    return row;
+}
+
+function applyContextMenuAvailability(targetEl) {
+    const menu = document.getElementById('msg-context-menu');
+    if (!menu) return;
+    const row = targetEl && typeof targetEl.closest === 'function'
+        ? targetEl.closest('.msg-row, .sys-msg-row, .chat-time-label')
+        : targetEl;
+    const kind = getChatRowKind(row);
+    const availability = {
+        edit: kind === 'message-row',
+        copy: kind === 'message-row' || kind === 'system-row' || kind === 'time-divider',
+        quote: kind === 'message-row',
+        recall: kind === 'message-row',
+        delete: kind === 'message-row' || kind === 'system-row' || kind === 'time-divider',
+        forward: kind === 'message-row' || kind === 'system-row',
+        fav: kind === 'message-row' || kind === 'system-row',
+        multi: kind === 'message-row' || kind === 'system-row' || kind === 'time-divider'
+    };
+    const items = menu.querySelectorAll('.menu-item[data-menu-action]');
+    items.forEach(function (item) {
+        const action = item.getAttribute('data-menu-action') || '';
+        item.classList.toggle('is-disabled', !availability[action]);
+    });
+}
+
+function deleteSingleChatRow(roleId, row) {
+    if (!row) return false;
+    const kind = getChatRowKind(row);
+    if (kind === 'time-divider') {
+        const ts = parseInt(row.getAttribute('data-timestamp') || '', 10);
+        if (!isNaN(ts)) {
+            hideChatTimeDivider(roleId, ts);
+        }
+        row.remove();
+        return true;
+    }
+    const index = findMessageIndexByRow(row, roleId);
+    row.remove();
+    if (window.chatData[roleId] && index >= 0) {
+        window.chatData[roleId].splice(index, 1);
+        return true;
+    }
+    return kind === 'system-row';
+}
+
+window.isChatTimeDividerHidden = isChatTimeDividerHidden;
+window.hideChatTimeDivider = hideChatTimeDivider;
+window.buildSystemMessageRowElement = buildSystemMessageRowElement;
 
 function findContextMenuTarget(target) {
     const t = target && target.nodeType === 3 ? target.parentElement : target;
     if (!t || !t.closest) return null;
     const bubble = t.closest('.msg-bubble');
     if (bubble) return bubble;
+    const timeLabel = t.closest('.chat-time-label:not(.chat-time-label-loadmore)');
+    if (timeLabel) return timeLabel;
     const sysText = t.closest('.sys-msg-text');
-    if (sysText && sysText.closest('.offline-action-row')) {
+    if (sysText && sysText.closest('.sys-msg-row')) {
         return sysText;
     }
     return null;
@@ -881,7 +1052,7 @@ function findContextMenuTarget(target) {
 
 function getSelectableChatRows(chatBody) {
     if (!chatBody) return [];
-    return Array.from(chatBody.querySelectorAll('.msg-row, .sys-msg-row.offline-action-row'));
+    return Array.from(chatBody.querySelectorAll('.msg-row, .sys-msg-row, .chat-time-label:not(.chat-time-label-loadmore)'));
 }
 
 function getRowPlainText(row, roleId) {
@@ -890,6 +1061,9 @@ function getRowPlainText(row, roleId) {
     const msgObj = (window.chatData && window.chatData[roleId] && index >= 0) ? window.chatData[roleId][index] : null;
     if (msgObj && typeof window.getMessagePlainText === 'function') {
         return window.getMessagePlainText(msgObj);
+    }
+    if (getChatRowKind(row) === 'time-divider') {
+        return String(row.innerText || '').trim();
     }
     const bubble = row.querySelector('.msg-bubble, .sys-msg-text');
     return bubble ? String(bubble.innerText || '').trim() : '';
@@ -1002,6 +1176,7 @@ function showContextMenu(bubbleEl, mouseX, mouseY) {
     // 1. 记录当前选中的气泡 
     // 【修改点】去掉 window. 前缀，直接赋值给上面的 let 变量
     currentSelectedMsgDiv = bubbleEl;
+    applyContextMenuAvailability(bubbleEl);
 
     // 2. 获取菜单和遮罩
     const menu = document.getElementById('msg-context-menu');
@@ -1071,6 +1246,7 @@ window.currentQuoteInfo = null;
 
 function findMessageIndexByRow(row, roleId) {
     if (!row || !roleId) return -1;
+    if (getChatRowKind(row) === 'time-divider') return -1;
     const list = window.chatData[roleId];
     if (!Array.isArray(list)) return -1;
     const msgIdAttr = row.getAttribute('data-msg-id');
@@ -1102,7 +1278,7 @@ function findMessageIndexByRow(row, roleId) {
     }
     const chatBody = document.getElementById('chat-history');
     if (!chatBody) return -1;
-    const allRows = getSelectableChatRows(chatBody);
+    const allRows = Array.from(chatBody.querySelectorAll('.msg-row, .sys-msg-row'));
     return allRows.indexOf(row);
 }
 
@@ -1115,7 +1291,7 @@ window.menuAction = function (actionType) {
     const bubble = currentSelectedMsgDiv;
 
     // 2. 获取这行消息的 DOM
-    const row = bubble.closest('.msg-row, .sys-msg-row');
+    const row = bubble.closest('.msg-row, .sys-msg-row, .chat-time-label');
 
     const roleId = window.currentChatRole;
     const originalText = getContextMenuCopyText(bubble, row, roleId);
@@ -1175,10 +1351,8 @@ window.menuAction = function (actionType) {
 
         case 'delete':
             if (confirm("确定删除这条消息吗？")) {
-                const index = findMessageIndexByRow(row, roleId);
-                row.remove();
-                if (window.chatData[roleId] && index >= 0) {
-                    window.chatData[roleId].splice(index, 1);
+                const changed = deleteSingleChatRow(roleId, row);
+                if (changed) {
                     saveData();
                 }
             }
@@ -1267,6 +1441,7 @@ function enterMultiSelectMode(targetRow) {
     const multiBar = document.getElementById('multi-select-bar');
 
     if (!chatBody || !multiBar) return;
+    const scrollTopBefore = chatBody.scrollTop;
 
     // 1. 样式切换
     chatBody.classList.add('select-mode');
@@ -1291,10 +1466,10 @@ function enterMultiSelectMode(targetRow) {
 
     window.setTimeout(function () {
         try {
-            if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
             if (typeof window.syncChatViewportLayout === 'function') {
                 window.syncChatViewportLayout();
             }
+            if (chatBody) chatBody.scrollTop = scrollTopBefore;
         } catch (e) { }
     }, 0);
 
@@ -1325,6 +1500,7 @@ function exitMultiSelectMode() {
 
     // 1. 恢复样式
     const chatBody = document.getElementById('chat-history');
+    const scrollTopBefore = chatBody ? chatBody.scrollTop : 0;
     if (chatBody) chatBody.classList.remove('select-mode');
 
     // 2. 恢复底部栏
@@ -1342,10 +1518,10 @@ function exitMultiSelectMode() {
 
     window.setTimeout(function () {
         try {
-            if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
             if (typeof window.syncChatViewportLayout === 'function') {
                 window.syncChatViewportLayout();
             }
+            if (chatBody) chatBody.scrollTop = scrollTopBefore;
         } catch (e) { }
     }, 0);
 
@@ -1390,9 +1566,15 @@ window.performMultiAction = function (type) {
         if (!confirm(`确定删除这 ${selectedRows.length} 条消息吗？`)) return;
 
         const roleId = window.currentChatRole;
+        let hasChanges = false;
+        const timeDividerRows = [];
         if (window.chatData[roleId]) {
             const list = window.chatData[roleId];
             const indicesToDelete = selectedRows.map(function (row) {
+                if (getChatRowKind(row) === 'time-divider') {
+                    timeDividerRows.push(row);
+                    return -1;
+                }
                 return findMessageIndexByRow(row, roleId);
             }).filter(function (index) {
                 return index >= 0 && index < list.length;
@@ -1400,9 +1582,17 @@ window.performMultiAction = function (type) {
             const uniqueSorted = Array.from(new Set(indicesToDelete)).sort((a, b) => b - a);
             uniqueSorted.forEach(index => {
                 list.splice(index, 1);
+                hasChanges = true;
             });
-            saveData();
         }
+        timeDividerRows.forEach(function (row) {
+            const ts = parseInt(row.getAttribute('data-timestamp') || '', 10);
+            if (!isNaN(ts)) {
+                hideChatTimeDivider(roleId, ts);
+                hasChanges = true;
+            }
+        });
+        if (hasChanges) saveData();
 
         // 3. 删除界面 DOM
         selectedRows.forEach(row => row.remove());
@@ -2183,6 +2373,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (m.type === 'sticker') return `${who}: [表情包]`;
                     if (m.type === 'voice') return `${who}: [语音]`;
                     if (m.type === 'location' || m.type === 'location_share') return `${who}: [位置]`;
+                    if (m.type === 'translated_text' && typeof window.parseTranslatedTextPayload === 'function') {
+                        const parsed = window.parseTranslatedTextPayload(m.content);
+                        return `${who}: ${normalizeText(parsed.translationText || parsed.foreignText || parsed.bodyText || '')}`;
+                    }
                     return `${who}: ${normalizeText(m.content)}`;
                 })
                 .filter(Boolean)
@@ -2370,6 +2564,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (m.type === 'sticker') return `${who}: [表情包]`;
                         if (m.type === 'voice') return `${who}: [语音]`;
                         if (m.type === 'location' || m.type === 'location_share') return `${who}: [位置]`;
+                        if (m.type === 'translated_text' && typeof window.parseTranslatedTextPayload === 'function') {
+                            const parsed = window.parseTranslatedTextPayload(m.content);
+                            return `${who}: ${normalizeText(parsed.translationText || parsed.foreignText || parsed.bodyText || '')}`;
+                        }
                         return `${who}: ${normalizeText(m.content)}`;
                     })
                     .filter(Boolean)
@@ -2676,6 +2874,17 @@ function syncCalendarToggleUI() {
         if (!id) return null;
         const list = loadOfflineSessions();
         const found = list.find(s => s && s.id === id) || null;
+        if (found) ensureOfflineSessionSummaryState(found);
+        return found;
+    }
+
+    function getLatestOfflineSessionByRole(roleId) {
+        const rid = String(roleId || '').trim();
+        if (!rid) return null;
+        const list = loadOfflineSessions().filter(function (session) {
+            return session && String(session.roleId || '').trim() === rid;
+        });
+        const found = list[0] || null;
         if (found) ensureOfflineSessionSummaryState(found);
         return found;
     }
@@ -3615,11 +3824,61 @@ function syncCalendarToggleUI() {
         ].join('\n') + '\n\n当前主角：' + userName + '\n互动角色：' + roleName + '\n楼层范围：' + startFloor + '-' + endFloor + '楼';
     }
 
+    function extractOfflineSummaryStringField(text, field) {
+        const source = String(text || '');
+        if (!source) return '';
+        const jsonPattern = new RegExp('"' + field + '"\\s*:\\s*"([^"]*[\\s\\S]*?)"', 'i');
+        const jsonMatch = source.match(jsonPattern);
+        if (jsonMatch && jsonMatch[1]) return String(jsonMatch[1] || '').trim();
+        const linePattern = new RegExp(field + '\\s*[:：]\\s*([^\\n\\r]+)', 'i');
+        const lineMatch = source.match(linePattern);
+        if (lineMatch && lineMatch[1]) return String(lineMatch[1] || '').trim();
+        return '';
+    }
+
+    function extractOfflineSummaryArrayItems(block) {
+        const source = String(block || '').trim();
+        if (!source) return [];
+        const quoted = [];
+        const quotePattern = /["“]([^"”\n\r]+)["”]/g;
+        let match;
+        while ((match = quotePattern.exec(source))) {
+            const item = String(match[1] || '').trim();
+            if (item) quoted.push(item);
+        }
+        if (quoted.length) return quoted;
+        return source
+            .replace(/^[\[\s]+|[\]\s]+$/g, '')
+            .split(/\n|[,，;；、]/)
+            .map(function (item) {
+                return String(item || '').replace(/^[-•*\d.\s]+/, '').trim();
+            })
+            .filter(Boolean);
+    }
+
+    function extractOfflineSummaryArrayField(text, field) {
+        const source = String(text || '');
+        if (!source) return [];
+        const jsonPattern = new RegExp('"' + field + '"\\s*:\\s*\\[([\\s\\S]*?)\\]', 'i');
+        const jsonMatch = source.match(jsonPattern);
+        if (jsonMatch && jsonMatch[1]) {
+            const items = extractOfflineSummaryArrayItems(jsonMatch[1]);
+            if (items.length) return items;
+        }
+        const blockPattern = new RegExp(field + '\\s*[:：]\\s*([\\s\\S]*?)(?=\\n\\s*(?:title|preview|summary_points|memory_lines)\\s*[:：]|$)', 'i');
+        const blockMatch = source.match(blockPattern);
+        if (blockMatch && blockMatch[1]) {
+            return extractOfflineSummaryArrayItems(blockMatch[1]);
+        }
+        return [];
+    }
+
     function parseOfflineSummaryPayload(raw, fallbackStartFloor, fallbackEndFloor) {
-        const text = String(raw || '').trim();
+        const text = String(stripMarkdownCodeFences(stripThinkingTags(raw)) || '').trim();
         let parsed = null;
+        let candidate = '';
         if (text) {
-            let candidate = text;
+            candidate = text;
             const start = candidate.indexOf('{');
             const end = candidate.lastIndexOf('}');
             if (start >= 0 && end > start) candidate = candidate.slice(start, end + 1);
@@ -3628,17 +3887,20 @@ function syncCalendarToggleUI() {
         const src = parsed && typeof parsed === 'object' ? parsed : {};
         const items = Array.isArray(src.summary_points)
             ? src.summary_points.map(function (item) { return String(item || '').trim(); }).filter(Boolean)
-            : text.split('\n').map(function (line) { return String(line || '').replace(/^[-•\s]+/, '').trim(); }).filter(Boolean).slice(0, 6);
+            : extractOfflineSummaryArrayField(candidate || text, 'summary_points');
         const memoryLines = Array.isArray(src.memory_lines)
             ? src.memory_lines.map(function (item) { return String(item || '').trim(); }).filter(Boolean)
-            : [];
+            : extractOfflineSummaryArrayField(candidate || text, 'memory_lines');
+        const title = String(src.title || extractOfflineSummaryStringField(candidate || text, 'title') || '').trim();
+        const preview = String(src.preview || extractOfflineSummaryStringField(candidate || text, 'preview') || '').trim();
+        if (items.length < 2) return null;
         return normalizeOfflineSummaryEntry({
             id: 'offline_summary_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
             mode: 'manual',
             startFloor: fallbackStartFloor,
             endFloor: fallbackEndFloor,
-            title: String(src.title || '').trim(),
-            preview: String(src.preview || '').trim(),
+            title: title,
+            preview: preview,
             items: items,
             memoryLines: memoryLines
         }, 0);
@@ -3842,6 +4104,9 @@ function syncCalendarToggleUI() {
                 maxTokens: 900
             });
             const entry = parseOfflineSummaryPayload(raw, startFloor, endFloor);
+            if (!entry) {
+                throw new Error('总结格式解析失败，请再试一次');
+            }
             entry.mode = mode;
             entry.createdAt = Date.now();
             session.summaryEntries.push(entry);
@@ -3850,12 +4115,16 @@ function syncCalendarToggleUI() {
             }
             session.updatedAt = Date.now();
             upsertOfflineSession(session);
-            renderOfflineSummaryPanel(session);
-            setOfflineSummaryStatus(`${mode === 'auto' ? '自动' : '手动'}总结已生成：${entry.title}`, true);
+            if (isCurrentOfflineSession(session)) {
+                renderOfflineSummaryPanel(session);
+                setOfflineSummaryStatus(`${mode === 'auto' ? '自动' : '手动'}总结已生成：${entry.title}`, true);
+            }
             return entry;
         } catch (e) {
             const msg = e && e.message ? String(e.message) : '总结失败';
-            setOfflineSummaryStatus('总结失败：' + msg, true);
+            if (isCurrentOfflineSession(session)) {
+                setOfflineSummaryStatus('总结失败：' + msg, true);
+            }
             return null;
         } finally {
             session.summaryMeta.pending = false;
@@ -3977,6 +4246,215 @@ function syncCalendarToggleUI() {
         if (modal) modal.style.display = 'none';
     }
 
+    function closeOfflineParagraphEditor() {
+        const modal = document.getElementById('offline-paragraph-editor-modal');
+        if (modal) modal.remove();
+    }
+
+    function reopenOfflineParagraphEditor(sessionId, messageId) {
+        closeOfflineParagraphEditor();
+        openOfflineParagraphEditor(sessionId, messageId);
+    }
+
+    function getOfflineLongTextMessage(sessionId, messageId) {
+        const session = getOfflineSessionById(sessionId);
+        if (!session || !Array.isArray(session.messages)) return { session: null, message: null };
+        const message = session.messages.find(function (item) { return item && item.id === messageId; }) || null;
+        return { session: session, message: message };
+    }
+
+    function refreshOfflineLongTextAfterEdit(session, message) {
+        if (!session || !message || !message.payload) return;
+        const enabled = offlineCommentsEnabled(session);
+        if (enabled) {
+            message.payload.commentStatus = 'pending';
+            message.payload.comments = [];
+            message.payload.commentTargets = buildOfflineCommentTargets(message.payload);
+            message.payload.pendingAnchorIndexes = message.payload.commentTargets.map(function (item) { return item.anchorIndex; });
+        } else {
+            message.payload.commentStatus = 'disabled';
+            message.payload.comments = [];
+            message.payload.commentTargets = [];
+            message.payload.pendingAnchorIndexes = [];
+        }
+        session.updatedAt = Date.now();
+        updateOfflineSessionSummary(session);
+        upsertOfflineSession(session);
+        renderOfflineHistory(session);
+        renderOfflineSummaryPanel(session);
+        if (enabled && message.id) {
+            generateOfflineReaderComments(session.id, message.id, message.payload, { retry: true, manualRetry: true });
+        }
+    }
+
+    async function promptOfflineParagraphText(defaultValue) {
+        if (typeof window.chatUiPrompt === 'function') {
+            return window.chatUiPrompt('你可以直接改写这一段；如果想删掉它，把内容留空即可。', String(defaultValue || ''), {
+                title: '编辑段落',
+                placeholder: '输入新的段落内容'
+            });
+        }
+        if (typeof window.uiPrompt === 'function') {
+            return window.uiPrompt('你可以直接改写这一段；如果想删掉它，把内容留空即可。', String(defaultValue || ''), {
+                title: '编辑段落',
+                placeholder: '输入新的段落内容'
+            });
+        }
+        return Promise.resolve(window.prompt('你可以直接改写这一段；如果想删掉它，把内容留空即可。', String(defaultValue || '')));
+    }
+
+    async function confirmOfflineParagraphDelete(message) {
+        const content = String(message || '确定删除这一段吗？');
+        if (typeof window.chatUiConfirm === 'function') {
+            return window.chatUiConfirm(content, { title: '删除段落', okText: '删除', cancelText: '取消' });
+        }
+        if (typeof window.uiConfirm === 'function') {
+            return window.uiConfirm(content, { title: '删除段落', okText: '删除', cancelText: '取消' });
+        }
+        return Promise.resolve(window.confirm(content));
+    }
+
+    async function editOfflineParagraph(sessionId, messageId, paraIndex) {
+        const found = getOfflineLongTextMessage(sessionId, messageId);
+        const session = found.session;
+        const message = found.message;
+        if (!session || !message || !message.payload || !Array.isArray(message.payload.content) || !message.payload.content[paraIndex]) return;
+        const oldText = String(message.payload.content[paraIndex] || '').trim();
+        const next = await promptOfflineParagraphText(oldText);
+        if (next === null) return;
+        const clean = sanitizePlainText(next || '');
+        if (!clean) {
+            const ok = await confirmOfflineParagraphDelete('这段会被删除。确定继续吗？');
+            if (!ok) return;
+            await deleteOfflineParagraph(sessionId, messageId, paraIndex);
+            return;
+        }
+        if (clean === oldText) return;
+        message.payload.content[paraIndex] = clean;
+        closeOfflineCommentSheet();
+        refreshOfflineLongTextAfterEdit(session, message);
+        reopenOfflineParagraphEditor(sessionId, messageId);
+        showOfflineMemoryToast('段落已更新');
+    }
+
+    async function deleteOfflineParagraph(sessionId, messageId, paraIndex) {
+        const found = getOfflineLongTextMessage(sessionId, messageId);
+        const session = found.session;
+        const message = found.message;
+        if (!session || !message || !message.payload || !Array.isArray(message.payload.content)) return;
+        const content = message.payload.content;
+        if (!content[paraIndex]) return;
+        if (content.length <= 1) {
+            const removeWhole = await confirmOfflineParagraphDelete('当前只剩这一段了。确定删除整条长叙事输出吗？');
+            if (!removeWhole) return;
+            closeOfflineCommentSheet();
+            session.messages = session.messages.filter(function (item) { return item && item.id !== messageId; });
+            session.updatedAt = Date.now();
+            updateOfflineSessionSummary(session);
+            upsertOfflineSession(session);
+            renderOfflineHistory(session);
+            renderOfflineSummaryPanel(session);
+            closeOfflineParagraphEditor();
+            showOfflineMemoryToast('这一段输出已删除');
+            return;
+        }
+        content.splice(paraIndex, 1);
+        closeOfflineCommentSheet();
+        refreshOfflineLongTextAfterEdit(session, message);
+        reopenOfflineParagraphEditor(sessionId, messageId);
+        showOfflineMemoryToast('段落已删除');
+    }
+
+    function openOfflineParagraphEditor(sessionId, messageId) {
+        const found = getOfflineLongTextMessage(sessionId, messageId);
+        const session = found.session;
+        const message = found.message;
+        if (!session || !message || !message.payload || !Array.isArray(message.payload.content)) {
+            showOfflineMemoryToast('没找到这段内容');
+            return;
+        }
+        closeOfflineParagraphEditor();
+
+        const modal = document.createElement('div');
+        modal.id = 'offline-paragraph-editor-modal';
+        modal.className = 'offline-paragraph-editor-modal';
+
+        const card = document.createElement('div');
+        card.className = 'offline-paragraph-editor-card';
+
+        const title = document.createElement('div');
+        title.className = 'offline-paragraph-editor-title';
+        title.textContent = '编辑本段输出';
+
+        const desc = document.createElement('div');
+        desc.className = 'offline-paragraph-editor-desc';
+        desc.textContent = '你可以按段修改，或者删掉不喜欢的段落。';
+
+        const list = document.createElement('div');
+        list.className = 'offline-paragraph-editor-list';
+
+        message.payload.content.forEach(function (paragraph, index) {
+            const item = document.createElement('div');
+            item.className = 'offline-paragraph-editor-item';
+
+            const meta = document.createElement('div');
+            meta.className = 'offline-paragraph-editor-item-meta';
+            meta.textContent = '第 ' + (index + 1) + ' 段';
+
+            const text = document.createElement('div');
+            text.className = 'offline-paragraph-editor-item-text';
+            text.textContent = String(paragraph || '').trim();
+
+            const actions = document.createElement('div');
+            actions.className = 'offline-paragraph-editor-item-actions';
+
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'offline-paragraph-editor-btn primary';
+            editBtn.textContent = '编辑';
+            editBtn.addEventListener('click', function () {
+                editOfflineParagraph(sessionId, messageId, index);
+            });
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'offline-paragraph-editor-btn danger';
+            delBtn.textContent = '删除';
+            delBtn.addEventListener('click', function () {
+                deleteOfflineParagraph(sessionId, messageId, index);
+            });
+
+            actions.appendChild(editBtn);
+            actions.appendChild(delBtn);
+            item.appendChild(meta);
+            item.appendChild(text);
+            item.appendChild(actions);
+            list.appendChild(item);
+        });
+
+        const footer = document.createElement('div');
+        footer.className = 'offline-paragraph-editor-footer';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'offline-paragraph-editor-btn secondary';
+        closeBtn.textContent = '关闭';
+        closeBtn.addEventListener('click', function () {
+            closeOfflineParagraphEditor();
+        });
+
+        footer.appendChild(closeBtn);
+        card.appendChild(title);
+        card.appendChild(desc);
+        card.appendChild(list);
+        card.appendChild(footer);
+        modal.appendChild(card);
+        modal.addEventListener('click', function (e) {
+            if (e && e.target === modal) closeOfflineParagraphEditor();
+        });
+        document.body.appendChild(modal);
+    }
+
     function findLatestEditableOfflineTurn(session) {
         const messages = Array.isArray(session && session.messages) ? session.messages : [];
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -4045,6 +4523,9 @@ function syncCalendarToggleUI() {
     function invalidateOfflinePendingRequest(session) {
         if (!session) return;
         session.lastReqId = 'offline_cancel_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        session.pendingReqId = '';
+        session.pendingStartedAt = 0;
+        session.pendingUserText = '';
         session.updatedAt = Date.now();
         upsertOfflineSession(session);
         hideOfflineTyping();
@@ -4327,6 +4808,7 @@ function syncCalendarToggleUI() {
                 ? '上一版段评格式不完整。请严格重新输出一个可解析的 JSON，对每条高光句都返回 5 条评论，不能缺条，不能解释。'
                 : '请围绕下面这些高光句，一次性输出全部段评 JSON。';
             const raw = await callNovelApiDirect({
+                roleId: session.roleId,
                 systemPrompt: buildOfflineCommentPrompt(session, targets),
                 history: [],
                 userText: requestUserText,
@@ -4342,6 +4824,7 @@ function syncCalendarToggleUI() {
             if ((!results.length || results.length < targets.length) && !options.retry) {
                 console.warn('[OfflineNovel Comments] batch result insufficient, retrying once', raw);
                 const retryRaw = await callNovelApiDirect({
+                    roleId: session.roleId,
                     systemPrompt: buildOfflineCommentPrompt(session, targets),
                     history: [],
                     userText: '上一版段评缺条、缺块或 JSON 不完整。请重新输出完整 JSON，每条高光句都必须有且仅有 5 条评论。',
@@ -4381,7 +4864,7 @@ function syncCalendarToggleUI() {
             if (sheetState && sheetState.open && String(sheetState.messageId || '') === String(messageId) && String(sheetState.sessionId || sessionId) === String(sessionId)) {
                 console.log('[OfflineNovel Comments] comment sheet is open, patching sheet content without rerender');
                 reopenOfflineCommentSheetIfNeeded();
-            } else {
+            } else if (isCurrentOfflineSession(cur)) {
                 renderOfflineHistory(cur);
             }
         } catch (e) {
@@ -4398,7 +4881,7 @@ function syncCalendarToggleUI() {
                     if (sheetState && sheetState.open && String(sheetState.messageId || '') === String(messageId) && String(sheetState.sessionId || sessionId) === String(sessionId)) {
                         console.log('[OfflineNovel Comments] comment sheet is open, showing error state without rerender');
                         reopenOfflineCommentSheetIfNeeded();
-                    } else {
+                    } else if (isCurrentOfflineSession(cur)) {
                         renderOfflineHistory(cur);
                     }
                 }
@@ -4732,6 +5215,18 @@ function syncCalendarToggleUI() {
         if (el) el.remove();
     }
 
+    function syncOfflinePendingUi(session) {
+        const state = getOfflineState();
+        const currentId = String(state.currentSessionId || '').trim();
+        const sessionId = String(session && session.id || '').trim();
+        const isCurrent = !!(state.active && sessionId && currentId === sessionId);
+        if (!isCurrent) return;
+        const pending = isOfflineSessionPending(session);
+        setAiInFlight(pending);
+        if (pending) showOfflineTyping();
+        else hideOfflineTyping();
+    }
+
     function renderOfflineHistory(session) {
         const box = getHistoryEl();
         syncOfflineRewindButtonState(session);
@@ -4753,6 +5248,7 @@ function syncCalendarToggleUI() {
                 const head = document.createElement('div');
                 head.className = 'offline-novel-head';
                 head.style.textAlign = 'right';
+                head.style.justifyContent = 'flex-end';
                 head.textContent = '我 · ' + formatDateTime(m.timestamp || Date.now());
 
                 const parasWrap = document.createElement('div');
@@ -4777,8 +5273,26 @@ function syncCalendarToggleUI() {
                 const time = m.payload.time ? String(m.payload.time) : '';
                 const location = m.payload.location ? String(m.payload.location) : '';
                 const charCountText = countOfflinePayloadChars(m.payload) + '字';
-                head.textContent = [time, location, charCountText].filter(Boolean).join(' · ');
-                if (!head.textContent) head.textContent = formatDateTime(m.timestamp);
+                const headText = document.createElement('span');
+                headText.className = 'offline-novel-head-text';
+                headText.textContent = [time, location, charCountText].filter(Boolean).join(' · ') || formatDateTime(m.timestamp);
+                head.appendChild(headText);
+                if (session && session.id && m.id) {
+                    const editBtn = document.createElement('button');
+                    editBtn.type = 'button';
+                    editBtn.className = 'offline-novel-edit-btn';
+                    editBtn.setAttribute('aria-label', '编辑段落');
+                    editBtn.title = '编辑或删除段落';
+                    editBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20.25V16.75L15.6 5.15C16 4.75 16.63 4.75 17.03 5.15L18.85 6.97C19.25 7.37 19.25 8 18.85 8.4L7.25 20H4.75C4.34 20 4 20.34 4 20.75V20.25Z"></path><path d="M13.47 7.28L16.72 10.53"></path></svg>';
+                    editBtn.addEventListener('click', function (e) {
+                        if (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        openOfflineParagraphEditor(session.id, m.id);
+                    });
+                    head.appendChild(editBtn);
+                }
 
                 const parasWrap = document.createElement('div');
                 parasWrap.className = 'offline-novel-paragraphs';
@@ -4874,6 +5388,7 @@ function syncCalendarToggleUI() {
             box.appendChild(entry);
         });
 
+        syncOfflinePendingUi(session);
         try {
             const body = document.querySelector('#offline-mode-overlay .offline-body');
             if (body) body.scrollTop = body.scrollHeight;
@@ -5147,7 +5662,22 @@ function syncCalendarToggleUI() {
         if (exitBtn && !exitBtn._offlineBound) {
             exitBtn._offlineBound = true;
             exitBtn.addEventListener('click', function () {
-                exitOfflineMode();
+                exitOfflineMode({
+                    destination: 'list',
+                    autoResume: true
+                });
+            });
+        }
+
+        const closeBtn = document.getElementById('offline-close-btn');
+        if (closeBtn && !closeBtn._offlineBound) {
+            closeBtn._offlineBound = true;
+            closeBtn.addEventListener('click', function () {
+                exitOfflineMode({
+                    destination: 'chat',
+                    promptName: true,
+                    autoResume: false
+                });
             });
         }
 
@@ -5298,6 +5828,7 @@ function syncCalendarToggleUI() {
         ensureWorldBookOptions();
         ensureSetupBindings();
         ensureOverlayBindings();
+        closeOfflineParagraphEditor();
         closeOfflineArchiveModal();
         closeOfflineRewindModal();
         renderOfflineMemoryPreview({ plotMode: 'read_memory', sourceChatRecords: [] });
@@ -5632,35 +6163,80 @@ function syncCalendarToggleUI() {
         });
     }
 
+    function buildOfflineSessionDefaultName(session) {
+        const current = session && typeof session === 'object' ? session : {};
+        const existing = String(current.plotName || '').trim();
+        if (existing) return existing;
+        const roleName = getOfflineRoleDisplayName(current.roleId || window.currentChatRole || '');
+        const timeText = formatDateTime(current.updatedAt || current.createdAt || Date.now()).replace(':', '-');
+        return `${roleName} · ${timeText}`;
+    }
+
+    async function promptAndSaveOfflineSessionName(session) {
+        if (!session || !session.id) return true;
+        const fallbackName = buildOfflineSessionDefaultName(session);
+        const input = await promptOfflineSessionName(fallbackName);
+        if (input === null) return false;
+        const clean = sanitizePlainText(input || '').replace(/\s+/g, ' ').trim() || fallbackName;
+        session.plotName = capText(clean, 60);
+        session.updatedAt = Date.now();
+        upsertOfflineSession(session);
+        return true;
+    }
+
     async function exitOfflineMode(options) {
+        const opts = options && typeof options === 'object' ? options : {};
+        const destination = String(opts.destination || 'chat') === 'list' ? 'list' : 'chat';
+        const shouldPromptName = opts.promptName === true;
+        const shouldAutoResume = opts.autoResume === true;
+        let shouldAbortExit = false;
         const stateForGuard = getOfflineState();
         if (stateForGuard.exiting) return;
         stateForGuard.exiting = true;
         try {
             closeOfflineCommentSheet();
+            closeOfflineParagraphEditor();
             closeOfflineRewindModal();
             const session = getCurrentOfflineSession();
-            if (session && Array.isArray(session.messages) && session.messages.length === 0) {
+            const roleId = String((session && session.roleId) || window.currentChatRole || '').trim();
+            if (session && shouldPromptName && Array.isArray(session.messages) && session.messages.length > 0) {
+                const named = await promptAndSaveOfflineSessionName(session);
+                if (!named) {
+                    shouldAbortExit = true;
+                    return;
+                }
+            }
+            if (session && Array.isArray(session.messages) && session.messages.length === 0 && !isOfflineSessionPending(session)) {
                 removeOfflineSessionById(session.id);
             }
             if (session && Array.isArray(session.messages) && session.messages.length > 0) {
                 session.updatedAt = Date.now();
                 upsertOfflineSession(session);
             }
+            if (shouldAutoResume && roleId && session && session.id) {
+                rememberOfflineAutoResumeTarget(roleId, session.id);
+            } else if (roleId) {
+                clearOfflineAutoResumeTarget(roleId);
+            }
         } catch (e) {
             console.warn('[OfflineMode] exit failed', e);
         } finally {
             const state = getOfflineState();
+            state.exiting = false;
+            if (shouldAbortExit) return;
             state.active = false;
             state.currentSessionId = '';
-            state.exiting = false;
             closeSetupModal();
             closeOfflineConfirmModal();
             closeOfflineArchiveModal();
             closeOfflineRewindModal();
             hideOfflineOverlay();
-            showChatView();
             setAiInFlight(false);
+            if (destination === 'list') {
+                backToList();
+            } else {
+                showChatView();
+            }
         }
     }
 
@@ -5674,12 +6250,37 @@ function syncCalendarToggleUI() {
         showOfflineOverlay();
         ensureOverlayBindings();
         closeSetupModal();
+        closeOfflineParagraphEditor();
         closeOfflineRewindModal();
         applyOfflineReaderSettings(session.readerSettings || loadOfflineReaderPrefs().readerSettings);
         renderOfflineMemoryPreview(session);
         renderOfflineHistory(session);
         renderOfflineSummaryPanel(session);
-        setAiInFlight(false);
+        syncOfflinePendingUi(session);
+    }
+
+    function maybeAutoResumeOfflineOnChatEnter(roleId) {
+        const rid = String(roleId || window.currentChatRole || '').trim();
+        if (!rid) return false;
+        const target = getOfflineAutoResumeTarget(rid);
+        if (!target) return false;
+        const targetSessionId = String(target.sessionId || '').trim();
+        let session = targetSessionId ? getOfflineSessionById(targetSessionId) : null;
+        if (!session) {
+            session = getLatestOfflineSessionByRole(rid);
+        }
+        if (!session || String(session.roleId || '').trim() !== rid) {
+            clearOfflineAutoResumeTarget(rid);
+            return false;
+        }
+        const currentState = getOfflineState();
+        if (currentState.active && String(currentState.currentSessionId || '').trim() === String(session.id || '').trim()) {
+            return true;
+        }
+        requestAnimationFrame(function () {
+            openOfflineSession(session.id);
+        });
+        return true;
     }
 
     function getCurrentOfflineSession() {
@@ -5687,6 +6288,40 @@ function syncCalendarToggleUI() {
         const id = state.currentSessionId;
         if (!id) return null;
         return getOfflineSessionById(id);
+    }
+
+    function isCurrentOfflineSession(session) {
+        const state = getOfflineState();
+        const currentId = String(state.currentSessionId || '').trim();
+        const sessionId = String(session && session.id || '').trim();
+        return !!(state.active && currentId && sessionId && currentId === sessionId);
+    }
+
+    function isOfflineSessionPending(session) {
+        return !!(session && String(session.pendingReqId || '').trim());
+    }
+
+    function markOfflineSessionPending(session, reqId, userText) {
+        if (!session || !reqId) return;
+        session.lastReqId = reqId;
+        session.pendingReqId = reqId;
+        session.pendingStartedAt = Date.now();
+        session.pendingUserText = sanitizePlainText(userText || '');
+        session.updatedAt = Date.now();
+        upsertOfflineSession(session);
+    }
+
+    function clearOfflineSessionPending(session, reqId) {
+        if (!session) return false;
+        const pendingReqId = String(session.pendingReqId || '').trim();
+        if (!pendingReqId) return false;
+        if (reqId && pendingReqId !== String(reqId || '').trim()) return false;
+        session.pendingReqId = '';
+        session.pendingStartedAt = 0;
+        session.pendingUserText = '';
+        session.updatedAt = Date.now();
+        upsertOfflineSession(session);
+        return true;
     }
 
     function updateOfflineSessionSummary(session) {
@@ -5717,7 +6352,9 @@ function syncCalendarToggleUI() {
         session.updatedAt = Date.now();
         updateOfflineSessionSummary(session);
         upsertOfflineSession(session);
-        renderOfflineHistory(session);
+        if (isCurrentOfflineSession(session)) {
+            renderOfflineHistory(session);
+        }
         maybeAutoGenerateOfflineSummary(session, msg);
     }
 
@@ -5727,6 +6364,17 @@ function syncCalendarToggleUI() {
             return `请以长叙事模式开始叙事，并给出第一段场景。`;
         }
         return `请先在脑内默读系统提供的聊天承接材料，再直接开始长叙事描写。不要复述这些材料。`;
+    }
+
+    function buildOfflineHistoryForRequest(messages, userText) {
+        const history = normalizeOfflineHistoryForAI(messages);
+        const cleanUserText = sanitizePlainText(userText || '');
+        if (!cleanUserText || !history.length) return history;
+        const last = history[history.length - 1];
+        if (last && last.role === 'me' && sanitizePlainText(last.content || '') === cleanUserText) {
+            return history.slice(0, -1);
+        }
+        return history;
     }
 
     function splitToParagraphs(text) {
@@ -5987,19 +6635,18 @@ function syncCalendarToggleUI() {
 
     async function callOfflineAI(session, userText, opts) {
         if (!session) return;
-        setAiInFlight(true);
-        showOfflineTyping();
-        const systemPrompt = buildOfflineSystemPrompt(session);
-        const history = normalizeOfflineHistoryForAI(session.messages);
         const userMessage = sanitizePlainText(userText);
+        const reqId = 'offline_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        const baseSession = getOfflineSessionById(session.id) || session;
+        markOfflineSessionPending(baseSession, reqId, userMessage);
+        syncOfflinePendingUi(baseSession);
+        const systemPrompt = buildOfflineSystemPrompt(baseSession);
+        const history = buildOfflineHistoryForRequest(baseSession.messages, userMessage);
         syncOfflinePromptDebug(session && session.roleId, systemPrompt, userMessage);
-
-        const reqId = 'offline_' + Date.now();
-        session.lastReqId = reqId;
-        upsertOfflineSession(session);
 
                 try {
             const text = await callNovelApiDirect({
+                roleId: baseSession.roleId,
                 systemPrompt,
                 history,
                 userText: userMessage,
@@ -6007,6 +6654,7 @@ function syncCalendarToggleUI() {
             });
             const cur = getOfflineSessionById(session.id);
             if (!cur || cur.lastReqId !== reqId) return;
+            clearOfflineSessionPending(cur, reqId);
 
             let raw = String(text || '').trim();
 
@@ -6094,7 +6742,8 @@ function syncCalendarToggleUI() {
             }
         } catch (e) {
             const cur = getOfflineSessionById(session.id);
-            if (cur) {
+            if (cur && cur.lastReqId === reqId) {
+                clearOfflineSessionPending(cur, reqId);
                 appendOfflineMessage(cur, {
                     role: 'ai',
                     type: 'text',
@@ -6103,8 +6752,11 @@ function syncCalendarToggleUI() {
                 });
             }
         } finally {
-            hideOfflineTyping();
-            setAiInFlight(false);
+            const latest = getOfflineSessionById(session.id);
+            if (latest && latest.lastReqId === reqId) {
+                clearOfflineSessionPending(latest, reqId);
+                syncOfflinePendingUi(latest);
+            }
         }
     }
 
@@ -6229,10 +6881,11 @@ function syncCalendarToggleUI() {
     window.openOfflineArchiveModal = openOfflineArchiveModal;
     window.closeOfflineArchiveModal = closeOfflineArchiveModal;
     window.exitOfflineMode = exitOfflineMode;
-window.openOfflineSession = openOfflineSession;
-window.removeOfflineSessionById = removeOfflineSessionById;
-window.persistWechatRuntimeNow = persistWechatRuntimeNow;
-window.markChatRoleAsRead = markChatRoleAsRead;
+    window.openOfflineSession = openOfflineSession;
+    window.maybeAutoResumeOfflineOnChatEnter = maybeAutoResumeOfflineOnChatEnter;
+    window.removeOfflineSessionById = removeOfflineSessionById;
+    window.persistWechatRuntimeNow = persistWechatRuntimeNow;
+    window.markChatRoleAsRead = markChatRoleAsRead;
 })();
 
 // =========================================================
@@ -6256,17 +6909,7 @@ function createMessageRow(msg) {
 
     // 系统消息处理
     if (msg.type === 'system_event' || msg.type === 'system') {
-        const text = msg && msg.content !== undefined ? msg.content : "";
-        const sysRow = document.createElement('div');
-        sysRow.className = 'sys-msg-row';
-        if (msgId) {
-            sysRow.setAttribute('data-msg-id', msgId);
-        }
-        if (msg.timestamp) {
-            sysRow.setAttribute('data-timestamp', String(msg.timestamp));
-        }
-        sysRow.innerHTML = `<span class="sys-msg-text">${text}</span>`;
-        return sysRow;
+        return buildSystemMessageRowElement(msg, msgId);
     }
 
     const content = msg && msg.content !== undefined ? msg.content : "";
@@ -6297,13 +6940,13 @@ function createMessageRow(msg) {
     // 检查是否是系统消息
     const isSysMsg = detectSystemMessage(msg, displayContent);
     if (isSysMsg && msg.role === 'ai') {
-        const sysRow = document.createElement('div');
-        sysRow.className = 'sys-msg-row';
-        if (msg.timestamp) {
-            sysRow.setAttribute('data-timestamp', String(msg.timestamp));
-        }
-        sysRow.innerHTML = `<span class="sys-msg-text">${displayContent}</span>`;
-        return sysRow;
+        return buildSystemMessageRowElement({
+            role: msg.role,
+            type: msg.type || 'text',
+            content: displayContent,
+            timestamp: msg.timestamp,
+            systemEventKind: msg.systemEventKind || ''
+        }, msgId);
     }
 
     // 准备基础数据
@@ -6476,16 +7119,31 @@ function createMessageRow(msg) {
     } else {
         const msgType = String(msg.type || 'text').trim();
         const isHtmlBubble = msg.role === 'ai' && msgType === 'html';
-        const translatedPayload = msg.role === 'ai' && !isHtmlBubble && (
-            typeof window.shouldRenderTranslatedBubble === 'function'
-                ? window.shouldRenderTranslatedBubble(window.currentChatRole || msg.roleId || '', msg)
-                : (typeof window.isAutoTranslateEnabled === 'function'
-                    ? !!window.isAutoTranslateEnabled(window.currentChatRole || msg.roleId || '')
-                    : (localStorage.getItem('chat_auto_translate') === 'true'))
-        ) && typeof parseTranslatedBubbleText === 'function'
-            ? parseTranslatedBubbleText(displayContent)
+        const inlineStructuredCandidate = msgType === 'text' && typeof window.normalizeStructuredTranslatedCandidate === 'function'
+            ? window.normalizeStructuredTranslatedCandidate(displayContent)
             : null;
-        const bubbleTextForRender = String(translatedPayload ? translatedPayload.bodyText : displayContent || '');
+        const isStructuredTranslatedBubble = msgType === 'translated_text' || (inlineStructuredCandidate && inlineStructuredCandidate.mode === 'translated_text');
+        const translatedPayload = msgType === 'translated_text' && typeof window.parseTranslatedTextPayload === 'function'
+            ? window.parseTranslatedTextPayload(content)
+            : (inlineStructuredCandidate && inlineStructuredCandidate.mode === 'translated_text' && typeof window.parseTranslatedTextPayload === 'function'
+                ? window.parseTranslatedTextPayload({
+                    foreign: inlineStructuredCandidate.foreign,
+                    translation: inlineStructuredCandidate.translation
+                })
+            : (msg.role === 'ai' && !isHtmlBubble && (
+                typeof window.shouldRenderTranslatedBubble === 'function'
+                    ? window.shouldRenderTranslatedBubble(window.currentChatRole || msg.roleId || '', msg)
+                    : (typeof window.isAutoTranslateEnabled === 'function'
+                        ? !!window.isAutoTranslateEnabled(window.currentChatRole || msg.roleId || '')
+                        : (localStorage.getItem('chat_auto_translate') === 'true'))
+            ) && typeof parseTranslatedBubbleText === 'function'
+                ? parseTranslatedBubbleText(displayContent)
+                : null));
+        const bubbleTextForRender = String(translatedPayload
+            ? translatedPayload.bodyText
+            : (inlineStructuredCandidate && inlineStructuredCandidate.mode === 'text'
+                ? inlineStructuredCandidate.text
+                : displayContent) || '');
         const safeContent = isHtmlBubble
             ? (typeof sanitizeChatBubbleHtml === 'function' ? sanitizeChatBubbleHtml(bubbleTextForRender) : bubbleTextForRender)
             : (typeof escapeHtmlText === 'function'
@@ -6556,7 +7214,7 @@ function createMessageRow(msg) {
 
     // 组合最终 HTML
     const row = document.createElement('div');
-    const isPlainTextMessage = !msg.type || String(msg.type || '') === 'text';
+    const isPlainTextMessage = !msg.type || String(msg.type || '') === 'text' || String(msg.type || '') === 'translated_text';
     row.className = isMe
         ? 'msg-row msg-right custom-bubble-container is-me' + (isPlainTextMessage ? ' msg-plain-bubble' : '')
         : 'msg-row msg-left custom-bubble-container is-other' + (isPlainTextMessage ? ' msg-plain-bubble' : '');

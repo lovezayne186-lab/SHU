@@ -649,70 +649,88 @@ function enterChat(roleId) {
             historyData = [];
             window.chatData[roleId] = [];
         }
+        historyBox._historyRoleId = roleId;
+        historyBox._hasMoreHistory = function () { return false; };
+        historyBox._loadMoreHistoryBatch = function () { return false; };
 
-        // === 【核心优化】只渲染最后 N 条，防止卡顿 ===
-        const RENDER_LIMIT = 200;
+        // === 【核心优化】初始只渲染最近 70 条，向上按 50 条分段展开 ===
+        const INITIAL_RENDER_LIMIT = 70;
+        const LOAD_MORE_BATCH_SIZE = 50;
         const totalCount = historyData.length;
-        const startIndex = Math.max(0, totalCount - RENDER_LIMIT);
-        const renderList = historyData.slice(startIndex);
+        let loadedStartIndex = Math.max(0, totalCount - INITIAL_RENDER_LIMIT);
+        const renderList = historyData.slice(loadedStartIndex);
+
+        const loadMoreHistoryBatch = function (options) {
+            const opts = options && typeof options === 'object' ? options : {};
+            const preserveViewport = opts.preserveViewport !== false;
+            if (loadedStartIndex <= 0) return false;
+            const previousScrollHeight = historyBox.scrollHeight;
+            const previousScrollTop = historyBox.scrollTop;
+            const nextStartIndex = Math.max(0, loadedStartIndex - LOAD_MORE_BATCH_SIZE);
+            const batchMessages = historyData.slice(nextStartIndex, loadedStartIndex);
+            const fragment = document.createDocumentFragment();
+
+            batchMessages.forEach(function (msg) {
+                const row = createMessageRow(msg);
+                if (!row) return;
+                if (typeof fillReplacementTextBubble === 'function') {
+                    fillReplacementTextBubble(row);
+                }
+                fragment.appendChild(row);
+            });
+
+            if (loadMoreBtn.parentNode === historyBox) {
+                historyBox.insertBefore(fragment, loadMoreBtn.nextSibling);
+            } else {
+                historyBox.insertBefore(fragment, historyBox.firstChild);
+            }
+
+            loadedStartIndex = nextStartIndex;
+
+            if (typeof window.updateMsgRowGroupClasses === 'function') {
+                window.updateMsgRowGroupClasses();
+            }
+
+            if (preserveViewport) {
+                const nextScrollHeight = historyBox.scrollHeight;
+                historyBox.scrollTop = previousScrollTop + (nextScrollHeight - previousScrollHeight);
+            }
+            return batchMessages.length > 0;
+        };
+        historyBox._hasMoreHistory = function () {
+            return loadedStartIndex > 0;
+        };
+        historyBox._loadMoreHistoryBatch = loadMoreHistoryBatch;
 
         // 如果有隐藏的历史记录，显示“查看更多”按钮
-        if (startIndex > 0) {
-            const loadMoreBtn = document.createElement('div');
+        let loadMoreBtn = document.createElement('div');
+        if (loadedStartIndex > 0) {
+            let isLoadingHistory = false;
             loadMoreBtn.className = 'chat-time-label chat-time-label-loadmore';
             loadMoreBtn.style.cursor = 'pointer';
             loadMoreBtn.style.color = '#576b95'; // 微信蓝
-            loadMoreBtn.innerText = `查看更多历史消息 (${startIndex} 条未显示)`;
-            loadMoreBtn.onclick = function () {
-                // 优化：分批加载历史消息，避免一次性渲染导致的卡顿
-                loadMoreBtn.innerText = "加载中...";
-                loadMoreBtn.style.pointerEvents = 'none'; // 防止重复点击
-                
-                // 分批加载历史消息（每次加载20条）
-                const BATCH_SIZE = 20;
-                let currentBatch = 0;
-                const totalBatches = Math.ceil(startIndex / BATCH_SIZE);
-                
-                function loadNextBatch() {
-                    const batchStart = startIndex - (currentBatch + 1) * BATCH_SIZE;
-                    const batchEnd = startIndex - currentBatch * BATCH_SIZE;
-                    const batchMessages = historyData.slice(Math.max(0, batchStart), batchEnd);
-                    
-                    // 在顶部插入消息（保持原有顺序）
-                    const fragment = document.createDocumentFragment();
-                    batchMessages.forEach(msg => {
-                        const row = createMessageRow(msg);
-                        if (row) {
-                            fragment.appendChild(row);
-                        }
-                    });
-                    
-                    // 插入到现有消息之前
-                    const firstChild = historyBox.firstChild;
-                    if (firstChild) {
-                        historyBox.insertBefore(fragment, firstChild);
-                    } else {
-                        historyBox.appendChild(fragment);
-                    }
-                    
-                    currentBatch++;
-                    
-                    if (currentBatch < totalBatches) {
-                        // 继续加载下一批
-                        loadMoreBtn.innerText = `加载中... (${currentBatch}/${totalBatches})`;
-                        setTimeout(loadNextBatch, 100); // 延迟100ms加载下一批
-                    } else {
-                        // 全部加载完成，移除按钮
-                        loadMoreBtn.remove();
-                        if (typeof window.updateMsgRowGroupClasses === 'function') {
-                            window.updateMsgRowGroupClasses();
-                        }
-                    }
+
+            const updateLoadMoreLabel = function () {
+                if (loadedStartIndex > 0) {
+                    loadMoreBtn.innerText = `查看更多历史消息 (${loadedStartIndex} 条未显示)`;
+                } else {
+                    loadMoreBtn.remove();
                 }
-                
-                // 开始加载第一批
-                setTimeout(loadNextBatch, 50);
             };
+
+            loadMoreBtn.onclick = function () {
+                if (isLoadingHistory || loadedStartIndex <= 0) return;
+                isLoadingHistory = true;
+                loadMoreBtn.innerText = '加载中...';
+                loadMoreBtn.style.pointerEvents = 'none';
+                loadMoreHistoryBatch({ preserveViewport: true });
+
+                isLoadingHistory = false;
+                loadMoreBtn.style.pointerEvents = '';
+                updateLoadMoreLabel();
+            };
+
+            updateLoadMoreLabel();
             historyBox.appendChild(loadMoreBtn);
         }
 
@@ -737,8 +755,23 @@ function enterChat(roleId) {
             }
         } catch (e) { }
 
-        // 滚到底部
+        const pendingScrollTarget = window.__pendingChatScrollTarget &&
+            String(window.__pendingChatScrollTarget.roleId || '') === String(roleId || '')
+            ? window.__pendingChatScrollTarget
+            : null;
+
         setTimeout(() => {
+            if (pendingScrollTarget && pendingScrollTarget.msgId && typeof window.scrollToChatMessageById === 'function') {
+                window.__pendingChatScrollTarget = null;
+                if (!window.scrollToChatMessageById(String(pendingScrollTarget.msgId || ''))) {
+                    try {
+                        if (typeof showCenterToast === 'function') {
+                            showCenterToast('没有定位到那条消息');
+                        }
+                    } catch (e) { }
+                }
+                return;
+            }
             historyBox.scrollTop = historyBox.scrollHeight;
         }, 100);
 
@@ -777,10 +810,16 @@ function enterChat(roleId) {
     } catch (e2) { }
 
     try {
+        if (typeof window.maybeAutoResumeOfflineOnChatEnter === 'function') {
+            window.maybeAutoResumeOfflineOnChatEnter(roleId);
+        }
+    } catch (e3) { }
+
+    try {
         if (typeof window.syncChatViewportLayout === 'function') {
             window.syncChatViewportLayout();
         }
-    } catch (e3) { }
+    } catch (e4) { }
 }
 
 function refreshChatViewportBaseHeight(force) {

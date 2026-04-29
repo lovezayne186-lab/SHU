@@ -111,7 +111,11 @@ var MineCore = (function () {
         html += '      <div class="mine-favorites-title">收藏</div>';
         html += '      <div class="mine-favorites-spacer"></div>';
         html += '    </div>';
-        html += '    <div class="mine-favorites-list" id="mine-favorites-list"></div>';
+        html += '    <div class="mine-favorites-body">';
+        html += '      <div class="mine-favorites-quick-grid" id="mine-favorites-quick-grid"></div>';
+        html += '      <div class="mine-favorites-section-title">最近收藏</div>';
+        html += '      <div class="mine-favorites-list" id="mine-favorites-list"></div>';
+        html += '    </div>';
         html += '  </div>';
         html += '  <div class="mine-edit-overlay" id="mine-edit-overlay" style="display:none;" aria-hidden="true">';
         html += '    <div class="mine-edit-card" role="dialog" aria-modal="true">';
@@ -738,6 +742,58 @@ var MineCore = (function () {
         return (d.getMonth() + 1) + '/' + d.getDate();
     }
 
+    var FAVORITES_FILTER_ITEMS = [
+        { key: 'all', label: '全部', icon: '★' },
+        { key: 'image', label: '图片', icon: '图' },
+        { key: 'history', label: '聊天记录', icon: '聊' },
+        { key: 'voice', label: '语音', icon: '声' }
+    ];
+
+    function escapeHtml(text) {
+        return String(text == null ? '' : text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function normalizeFavoritesFilter(filter) {
+        var val = String(filter || 'all').trim();
+        return /^(all|image|history|voice)$/.test(val) ? val : 'all';
+    }
+
+    function getFavoriteTypeLabel(fav) {
+        var type = fav && fav.type ? String(fav.type) : 'text';
+        if (type === 'image' || type === 'sticker') return '图片';
+        if (type === 'history') return '聊天记录';
+        if (type === 'voice') return '语音';
+        if (type === 'location') return '位置';
+        if (type === 'translated_text') return '聊天记录';
+        if (type === 'redpacket') return '红包';
+        if (type === 'transfer') return '转账';
+        if (type === 'family_card') return '亲属卡';
+        return '消息';
+    }
+
+    function getFavoritePreviewText(fav) {
+        var content = fav && fav.content ? String(fav.content) : '';
+        content = content.replace(/\s+/g, ' ').trim();
+        if (!content) content = '[' + getFavoriteTypeLabel(fav) + ']';
+        if (content.length > 88) content = content.slice(0, 88) + '...';
+        return content;
+    }
+
+    function isFavoriteMatchedByFilter(fav, filter) {
+        var current = normalizeFavoritesFilter(filter);
+        if (current === 'all') return true;
+        var type = fav && fav.type ? String(fav.type) : 'text';
+        if (current === 'image') return type === 'image' || type === 'sticker';
+        if (current === 'history') return type === 'history' || type === 'text' || type === 'translated_text';
+        if (current === 'voice') return type === 'voice';
+        return true;
+    }
+
     function getFavoritesList() {
         if (window.getFavorites && typeof window.getFavorites === 'function') {
             return window.getFavorites();
@@ -754,6 +810,9 @@ var MineCore = (function () {
     function toggleFavoritesPanel(container, visible) {
         var panel = container.querySelector('#mine-favorites-panel');
         if (panel) panel.style.display = visible ? 'block' : 'none';
+        if (panel && visible && !panel.getAttribute('data-active-filter')) {
+            panel.setAttribute('data-active-filter', 'all');
+        }
         var header = container.querySelector('.mine-header');
         if (header) header.style.display = visible ? 'none' : '';
         var sections = container.querySelectorAll('.mine-list-section');
@@ -2322,46 +2381,163 @@ var MineCore = (function () {
 
     function renderFavorites(container) {
         var listEl = container.querySelector('#mine-favorites-list');
-        if (!listEl) return;
+        var quickEl = container.querySelector('#mine-favorites-quick-grid');
+        var panel = container.querySelector('#mine-favorites-panel');
+        if (!listEl || !quickEl || !panel) return;
         var list = getFavoritesList();
         list = list.slice().sort(function (a, b) {
             var ta = a && typeof a.timestamp === 'number' ? a.timestamp : 0;
             var tb = b && typeof b.timestamp === 'number' ? b.timestamp : 0;
             return tb - ta;
         });
-        if (!list.length) {
+        var activeFilter = normalizeFavoritesFilter(panel.getAttribute('data-active-filter') || 'all');
+        var quickHtml = '';
+        FAVORITES_FILTER_ITEMS.forEach(function (item) {
+            var count = list.filter(function (fav) {
+                return isFavoriteMatchedByFilter(fav, item.key);
+            }).length;
+            var activeClass = item.key === activeFilter ? ' is-active' : '';
+            quickHtml += '<button type="button" class="mine-favorites-quick-btn' + activeClass + '" data-fav-filter="' + item.key + '">';
+            quickHtml += '  <span class="mine-favorites-quick-icon">' + escapeHtml(item.icon) + '</span>';
+            quickHtml += '  <span class="mine-favorites-quick-label">' + escapeHtml(item.label) + '</span>';
+            quickHtml += '  <span class="mine-favorites-quick-count">' + String(count) + '</span>';
+            quickHtml += '</button>';
+        });
+        quickEl.innerHTML = quickHtml;
+
+        var filtered = list.filter(function (fav) {
+            return isFavoriteMatchedByFilter(fav, activeFilter);
+        });
+        if (!filtered.length) {
             listEl.innerHTML = '<div class="mine-favorites-empty">暂无收藏</div>';
-            return;
-        }
-        var html = '';
-        list.forEach(function (fav) {
+        } else {
+            var html = '';
+            filtered.forEach(function (fav) {
             var id = fav && fav.id ? String(fav.id) : '';
-            var avatar = fav && fav.senderAvatar ? String(fav.senderAvatar) : 'assets/chushitouxiang.jpg';
             var name = fav && fav.senderName ? String(fav.senderName) : 'TA';
             var timeText = formatTime(fav && fav.timestamp);
-            var content = fav && fav.content ? String(fav.content) : '';
-            content = content.replace(/\s+/g, ' ').trim();
-            if (content.length > 80) content = content.slice(0, 80) + '...';
-            html += '<div class="mine-fav-item" data-fav-id="' + id + '">';
-            html += '  <div class="mine-fav-avatar"><img src="' + avatar + '" alt=""></div>';
-            html += '  <div class="mine-fav-main">';
-            html += '    <div class="mine-fav-top">';
-            html += '      <div class="mine-fav-name">' + name + '</div>';
-            html += '      <div class="mine-fav-time">' + timeText + '</div>';
+            var typeLabel = getFavoriteTypeLabel(fav);
+            var content = getFavoritePreviewText(fav);
+            var previewUrl = fav && fav.previewUrl ? String(fav.previewUrl) : '';
+            html += '<div class="mine-favorites-item" data-fav-id="' + escapeHtml(id) + '">';
+            html += '  <div class="mine-favorites-item-main">';
+            html += '    <div class="mine-favorites-item-title">' + escapeHtml(content) + '</div>';
+            html += '    <div class="mine-favorites-item-subtitle">' + escapeHtml(typeLabel) + '</div>';
+            html += '    <div class="mine-favorites-item-meta">';
+            html += '      <div class="mine-favorites-item-role">' + escapeHtml(name) + '</div>';
+            html += '      <div class="mine-favorites-item-date">' + escapeHtml(timeText) + '</div>';
             html += '    </div>';
-            html += '    <div class="mine-fav-content">' + content + '</div>';
             html += '  </div>';
+            if (previewUrl && (fav.type === 'image' || fav.type === 'sticker')) {
+                html += '  <div class="mine-favorites-item-side"><img class="mine-favorites-item-thumb" src="' + escapeHtml(previewUrl) + '" alt=""></div>';
+            } else {
+                html += '  <div class="mine-favorites-item-side"><div class="mine-favorites-item-badge">' + escapeHtml(typeLabel) + '</div></div>';
+            }
             html += '</div>';
         });
-        listEl.innerHTML = html;
-        var items = listEl.querySelectorAll('.mine-fav-item');
+            listEl.innerHTML = html;
+        }
+
+        var filterBtns = quickEl.querySelectorAll('[data-fav-filter]');
+        filterBtns.forEach(function (btn) {
+            btn.onclick = function () {
+                var nextFilter = normalizeFavoritesFilter(btn.getAttribute('data-fav-filter') || 'all');
+                panel.setAttribute('data-active-filter', nextFilter);
+                renderFavorites(container);
+            };
+        });
+
+        var items = listEl.querySelectorAll('.mine-favorites-item');
         items.forEach(function (el) {
-            el.onclick = function () {
+            var longPressTimer = null;
+            var isLongPress = false;
+            var startX = 0;
+            var startY = 0;
+
+            function clearLongPressTimer() {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            }
+
+            function handleLongPress() {
+                isLongPress = true;
                 var id = el.getAttribute('data-fav-id') || '';
                 var picked = null;
-                for (var i = 0; i < list.length; i++) {
-                    if (String(list[i] && list[i].id || '') === String(id)) {
-                        picked = list[i];
+                for (var i = 0; i < filtered.length; i++) {
+                    if (String(filtered[i] && filtered[i].id || '') === String(id)) {
+                        picked = filtered[i];
+                        break;
+                    }
+                }
+                if (!picked) return;
+                showFavoriteDeleteConfirm(el, picked, container);
+            }
+
+            el.addEventListener('touchstart', function (e) {
+                isLongPress = false;
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                longPressTimer = setTimeout(handleLongPress, 500);
+            }, { passive: true });
+
+            el.addEventListener('touchmove', function (e) {
+                if (!longPressTimer) return;
+                var moveX = Math.abs(e.touches[0].clientX - startX);
+                var moveY = Math.abs(e.touches[0].clientY - startY);
+                if (moveX > 10 || moveY > 10) {
+                    clearLongPressTimer();
+                }
+            }, { passive: true });
+
+            el.addEventListener('touchend', function (e) {
+                clearLongPressTimer();
+                if (isLongPress) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, { passive: false });
+
+            el.addEventListener('touchcancel', clearLongPressTimer);
+
+            el.addEventListener('mousedown', function (e) {
+                isLongPress = false;
+                startX = e.clientX;
+                startY = e.clientY;
+                longPressTimer = setTimeout(handleLongPress, 500);
+            });
+
+            el.addEventListener('mousemove', function (e) {
+                if (!longPressTimer) return;
+                var moveX = Math.abs(e.clientX - startX);
+                var moveY = Math.abs(e.clientY - startY);
+                if (moveX > 10 || moveY > 10) {
+                    clearLongPressTimer();
+                }
+            });
+
+            el.addEventListener('mouseup', function (e) {
+                clearLongPressTimer();
+                if (isLongPress) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+
+            el.addEventListener('mouseleave', clearLongPressTimer);
+
+            el.onclick = function (e) {
+                if (isLongPress) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                var id = el.getAttribute('data-fav-id') || '';
+                var picked = null;
+                for (var i = 0; i < filtered.length; i++) {
+                    if (String(filtered[i] && filtered[i].id || '') === String(id)) {
+                        picked = filtered[i];
                         break;
                     }
                 }
@@ -2376,6 +2552,59 @@ var MineCore = (function () {
                 }
             };
         });
+    }
+
+    function showFavoriteDeleteConfirm(el, fav, container) {
+        var existingConfirm = document.getElementById('fav-delete-confirm-modal');
+        if (existingConfirm) existingConfirm.remove();
+
+        var content = getFavoritePreviewText(fav);
+        if (content.length > 30) content = content.substring(0, 30) + '...';
+
+        var modal = document.createElement('div');
+        modal.id = 'fav-delete-confirm-modal';
+        modal.innerHTML = '<div class="fav-delete-confirm-mask"></div>' +
+            '<div class="fav-delete-confirm-dialog">' +
+            '  <div class="fav-delete-confirm-title">删除收藏</div>' +
+            '  <div class="fav-delete-confirm-content">确定要删除这条收藏吗？</div>' +
+            '  <div class="fav-delete-confirm-preview">"' + escapeHtml(content) + '"</div>' +
+            '  <div class="fav-delete-confirm-actions">' +
+            '    <button type="button" class="fav-delete-confirm-btn fav-delete-confirm-cancel">取消</button>' +
+            '    <button type="button" class="fav-delete-confirm-btn fav-delete-confirm-ok">删除</button>' +
+            '  </div>' +
+            '</div>';
+        document.body.appendChild(modal);
+
+        var mask = modal.querySelector('.fav-delete-confirm-mask');
+        var cancelBtn = modal.querySelector('.fav-delete-confirm-cancel');
+        var okBtn = modal.querySelector('.fav-delete-confirm-ok');
+
+        function closeModal() {
+            modal.remove();
+        }
+
+        mask.onclick = closeModal;
+        cancelBtn.onclick = closeModal;
+
+        okBtn.onclick = function () {
+            var favId = fav && fav.id ? String(fav.id) : '';
+            if (favId && window.removeFavoriteById && typeof window.removeFavoriteById === 'function') {
+                window.removeFavoriteById(favId);
+            } else {
+                try {
+                    var raw = localStorage.getItem('wechat_favorites_v2');
+                    var list = raw ? JSON.parse(raw) : [];
+                    if (Array.isArray(list)) {
+                        list = list.filter(function (item) {
+                            return String(item && item.id || '') !== favId;
+                        });
+                        localStorage.setItem('wechat_favorites_v2', JSON.stringify(list));
+                    }
+                } catch (e) { }
+            }
+            closeModal();
+            renderFavorites(container);
+        };
     }
 
     function closeEditOverlay(container) {

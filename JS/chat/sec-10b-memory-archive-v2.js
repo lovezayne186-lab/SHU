@@ -1329,6 +1329,26 @@
         }
     };
 
+    window.clearMemoryArchiveForRole = function (roleId, options) {
+        const rid = String(roleId || window.currentChatRole || '').trim();
+        if (!rid) return false;
+        const opts = options && typeof options === 'object' ? options : {};
+        loadStore();
+        if (window.memoryArchiveStore && typeof window.memoryArchiveStore === 'object' && window.memoryArchiveStore[rid]) {
+            delete window.memoryArchiveStore[rid];
+        }
+        saveStore();
+        if (String(window.currentChatRole || '').trim() === rid) {
+            try {
+                refreshArchiveModal(window.currentMemoryArchiveTab || 'likes');
+            } catch (e) { }
+        }
+        if (!opts.silent && typeof window.showCenterToast === 'function') {
+            window.showCenterToast('记忆档案已清空');
+        }
+        return true;
+    };
+
     window.rebuildMemoryArchive = function (roleId) {
         try {
             const rid = String(roleId || window.currentChatRole || '').trim();

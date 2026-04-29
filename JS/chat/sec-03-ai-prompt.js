@@ -807,20 +807,20 @@ function buildAutoTranslatePromptLayer(roleId, profile) {
     return formatPromptLayer('自动翻译层', [
         '【自动翻译模式（最高优先级）】',
         `自动翻译模式已经开启。无论你的角色设定写在语言、国籍、locale、标签、简介还是聊天风格里，你都必须遵守这一层规则。`,
-        `如果你本轮输出的是简体中文正文，就正常输出简体中文，不需要额外加括号翻译。`,
-        `如果你本轮输出的是中文以外的语言，或是非简体中文表达（例如韩语、日语、英语、繁体字、粤语、各类方言、文言等），你的消息回复必须严格遵循翻译模式下的普通消息格式：{原文}（简体中文翻译），例如：Of course, I'd love to.（当然，我很乐意。）、안녕.（你好。）或 我鍾意你呀。（我喜欢你呀。）。`,
-        '括号里的内容视为系统附带的简体中文翻译，不视为角色的原话。',
+        '只有当角色原话是中文以外的语言，或是非简体中文表达（例如日语、韩语、英语、繁体中文、粤语、文言等）时，普通文本回复才必须使用结构化对象。',
+        '这类需要翻译的普通文本气泡必须写成：{"type":"translated_text","foreign":"角色原话","translation":"对应的简体中文翻译"}。',
+        '如果角色原话本身就是简体中文，就直接按普通文本输出，不要包成 translated_text，也不要额外附翻译。',
+        '这里的 `foreign` 表示角色真正说出口的原话，`translation` 表示系统附带的简体中文翻译。',
         `当你的角色想要说中文时，需要根据你的角色设定自行判断对于中文的熟悉程度来造句，并直接输出中文消息内容，不要添加“${roleName}的消息：”这类前缀。`,
         '这条规则的优先级非常高，请务必遵守。',
-        '在主聊天场景里，`reply` 或 `reply_bubbles` 数组中的每一个普通文本气泡，都必须单独遵循这个格式。',
-        '只要这条消息里用了非简体中文原文，或用了中文以外语言，就必须立刻在原文后面紧跟一个简体中文括号翻译，格式必须是：原文（简体中文翻译）。',
-        '绝对不允许只输出原文而不附简体中文翻译，绝对不允许把“原文”和“简体中文翻译”拆成两个相邻气泡。',
-        '绝对不允许把翻译写成标题、说明、注释、括号外补充或 markdown 小标题；简体中文翻译只能直接跟在对应原文后面的括号里。',
+        '在主聊天场景里，`reply` 或 `reply_bubbles` 数组中的每一个需要翻译的普通文本气泡，都必须单独使用这个 `translated_text` 对象格式。',
+        '对于简体中文普通文本，允许也必须直接写回纯字符串；对于非简体中文或外语文本，绝对不允许只输出原文不输出 translation，绝对不允许把原文和翻译拆成两个相邻气泡。',
+        '绝对不允许把翻译写成标题、说明、注释、括号外补充或 markdown 小标题。',
         `绝对禁止输出“${roleName}的消息：”、"[${roleName}的消息：...]"、"【${roleName}的消息：...】" 或任何说话人包装。`,
         '绝对禁止输出诸如“下面是翻译”“回复如下”“## 回复”“格式说明”“不必要……而是……”这类解释性文字。',
-        '如果你要连续发送 4 条文本气泡，那么这 4 条中的每一条都必须各自完整，不能只给前两条翻译、后两条不翻译。',
+        '如果你要连续发送 4 条文本气泡，那么其中每一条都必须各自判断：简体中文就直接输出字符串，非简体中文或外语就完整写成 `translated_text` 对象。',
         '如果当前任务不是“说话内容”，例如纯决策、纯状态、纯系统事件或纯 JSON 结构化任务，请不要把这条格式强行套到无关字段上。',
-        '在通话场景里，`lines` 数组中的每一条台词也必须遵循以上格式。'
+        '在通话场景里，`lines` 数组中的每一条台词也遵循同样的规则：简体中文直接输出，非简体中文或外语才附带简体中文翻译。'
     ].join('\n'));
 }
 
@@ -831,11 +831,11 @@ function buildForcedAutoTranslateFallbackLayer(roleId, profile) {
     return formatPromptLayer('自动翻译层', [
         '【自动翻译模式（最高优先级）】',
         '自动翻译模式已经开启，这一层为强制兜底层。',
-        '如果你本轮输出的是简体中文正文，就正常输出简体中文，不需要额外加括号翻译。',
-        '如果你本轮输出的是中文以外的语言，或是非简体中文表达（例如韩语、日语、英语、繁体字、粤语、各类方言、文言等），就必须写成：原文（简体中文翻译）。',
-        '绝对不允许只输出原文而不附简体中文翻译，绝对不允许把原文和翻译拆成两个相邻气泡。',
+        '只有中文以外语言或非简体中文表达的普通文本回复，才必须写成结构化对象：{"type":"translated_text","foreign":"角色原话","translation":"简体中文翻译"}。',
+        '如果角色原话本身就是简体中文，就直接输出普通文本字符串，不要包成 translated_text。',
+        '对于需要翻译的文本，绝对不允许只输出原文而没有 translation，绝对不允许把原文和翻译拆成两个相邻气泡。',
         `绝对禁止输出“${roleName}的消息：”这类说话人包装。`,
-        '括号里的内容视为系统附带的简体中文翻译，不视为角色的原话。'
+        '绝对禁止输出括号翻译、标题说明或任何解释性文字。'
     ].join('\n'));
 }
 
@@ -1094,6 +1094,7 @@ function buildWechatPrivatePromptV2(options) {
         '【主动视频/语音通话】\n- 绝对禁止无铺垫直接打通话！当你决定发起通话时，必须先在 `reply` 数组的前几个气泡中发文字或语音，然后再把通话指令 `"[[VIDEO_CALL_USER]]"` 或 `"[[CALL_USER]]"` 作为 `reply` 数组的最后一个元素。\n- 如果视频和语音都说得通，默认优先选择视频通话，只有在明显更适合只听声音时才用语音通话。\n- 但只要当前语境是“见面、想见你、来找你、去找你、约地点、我去找你、过去找你”这一类，默认不走通话，优先触发实时位置共享邀请。\n- 正确示范：`["你再这样我真生气了", "接电话！", "[[CALL_USER]]"]` 或 `[{"type":"voice","content":"我想见你..."}, "[[VIDEO_CALL_USER]]"]`。',
         '【一起听/骰子】\n- 接受一起听追加 `[[LISTEN_TOGETHER_ACCEPT:invite_id]]`；参与骰子追加 `[[DICE]]`。',
         '【金钱能力】\n- 你主动给用户转账/发红包时，必须在 actions.transfer 中返回 `{ amount, remark, kind }`，并在 reply 中正常说人话解释给钱原因。禁止只给动作不说话。\n- 你主动点外卖或送礼物时，使用 reply 数组里的 `takeout_card` / `gift_card` 对象生成卡片，不要塞进 actions.transfer。\n- 你收取用户发来的转账时，必须先在 reply 中自然回复，再在 actions.acceptTransfer 返回 true，或在 reply 最后追加 `[[ACCEPT_TRANSFER]]`。\n- 你拆开用户发来的红包时，必须先在 reply 中自然回复，再在 actions.openRedpacket 返回 true，或在 reply 最后追加 `[[OPEN_REDPACKET]]`。\n- 收取用户发来的转账/红包时，绝对不要创建新的转账卡片，也不要在 reply 里写 `[转账]3.00`、`[已收款1.00]`、`[红包]`、`[已领取红包]` 这类 UI 状态文本。\n- 转账和红包是两种不同卡片：说“转账/收钱/退回”时 kind 必须是 "transfer"；说“红包/恭喜发财/拆红包/压岁钱/利是”时 kind 必须是 "redpacket"。不要把红包写成转账。',
+        '【金钱能力】\n- 你主动给用户转账/发红包时，必须在 actions.transfer 中返回 `{ amount, remark, kind }`，并在 reply 中正常说人话解释给钱原因。禁止只给动作不说话。\n- 你主动点外卖或送礼物时，使用 reply 数组里的 `takeout_card` / `gift_card` 对象生成卡片，不要塞进 actions.transfer。\n- 你收取用户发来的转账时，必须先在 reply 中自然回复，再在 actions.acceptTransfer 返回 true，或在 reply 最后追加 `[[ACCEPT_TRANSFER]]`。\n- 你拆开用户发来的红包时，必须先在 reply 中自然回复，再在 actions.openRedpacket 返回 true，或在 reply 最后追加 `[[OPEN_REDPACKET]]`。\n- 如果当前同时存在待收的转账和待拆的红包，并且你的人设判断两者都愿意接受，可以在同一轮里同时返回 `actions.acceptTransfer = true` 和 `actions.openRedpacket = true`；不要只处理其中一个。\n- 收取用户发来的转账/红包时，绝对不要创建新的转账卡片，也不要在 reply 里写 `[转账]3.00`、`[已收款1.00]`、`[红包]`、`[已领取红包]` 这类 UI 状态文本。\n- 转账和红包是两种不同卡片：说“转账/收钱/退回”时 kind 必须是 "transfer"；说“红包/恭喜发财/拆红包/压岁钱/利是”时 kind 必须是 "redpacket"。不要把红包写成转账。',
         '【亲属卡】\n- 在 actions.family_card 中返回 `{ amount }`，并在 reply 中自然说人话。',
         '【礼物待办】\n- 如果当前有礼物抽卡待确认或礼物待办，你必须把它当成真实约定，不要当成一次性消息。\n- 当用户明确选中了某张礼物卡，并且提出执行时间或执行条件时，使用 `actions.gift_task` 创建或更新待办。\n- 当用户说“执行完了 / 做完了 / 取消 / 不做了”时，使用 `actions.gift_task` 完成或移除待办。\n- 推荐写法：`{"op":"schedule","cardId":"...","cardTitle":"摸头券","rarity":"SSR","executeAtText":"周六晚上八点","note":"周六晚上执行"}`；完成示例：`{"op":"complete","taskId":"gift_task_xxx"}`。',
         '【头像变更】\n- 仅当用户发图并要求时才设置 actions.changeAvatar。',
@@ -1408,10 +1409,30 @@ async function triggerAI() {
     const busyWakeOverride = typeof window.readBusyWakeOverride === 'function'
         ? window.readBusyWakeOverride(roleId)
         : null;
-    if (!isRerollRequest && busyReplyGate && busyReplyGate.expiresAt > Date.now() && Number(busyReplyGate.servedActivity || 0) === currentBusyActivity && busyContextActive && !busyWakeOverride) {
-        return;
+    const busyReplyLocked = !isRerollRequest &&
+        busyReplyGate &&
+        busyReplyGate.expiresAt > Date.now() &&
+        Number(busyReplyGate.servedActivity || 0) === currentBusyActivity &&
+        busyContextActive &&
+        !busyWakeOverride;
+    let manualBusyReplyOverride = null;
+    if (busyReplyLocked) {
+        const askContinue = typeof window.uiConfirm === 'function'
+            ? window.uiConfirm('当前这条忙时自动回复/系统提示已经发过了。确定再次让角色继续回复吗？', { title: '继续回复确认' })
+            : Promise.resolve(confirm('当前这条忙时自动回复/系统提示已经发过了。确定再次让角色继续回复吗？'));
+        const confirmed = await askContinue;
+        if (!confirmed) {
+            return;
+        }
+        manualBusyReplyOverride = {
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 30 * 1000,
+            trigger: 'manual_retry',
+            kind: busyStateForGate && busyStateForGate.isSleepingTime ? 'sleep' : 'busy'
+        };
     }
-    if (!isRerollRequest && busyContextActive && typeof window.writeBusyReplyGate === 'function') {
+    const effectiveBusyWakeOverride = busyWakeOverride || manualBusyReplyOverride;
+    if (!isRerollRequest && busyContextActive && !manualBusyReplyOverride && typeof window.writeBusyReplyGate === 'function') {
         try {
             window.writeBusyReplyGate(roleId, {
                 servedActivity: currentBusyActivity,
@@ -1753,11 +1774,32 @@ async function triggerAI() {
     }
 
     const lastMsg = cleanHistory[cleanHistory.length - 1];
-    if (lastMsg && lastMsg.role === 'me') {
-        if (lastMsg.type === 'transfer' && lastMsg.status !== 'accepted') {
-            const amountText = String(lastMsg.amount || '');
-            const noteText = lastMsg.note || '（无备注）';
-            transferScenePrompt =
+    const latestPendingTransferAfterLastAi = (function () {
+        for (let i = cleanHistory.length - 1; i > aiLastIndex; i--) {
+            const item = cleanHistory[i];
+            if (!item || item.role !== 'me') continue;
+            if (item.type === 'transfer' && item.status !== 'accepted' && item.status !== 'returned') {
+                return item;
+            }
+        }
+        return null;
+    })();
+    const latestPendingRedpacketAfterLastAi = (function () {
+        for (let i = cleanHistory.length - 1; i > aiLastIndex; i--) {
+            const item = cleanHistory[i];
+            if (!item || item.role !== 'me') continue;
+            if (item.type === 'redpacket' && item.status !== 'opened' && item.status !== 'returned') {
+                return item;
+            }
+        }
+        return null;
+    })();
+    if (latestPendingTransferAfterLastAi || latestPendingRedpacketAfterLastAi) {
+        const moneyPromptBlocks = [];
+        if (latestPendingTransferAfterLastAi) {
+            const amountText = String(latestPendingTransferAfterLastAi.amount || '');
+            const noteText = latestPendingTransferAfterLastAi.note || '（无备注）';
+            moneyPromptBlocks.push(
                 '\n\n【🎁 转账场景说明】\n' +
                 '用户刚刚给你发了一笔微信转账，请根据人设决定是否收取。\n' +
                 '金额：¥' + amountText + '\n' +
@@ -1769,12 +1811,13 @@ async function triggerAI() {
                 '1. 如果你决定收下转账：先用自然的语气回复对方，再在 actions.acceptTransfer 返回 true；兼容旧写法是在自然回复内容的最后追加特殊标记 [[ACCEPT_TRANSFER]]。\n' +
                 '2. 如果你决定不收：只需要正常说明拒绝原因，不要输出任何特殊标记。\n' +
                 '3. 严禁在回复里写 `[已收款]`、`[已收款1.00]`、`[转账]1.00` 这类卡片或状态占位文本；卡片和状态由前端渲染。\n' +
-                '4. 不要向用户解释这些规则，不要提到"系统提示词""标记""转账逻辑实现"等技术细节。\n';
-            systemPrompt += transferScenePrompt;
-        } else if (lastMsg.type === 'redpacket' && lastMsg.status !== 'opened') {
-            const amountText = String(lastMsg.amount || '');
-            const noteText = lastMsg.note || '恭喜发财，大吉大利';
-            transferScenePrompt =
+                '4. 不要向用户解释这些规则，不要提到"系统提示词""标记""转账逻辑实现"等技术细节。\n'
+            );
+        }
+        if (latestPendingRedpacketAfterLastAi) {
+            const amountText = String(latestPendingRedpacketAfterLastAi.amount || '');
+            const noteText = latestPendingRedpacketAfterLastAi.note || '恭喜发财，大吉大利';
+            moneyPromptBlocks.push(
                 '\n\n【🧧 红包场景说明】\n' +
                 '用户刚刚给你发了一个红包，请根据人设决定是否拆开。\n' +
                 (amountText ? ('金额：¥' + amountText + '\n') : '') +
@@ -1786,9 +1829,18 @@ async function triggerAI() {
                 '1. 如果你决定拆开红包：先用自然的语气回复对方，再在 actions.openRedpacket 返回 true；兼容旧写法是在自然回复内容的最后追加特殊标记 [[OPEN_REDPACKET]]。\n' +
                 '2. 如果你决定不拆：只需要正常说明原因，不要输出任何特殊标记。\n' +
                 '3. 严禁在回复里写 `[红包]`、`[已领取红包]`、`[红包已领取]` 这类卡片或状态占位文本；红包卡片和领取状态由前端渲染。\n' +
-                '4. 不要向用户解释这些规则，不要提到"系统提示词""标记""红包逻辑实现"等技术细节。\n';
-            systemPrompt += transferScenePrompt;
-        } else if (lastMsg.type === 'gift_card') {
+                '4. 不要向用户解释这些规则，不要提到"系统提示词""标记""红包逻辑实现"等技术细节。\n'
+            );
+        }
+        if (latestPendingTransferAfterLastAi && latestPendingRedpacketAfterLastAi) {
+            moneyPromptBlocks.push(
+                '\n【同时处理规则】\n' +
+                '当前同时有一笔待收转账和一个待拆红包。若你的人设判断两者都愿意接受，可以在同一轮里同时返回 actions.acceptTransfer = true 和 actions.openRedpacket = true，不要只处理其中一个。\n'
+            );
+        }
+        transferScenePrompt = moneyPromptBlocks.join('');
+        systemPrompt += transferScenePrompt;
+    } else if (lastMsg && lastMsg.role === 'me' && lastMsg.type === 'gift_card') {
             let giftPayload = {};
             try {
                 giftPayload = JSON.parse(String(lastMsg.content || '{}'));
@@ -1822,7 +1874,6 @@ async function triggerAI() {
                 '2. 如果你决定回送礼物，可以在 reply 中追加 `gift_card` 对象；匿名回礼时设置 `anonymous:true`。\n' +
                 '3. 不要向用户解释这些规则，不要提到"系统提示词""礼物逻辑实现"等技术细节。\n';
             systemPrompt += transferScenePrompt;
-        }
     }
 
     const isOfflineMeeting = !!(mapData && mapData.isMeeting === true);
@@ -1999,7 +2050,7 @@ async function triggerAI() {
         ? window.readBusyReplyQueue(roleId)
         : { items: [] };
     const hasBusyReplyQueue = Array.isArray(busyReplyQueue.items) && busyReplyQueue.items.length > 0;
-    const canFlushBusyReplyQueue = hasBusyReplyQueue && (!busyContextActive || !!busyWakeOverride);
+    const canFlushBusyReplyQueue = hasBusyReplyQueue && (!busyContextActive || !!effectiveBusyWakeOverride);
     if (canFlushBusyReplyQueue) {
         const queueBundleText = typeof window.formatBusyReplyQueueBundle === 'function'
             ? window.formatBusyReplyQueueBundle(roleId, busyReplyQueue)

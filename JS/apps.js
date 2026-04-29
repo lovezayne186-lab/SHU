@@ -1723,8 +1723,21 @@ function loadWechatChatList(forceRender) {
     const pinnedSection = document.getElementById('pinned-section');
     const normalSection = document.getElementById('normal-section');
     const groupSection = document.getElementById('group-section');
+    const filterBar = document.getElementById('chat-filter-bar');
+    const searchInput = document.querySelector('#tab-chat input[oninput*="filterChatList"]');
     
     if (!normalContainer) return;
+
+    const searchKeyword = String(
+        window.__wechatChatSearchKeyword != null
+            ? window.__wechatChatSearchKeyword
+            : (searchInput ? searchInput.value : '')
+    ).trim();
+    const searchKeywordLower = searchKeyword.toLowerCase();
+    const searchActive = !!searchKeyword;
+    if (searchInput && searchInput.value !== searchKeyword) {
+        searchInput.value = searchKeyword;
+    }
 
     const hasMemProfiles = !!(window.charProfiles && typeof window.charProfiles === 'object' && Object.keys(window.charProfiles).length);
     const hasMemChat = !!(window.chatData && typeof window.chatData === 'object' && Object.keys(window.chatData).length);
@@ -1810,6 +1823,43 @@ function loadWechatChatList(forceRender) {
         }
     }
 
+    function escapeWechatListHtml(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] || ch;
+        });
+    }
+
+    function normalizeSearchableText(text) {
+        return String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+    }
+
+    function formatWechatListTime(timestamp) {
+        const ts = Number(timestamp) || 0;
+        if (!ts) return '';
+        const d = new Date(ts);
+        const now = new Date();
+        if (d.toDateString() === now.toDateString()) {
+            return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+        }
+        return `${d.getMonth()+1}/${d.getDate()}`;
+    }
+
+    function buildChatSearchSnippet(text, keyword) {
+        const source = normalizeSearchableText(text);
+        if (!source) return '';
+        if (!keyword) return source;
+        const lowerSource = source.toLowerCase();
+        const lowerKeyword = String(keyword || '').toLowerCase();
+        const index = lowerSource.indexOf(lowerKeyword);
+        if (index < 0) return source;
+        const contextSize = 18;
+        const start = Math.max(0, index - contextSize);
+        const end = Math.min(source.length, index + lowerKeyword.length + contextSize);
+        const prefix = start > 0 ? '...' : '';
+        const suffix = end < source.length ? '...' : '';
+        return prefix + source.slice(start, end) + suffix;
+    }
+
     // 3. 排序 (按最后一条消息时间倒序)
     const sortedIds = ids.slice().sort((a, b) => {
         const ha = Array.isArray(chatData[a]) ? chatData[a] : [];
@@ -1818,6 +1868,80 @@ function loadWechatChatList(forceRender) {
         const lastTb = getLastVisibleTimestamp(hb);
         return lastTb - lastTa; // Descending
     });
+
+    if (searchActive) {
+        const results = [];
+        sortedIds.forEach(function (id) {
+            const p = profiles[id];
+            if (!p) return;
+            const history = Array.isArray(chatData[id]) ? chatData[id] : [];
+            const displayName = p.remark || p.nickName || p.name || id;
+            for (let i = history.length - 1; i >= 0; i--) {
+                const msg = history[i];
+                if (!msg || msg.hidden || msg.recalled) continue;
+                if (isSuppressedMusicSystemMsg(msg)) continue;
+                const plainText = typeof window.getMessagePlainText === 'function'
+                    ? window.getMessagePlainText(msg)
+                    : String(msg.content || '');
+                const searchableText = normalizeSearchableText(plainText);
+                if (!searchableText) continue;
+                if (searchableText.toLowerCase().indexOf(searchKeywordLower) === -1) continue;
+                const msgId = typeof window.ensureChatMessageId === 'function'
+                    ? window.ensureChatMessageId(msg)
+                    : String(msg.id || '').trim();
+                if (!msgId) continue;
+                results.push({
+                    roleId: id,
+                    displayName: displayName,
+                    avatar: p.avatar || 'assets/icons/icon-placeholder.png',
+                    timestamp: Number(msg.timestamp) || 0,
+                    timeText: formatWechatListTime(msg.timestamp),
+                    msgId: msgId,
+                    preview: buildChatSearchSnippet(searchableText, searchKeyword),
+                    speaker: msg.role === 'me' ? '我' : displayName
+                });
+            }
+        });
+
+        results.sort(function (a, b) {
+            return (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0);
+        });
+
+        if (filterBar) filterBar.style.display = 'none';
+        if (pinnedSection) pinnedSection.classList.add('hidden');
+        if (groupSection) groupSection.classList.add('hidden');
+        if (normalSection) normalSection.classList.remove('hidden');
+
+        if (!results.length) {
+            normalContainer.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">没有找到包含“${escapeWechatListHtml(searchKeyword)}”的聊天记录</div>`;
+            return;
+        }
+
+        normalContainer.innerHTML = results.map(function (item) {
+            return `
+                <div class="chat-item bg-white p-3.5 flex items-center gap-3 active:scale-95 transition-transform duration-100 cursor-pointer border-b border-gray-100/50 last:border-0 select-none"
+                     onclick="openChatSearchResult('${String(item.roleId).replace(/'/g, "\\'")}', '${String(item.msgId).replace(/'/g, "\\'")}')"
+                     data-id="${escapeWechatListHtml(item.roleId)}"
+                     data-search-hit="true">
+                    <div class="w-14 h-14 bg-gray-200 rounded-full overflow-hidden flex-shrink-0 relative">
+                       <img src="${escapeWechatListHtml(item.avatar)}" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1 min-w-0 ml-1">
+                        <div class="flex justify-between items-center mb-1">
+                           <div class="font-bold text-gray-900 text-[16px] truncate pr-2">${escapeWechatListHtml(item.displayName)}</div>
+                           <div class="text-[12px] text-gray-400 flex-shrink-0">${escapeWechatListHtml(item.timeText)}</div>
+                        </div>
+                        <div class="text-[13px] text-gray-500 truncate flex items-center">
+                            ${escapeWechatListHtml(item.speaker)}：${escapeWechatListHtml(item.preview)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        return;
+    }
+
+    if (filterBar) filterBar.style.display = '';
 
     let hasPinned = false;
     let maxMsgCount = -1;
@@ -2053,18 +2177,17 @@ window.filterChatListByCategory = function(category, btnEl) {
     });
 }
 
-// 简单的搜索过滤功能 (保留)
 window.filterChatList = function(keyword) {
-    keyword = keyword.toLowerCase();
-    const allItems = document.querySelectorAll('.chat-item');
-    allItems.forEach(item => {
-        const nameEl = item.querySelector('.font-bold');
-        const msgEl = item.querySelector('.text-xs.text-gray-400'); // Note: class selector might need to be precise
-        if (nameEl) {
-            const text = (nameEl.innerText + " " + (msgEl ? msgEl.innerText : "")).toLowerCase();
-            item.style.display = text.includes(keyword) ? 'flex' : 'none';
-        }
-    });
+    window.__wechatChatSearchKeyword = String(keyword || '');
+    loadWechatChatList(true);
+};
+
+window.openChatSearchResult = function(roleId, msgId) {
+    const rid = String(roleId || '').trim();
+    const mid = String(msgId || '').trim();
+    if (!rid) return;
+    window.__pendingChatScrollTarget = mid ? { roleId: rid, msgId: mid } : null;
+    enterChatRoom(rid);
 };
 
 /* === 把 apps.js 里的 switchWechatTab 函数替换成这个 === */
@@ -2349,9 +2472,174 @@ function cleanupRoleFromObjectMapStorage(storageKey, roleId) {
     } catch (e) { }
 }
 
-function cleanupDeletedRoleReferences(id) {
+function readJsonStorageValue(storageKey, fallback) {
+    try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed == null ? fallback : parsed;
+    } catch (e) {
+        return fallback;
+    }
+}
+
+function writeJsonStorageValue(storageKey, value) {
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(value));
+    } catch (e) { }
+}
+
+function cleanupRoleLinkedStorage(storageKey, roleId) {
+    const id = String(roleId || '').trim();
+    if (!id) return;
+    const parsed = readJsonStorageValue(storageKey, null);
+    if (!parsed || typeof parsed !== 'object') return;
+    const list = Array.isArray(parsed) ? parsed : Object.keys(parsed);
+    let touched = false;
+    const next = Array.isArray(parsed) ? [] : {};
+    list.forEach(function (item) {
+        const key = Array.isArray(parsed) ? String(item || '').trim() : String(item || '').trim();
+        if (!key) return;
+        if (key === id) {
+            touched = true;
+            return;
+        }
+        if (Array.isArray(parsed)) {
+            next.push(key);
+        } else {
+            const value = parsed[item];
+            if (value === false || value == null) return;
+            next[key] = value && typeof value === 'object'
+                ? Object.assign({}, value, { roleId: key })
+                : { roleId: key, linkedAt: 0 };
+        }
+    });
+    if (touched) writeJsonStorageValue(storageKey, next);
+}
+
+function cleanupRolePayloadStorage(storageKey, roleId, matchers) {
+    const id = String(roleId || '').trim();
+    if (!id) return;
+    const payload = readJsonStorageValue(storageKey, null);
+    if (!payload || typeof payload !== 'object') return;
+    const keys = Array.isArray(matchers) ? matchers : ['roleId'];
+    const hit = keys.some(function (key) {
+        return String(payload && payload[key] || '').trim() === id;
+    });
+    if (hit) {
+        try { localStorage.removeItem(storageKey); } catch (e) { }
+    }
+}
+
+function persistRoleStatusCleanup(roleId) {
+    const id = String(roleId || '').trim();
+    if (!id) return;
+    if (String(window.currentChatRole || '').trim() === id) {
+        window.currentRoleStatus = null;
+    }
+    try {
+        const store = window.roleStatusStore && typeof window.roleStatusStore === 'object' ? window.roleStatusStore : readJsonStorageValue('wechat_roleStatusStore', {});
+        if (store && typeof store === 'object' && Object.prototype.hasOwnProperty.call(store, id)) {
+            delete store[id];
+        }
+        window.roleStatusStore = store && typeof store === 'object' ? store : {};
+        writeJsonStorageValue('wechat_roleStatusStore', window.roleStatusStore || {});
+    } catch (e) { }
+    try {
+        const history = window.roleStatusHistory && typeof window.roleStatusHistory === 'object' ? window.roleStatusHistory : readJsonStorageValue('wechat_roleStatusHistory', {});
+        if (history && typeof history === 'object' && Object.prototype.hasOwnProperty.call(history, id)) {
+            delete history[id];
+        }
+        window.roleStatusHistory = history && typeof history === 'object' ? history : {};
+        writeJsonStorageValue('wechat_roleStatusHistory', window.roleStatusHistory || {});
+    } catch (e2) { }
+}
+
+async function cleanupCoupleSpaceRoleStorage(roleId, options) {
+    const id = String(roleId || '').trim();
+    if (!id) return;
+    const opts = options && typeof options === 'object' ? options : {};
+    const sep = '__roleId__';
+    const baseKeys = [
+        'couple_space_data',
+        'couple_bg',
+        'couple_avatar_user',
+        'couple_avatar_role',
+        'couple_space_qa_progress_v1',
+        'couple_space_anniversary_date_v1',
+        'couple_space_mood_entries_v1',
+        'couple_space_role_mood_entries_v1',
+        'couple_space_ai_miss_counts_v1',
+        'couple_space_diary_sync_lock_v1',
+        'couple_space_secret_messages_v1',
+        'couple_space_secret_peer_activity_v1',
+        'couple_space_secret_peer_chat_history_v1',
+        'couple_space_secret_ui_state_v1'
+    ];
+    const removeKeys = [];
+    baseKeys.forEach(function (key) {
+        const scoped = key + sep + id;
+        removeKeys.push(scoped);
+        if (opts.removeBaseKeys) removeKeys.push(key);
+    });
+    removeKeys.push('couple_wishlist_state_v2_' + id);
+    removeKeys.push('couple_space_last_exit_time_v1_' + id);
+    removeKeys.push('couple_space_auto_enter_role_once_v1');
+
+    removeKeys.forEach(function (key) {
+        try {
+            const raw = String(localStorage.getItem(key) || '').trim();
+            if (key === 'couple_space_auto_enter_role_once_v1' && raw && raw !== id) return;
+            localStorage.removeItem(key);
+        } catch (e) { }
+    });
+
+    if (!(window.localforage && typeof window.localforage.createInstance === 'function')) return;
+    try {
+        const forage = window.localforage.createInstance({ name: 'shubao_large_store_v1', storeName: 'couple_space' });
+        await Promise.all(removeKeys.map(function (key) {
+            return forage.removeItem(key).catch(function () { });
+        }));
+    } catch (e2) { }
+    try {
+        const qaStore = window.localforage.createInstance({ name: 'shubao_large_store_v1', storeName: 'couple_space_qa' });
+        const qaKeys = ['couple_space_qa_progress_v1' + sep + id];
+        if (opts.removeBaseKeys) qaKeys.push('couple_space_qa_progress_v1');
+        await Promise.all(qaKeys.map(function (key) {
+            return qaStore.removeItem(key).catch(function () { });
+        }));
+    } catch (e3) { }
+}
+
+async function clearRoleConversationArtifacts(roleId, options) {
+    const id = String(roleId || '').trim();
+    if (!id) return;
+    const opts = options && typeof options === 'object' ? options : {};
+
+    if (!opts.preserveMemoryArchive) {
+        if (typeof window.clearMemoryArchiveForRole === 'function') {
+            try { window.clearMemoryArchiveForRole(id, { silent: true }); } catch (e) { }
+        } else {
+            try {
+                if (window.memoryArchiveStore && typeof window.memoryArchiveStore === 'object' && window.memoryArchiveStore[id]) {
+                    delete window.memoryArchiveStore[id];
+                }
+                writeJsonStorageValue('wechat_memory_archive_v1', window.memoryArchiveStore || {});
+                writeJsonStorageValue('ai_memory_archives', window.memoryArchiveStore || {});
+            } catch (e2) { }
+        }
+    }
+
+    cleanupRoleFromObjectMapStorage('wechat_api_memory_cfg_v1', id);
+    persistRoleStatusCleanup(id);
+}
+
+window.clearRoleConversationArtifacts = clearRoleConversationArtifacts;
+
+async function cleanupDeletedRoleReferences(id) {
     const roleId = String(id || '').trim();
     if (!roleId) return;
+    await clearRoleConversationArtifacts(roleId);
 
     try {
         if (typeof window.cleanupMomentsDataForRole === 'function') {
@@ -2396,6 +2684,22 @@ function cleanupDeletedRoleReferences(id) {
     }
 
     try {
+        if (typeof window.removeFavoritesByRoleId === 'function') {
+            window.removeFavoritesByRoleId(roleId);
+        } else {
+            const list = readJsonStorageValue('wechat_favorites_v2', []);
+            if (Array.isArray(list)) {
+                const next = list.filter(function (item) {
+                    return String(item && item.roleId || '').trim() !== roleId;
+                });
+                writeJsonStorageValue('wechat_favorites_v2', next);
+            }
+        }
+    } catch (e0) {
+        console.warn('清理收藏残留失败', e0);
+    }
+
+    try {
         const state = window.familyCardState && typeof window.familyCardState === 'object'
             ? window.familyCardState
             : { receivedCards: [], sentCards: [] };
@@ -2431,30 +2735,72 @@ function cleanupDeletedRoleReferences(id) {
     } catch (e) { }
 
     cleanupRoleFromObjectMapStorage('chat_settings_by_role', roleId);
+    cleanupRoleFromObjectMapStorage('chat_bubble_css_by_role', roleId);
+    cleanupRoleFromObjectMapStorage('chat_bubble_presets_by_role', roleId);
     cleanupRoleFromObjectMapStorage('moments_proactive_state_v1', roleId);
+
+    try {
+        const linked = readJsonStorageValue('couple_linked_roles_v1', {});
+        const linkedIds = Array.isArray(linked) ? linked.slice() : Object.keys(linked || {});
+        const isActiveLinkedRole = String(localStorage.getItem('couple_linked_role_id_v1') || '').trim() === roleId;
+        cleanupRoleLinkedStorage('couple_linked_roles_v1', roleId);
+        cleanupRolePayloadStorage('couple_pending_invite_v1', roleId, ['roleId', 'fromRoleId', 'toRoleId', 'targetRoleId']);
+        cleanupRolePayloadStorage('listen_together_pending_ai', roleId, ['roleId', 'peerRoleId', 'targetRoleId']);
+        cleanupRolePayloadStorage('listen_together_session', roleId, ['roleId', 'peerRoleId', 'targetRoleId']);
+        if (String(localStorage.getItem('currentChatId') || '').trim() === roleId) {
+            localStorage.removeItem('currentChatId');
+        }
+        if (String(localStorage.getItem('lastChatSettingsRoleId') || '').trim() === roleId) {
+            localStorage.removeItem('lastChatSettingsRoleId');
+        }
+        if (String(localStorage.getItem('wechat_stats_partner_id') || '').trim() === roleId) {
+            localStorage.removeItem('wechat_stats_partner_id');
+        }
+        if (String(localStorage.getItem('wechat_gift_cabinet_role') || '').trim() === roleId) {
+            localStorage.removeItem('wechat_gift_cabinet_role');
+        }
+
+        const remainingLinkedIds = linkedIds.filter(function (x) {
+            return String(x || '').trim() && String(x || '').trim() !== roleId;
+        });
+        if (isActiveLinkedRole) {
+            if (remainingLinkedIds.length) {
+                localStorage.setItem('couple_has_linked_v1', 'true');
+                localStorage.setItem('couple_linked_role_id_v1', String(remainingLinkedIds[0] || '').trim());
+            } else {
+                localStorage.removeItem('couple_has_linked_v1');
+                localStorage.removeItem('couple_linked_role_id_v1');
+            }
+        }
+
+        await cleanupCoupleSpaceRoleStorage(roleId, { removeBaseKeys: isActiveLinkedRole });
+    } catch (e3) {
+        console.warn('清理情侣空间残留失败', e3);
+    }
 }
 
 window.deleteRole = async function (id) {
+    const roleId = String(id || '').trim();
     const profiles = (window.charProfiles && typeof window.charProfiles === 'object')
         ? window.charProfiles
         : readWechatProfilesFromMemoryOrStorage();
 
     try {
         if (window.WechatStore && typeof window.WechatStore.deleteRole === 'function') {
-            await window.WechatStore.deleteRole(id);
+            await window.WechatStore.deleteRole(roleId);
         } else {
-            if (profiles && profiles[id]) {
-                delete profiles[id];
+            if (profiles && profiles[roleId]) {
+                delete profiles[roleId];
                 const saveResult = saveProfiles(profiles);
                 if (saveResult && typeof saveResult.then === 'function') {
                     await saveResult;
                 }
             }
-            if (window.chatData && window.chatData[id]) delete window.chatData[id];
-            if (window.userPersonas && window.userPersonas[id]) delete window.userPersonas[id];
-            if (window.chatUnread && window.chatUnread[id] != null) delete window.chatUnread[id];
+            if (window.chatData && window.chatData[roleId]) delete window.chatData[roleId];
+            if (window.userPersonas && window.userPersonas[roleId]) delete window.userPersonas[roleId];
+            if (window.chatUnread && window.chatUnread[roleId] != null) delete window.chatUnread[roleId];
         }
-        cleanupDeletedRoleReferences(id);
+        await cleanupDeletedRoleReferences(roleId);
     } catch (e0) {
         console.error('删除角色失败', e0);
         alert('❌ 删除失败：' + (e0 && e0.message ? e0.message : '未知错误'));
@@ -2469,7 +2815,7 @@ window.deleteRole = async function (id) {
     }
 
     try {
-        if (String(window.currentChatRole || '') === String(id)) {
+        if (String(window.currentChatRole || '') === roleId) {
             window.currentChatRole = '';
             localStorage.removeItem('currentChatId');
         }
@@ -2480,8 +2826,10 @@ window.deleteRole = async function (id) {
     }
     if (typeof window.saveData === 'function') {
         try {
-            const ret = window.saveData();
-            if (ret && typeof ret.catch === 'function') ret.catch(function () {});
+            await window.saveData();
+            if (typeof window.flushSaveDataImmediately === 'function') {
+                await window.flushSaveDataImmediately();
+            }
         } catch (e) {}
     }
 };

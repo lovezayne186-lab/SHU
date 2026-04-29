@@ -1832,7 +1832,33 @@ window.buildStickerSemanticText = buildStickerSemanticText;
 
 function getMessagePlainText(msg) {
     if (!msg) return '';
+    if (msg.systemEventKind === 'location_share_invite') {
+        return String(msg.content || '我发起了位置共享');
+    }
+    if (msg.type === 'translated_text') {
+        const parsed = typeof window.parseTranslatedTextPayload === 'function'
+            ? window.parseTranslatedTextPayload(msg.content)
+            : null;
+        if (parsed) {
+            const foreignText = String(parsed.foreignText || parsed.bodyText || '').trim();
+            const translationText = String(parsed.translationText || '').trim();
+            if (foreignText && translationText && foreignText !== translationText) {
+                return `${foreignText}\n${translationText}`;
+            }
+            return foreignText || translationText;
+        }
+    }
     if (msg.type === 'text' || !msg.type) {
+        const rawText = String(msg.content || '').trim();
+        if (rawText.startsWith('{') && rawText.endsWith('}') && typeof window.normalizeStructuredTranslatedCandidate === 'function') {
+            const structuredCandidate = window.normalizeStructuredTranslatedCandidate(rawText);
+            if (structuredCandidate && structuredCandidate.mode === 'translated_text') {
+                return `${structuredCandidate.foreign}\n${structuredCandidate.translation}`;
+            }
+            if (structuredCandidate && structuredCandidate.mode === 'text' && structuredCandidate.text) {
+                return structuredCandidate.text;
+            }
+        }
         let s = String(msg.content || '').replace(/\r\n?/g, '\n');
         s = s.replace(/(?:^|\n)\s*[\[【](?:内心独白|思考链|思考|引用回复)[^\]\n】]*[\]】][^\n]*/gi, '\n');
         s = s.replace(/(?:^|\n)\s*[\[【](?:语音消息|语音|发送照片|发送图片|发送位置|系统提示)[\]】]\s*[:：]?\s*/gi, '\n');
@@ -2123,14 +2149,25 @@ window.scrollToChatMessageById = function (msgId) {
     if (!id) return false;
     const historyBox = document.getElementById('chat-history');
     if (!historyBox) return false;
-    const nodes = historyBox.querySelectorAll('[data-msg-id]');
-    let target = null;
-    for (let i = 0; i < nodes.length; i++) {
-        const el = nodes[i];
-        if (!el) continue;
-        if (String(el.getAttribute('data-msg-id') || '') === id) {
-            target = el;
-            break;
+    const findTargetNode = function () {
+        const nodes = historyBox.querySelectorAll('[data-msg-id]');
+        for (let i = 0; i < nodes.length; i++) {
+            const el = nodes[i];
+            if (!el) continue;
+            if (String(el.getAttribute('data-msg-id') || '') === id) {
+                return el;
+            }
+        }
+        return null;
+    };
+    let target = findTargetNode();
+    if (!target && typeof historyBox._loadMoreHistoryBatch === 'function' && typeof historyBox._hasMoreHistory === 'function') {
+        let guard = 0;
+        while (!target && historyBox._hasMoreHistory() && guard < 100) {
+            const loaded = historyBox._loadMoreHistoryBatch({ preserveViewport: false });
+            if (!loaded) break;
+            target = findTargetNode();
+            guard++;
         }
     }
     if (!target) {
@@ -2159,9 +2196,14 @@ function loadFavoritesState() {
         const raw = localStorage.getItem('wechat_favorites_v2');
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed;
+            if (Array.isArray(parsed)) {
+                console.log('[收藏] 加载成功，共', parsed.length, '条');
+                return parsed;
+            }
         }
-    } catch (e) { }
+    } catch (e) {
+        console.error('[收藏] 加载失败:', e);
+    }
     try {
         const legacyRaw = localStorage.getItem('wechat_favorites');
         if (legacyRaw) {
@@ -2182,17 +2224,41 @@ function loadFavoritesState() {
                     };
                 });
                 localStorage.setItem('wechat_favorites_v2', JSON.stringify(migrated));
+                console.log('[收藏] 迁移旧数据成功，共', migrated.length, '条');
                 return migrated;
             }
         }
-    } catch (e2) { }
+    } catch (e2) {
+        console.error('[收藏] 迁移旧数据失败:', e2);
+    }
+    console.log('[收藏] 无历史数据');
     return [];
 }
 
 function saveFavoritesState(list) {
     try {
-        localStorage.setItem('wechat_favorites_v2', JSON.stringify(Array.isArray(list) ? list : []));
-    } catch (e) { }
+        const data = JSON.stringify(Array.isArray(list) ? list : []);
+        localStorage.setItem('wechat_favorites_v2', data);
+        console.log('[收藏] 保存成功，共', Array.isArray(list) ? list.length : 0, '条');
+    } catch (e) {
+        console.error('[收藏] 保存失败:', e);
+    }
+}
+
+function resolveFavoritePreviewUrl(msg) {
+    const m = msg && typeof msg === 'object' ? msg : {};
+    const rawContent = typeof m.content === 'string' ? String(m.content || '').trim() : '';
+    const base64 = typeof m.base64 === 'string' ? String(m.base64 || '').trim() : '';
+    const stickerUrl = typeof m.stickerUrl === 'string' ? String(m.stickerUrl || '').trim() : '';
+    const candidates = [base64, rawContent, stickerUrl];
+    for (let i = 0; i < candidates.length; i++) {
+        const value = String(candidates[i] || '').trim();
+        if (!value) continue;
+        if (value.indexOf('data:image/') === 0 || value.indexOf('blob:') === 0 || /^https?:\/\//i.test(value) || /^assets\//i.test(value)) {
+            return value;
+        }
+    }
+    return '';
 }
 
 function buildFavoriteItem(roleId, msg) {
@@ -2201,6 +2267,7 @@ function buildFavoriteItem(roleId, msg) {
     const ts = typeof m.timestamp === 'number' && isFinite(m.timestamp) ? m.timestamp : Date.now();
     const messageId = ensureChatMessageId(m);
     const senderName = resolveMessageSenderName(rid, m);
+    const plainText = getMessagePlainText(m);
     let senderAvatar = '';
     if (m.role === 'me') {
         senderAvatar = getCurrentUserProfile().avatar || 'assets/chushitouxiang.jpg';
@@ -2215,8 +2282,10 @@ function buildFavoriteItem(roleId, msg) {
         senderName: senderName,
         senderAvatar: senderAvatar,
         senderRole: String(m.role || ''),
-        content: getMessagePlainText(m),
+        content: plainText,
         type: String(m.type || 'text'),
+        previewUrl: resolveFavoritePreviewUrl(m),
+        description: String(m.description || m.stickerName || '').trim(),
         timestamp: ts
     };
 }
@@ -2226,11 +2295,15 @@ window.getFavorites = function () {
     return Array.isArray(window.favorites) ? window.favorites.slice() : [];
 };
 window.addFavoriteMessage = function (roleId, msg) {
-    if (!roleId || !msg) return null;
+    if (!roleId || !msg) {
+        console.warn('[收藏] 添加失败：缺少参数', { roleId: roleId, msg: msg });
+        return null;
+    }
     if (!Array.isArray(window.favorites)) window.favorites = [];
     const item = buildFavoriteItem(roleId, msg);
     window.favorites = window.favorites.concat([item]).slice(-800);
     saveFavoritesState(window.favorites);
+    console.log('[收藏] 添加成功:', item.content ? item.content.substring(0, 30) : '(无内容)');
     return item;
 };
 window.removeFavoriteById = function (favId) {
@@ -2240,6 +2313,20 @@ window.removeFavoriteById = function (favId) {
     window.favorites = next;
     saveFavoritesState(window.favorites);
     return true;
+};
+window.removeFavoritesByRoleId = function (roleId) {
+    const id = String(roleId || '').trim();
+    if (!id) return 0;
+    if (!Array.isArray(window.favorites)) window.favorites = loadFavoritesState();
+    const before = window.favorites.length;
+    window.favorites = window.favorites.filter(function (item) {
+        return String(item && item.roleId || '').trim() !== id;
+    });
+    const removed = before - window.favorites.length;
+    if (removed > 0) {
+        saveFavoritesState(window.favorites);
+    }
+    return removed;
 };
 
 function createFamilyCardMessage(role, amount, timestamp, peerRoleId) {
@@ -2446,6 +2533,10 @@ function createChatTimeDividerElement(timestamp) {
     const text = formatChatDividerTime(timestamp);
     divider.textContent = text;
     divider.setAttribute('data-text', text);
+    if (timestamp) {
+        divider.setAttribute('data-timestamp', String(timestamp));
+    }
+    divider.setAttribute('data-row-kind', 'time-divider');
     return divider;
 }
 
