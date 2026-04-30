@@ -26,6 +26,7 @@
         callLogs: 'wechat_callLogs',
         unread: 'wechat_unread',
         familyCards: 'wechat_family_cards',
+        favorites: 'wechat_favorites_v2',
         stickerData: 'wechat_sticker_data',
         memoryArchive: 'wechat_memory_archive_v1'
     };
@@ -99,6 +100,7 @@
             callLogs: {},
             unread: {},
             familyCards: {},
+            favorites: [],
             stickerData: null,
             memoryArchive: {}
         };
@@ -112,6 +114,7 @@
         ROLE_MAP_KEYS.forEach(function (key) {
             out[key] = isObject(out[key]) ? out[key] : {};
         });
+        out.favorites = Array.isArray(out.favorites) ? out.favorites : [];
         out.stickerData = out.stickerData === undefined ? null : out.stickerData;
         out.__shubao_wechat_v2__ = 1;
         out.version = 2;
@@ -138,6 +141,7 @@
             chatMessageCount(snap.chats) > 0 ||
             roleCount(snap.userPersonas) > 0 ||
             roleCount(snap.chatMapData) > 0 ||
+            (Array.isArray(snap.favorites) && snap.favorites.length > 0) ||
             roleCount(snap.memoryArchive) > 0;
     }
 
@@ -148,8 +152,11 @@
         const newProfiles = roleCount(newSnap.profiles);
         const oldMessages = chatMessageCount(oldSnap.chats);
         const newMessages = chatMessageCount(newSnap.chats);
+        const oldFavorites = Array.isArray(oldSnap.favorites) ? oldSnap.favorites.length : 0;
+        const newFavorites = Array.isArray(newSnap.favorites) ? newSnap.favorites.length : 0;
         return (oldProfiles > 0 && newProfiles < oldProfiles) ||
-            (oldMessages > 0 && newMessages < oldMessages);
+            (oldMessages > 0 && newMessages < oldMessages) ||
+            (oldFavorites > 0 && newFavorites < oldFavorites);
     }
 
     function getStore() {
@@ -202,8 +209,9 @@
         try { localStorage.setItem(LEGACY_KEYS.callLogs, JSON.stringify(snap.callLogs || {})); } catch (e6) { }
         try { localStorage.setItem(LEGACY_KEYS.unread, JSON.stringify(snap.unread || {})); } catch (e7) { }
         try { localStorage.setItem(LEGACY_KEYS.familyCards, JSON.stringify(snap.familyCards || {})); } catch (e8) { }
-        try { localStorage.setItem(LEGACY_KEYS.memoryArchive, JSON.stringify(snap.memoryArchive || {})); } catch (e9) { }
-        try { localStorage.setItem(LEGACY_KEYS.stickerData, JSON.stringify(snap.stickerData || null)); } catch (e10) { }
+        try { localStorage.setItem(LEGACY_KEYS.favorites, JSON.stringify(snap.favorites || [])); } catch (e9) { }
+        try { localStorage.setItem(LEGACY_KEYS.memoryArchive, JSON.stringify(snap.memoryArchive || {})); } catch (e10) { }
+        try { localStorage.setItem(LEGACY_KEYS.stickerData, JSON.stringify(snap.stickerData || null)); } catch (e11) { }
     }
 
     async function writeLegacyForageSnapshot(snapshot) {
@@ -219,6 +227,7 @@
             legacy.setItem(LEGACY_KEYS.callLogs, snap.callLogs || {}),
             legacy.setItem(LEGACY_KEYS.unread, snap.unread || {}),
             legacy.setItem(LEGACY_KEYS.familyCards, snap.familyCards || {}),
+            legacy.setItem(LEGACY_KEYS.favorites, snap.favorites || []),
             legacy.setItem(LEGACY_KEYS.memoryArchive, snap.memoryArchive || {}),
             legacy.setItem(LEGACY_KEYS.stickerData, snap.stickerData || null)
         ]), 2500, 'legacy wechat mirror write');
@@ -295,6 +304,10 @@
         out.unread = mergeRoleMap(out.unread, src.unread, mapOpts);
         out.familyCards = mergeRoleMap(out.familyCards, src.familyCards, mapOpts);
         out.memoryArchive = mergeRoleMap(out.memoryArchive, src.memoryArchive, mapOpts);
+        if (Array.isArray(src.favorites) && src.favorites.length) {
+            const currentFavorites = Array.isArray(out.favorites) ? out.favorites : [];
+            out.favorites = clone(src.favorites.length >= currentFavorites.length ? src.favorites : currentFavorites);
+        }
         if (src.stickerData != null) out.stickerData = clone(src.stickerData);
         out.updatedAt = nowIso();
         return out;
@@ -310,6 +323,7 @@
         out.callLogs = isObject(map.callLogs) ? clone(map.callLogs) : {};
         out.unread = isObject(map.unread) ? clone(map.unread) : {};
         out.familyCards = isObject(map.familyCards) ? clone(map.familyCards) : {};
+        out.favorites = Array.isArray(map.favorites) ? clone(map.favorites) : [];
         out.memoryArchive = isObject(map.memoryArchive) ? clone(map.memoryArchive) : {};
         out.stickerData = map.stickerData === undefined ? null : clone(map.stickerData);
         return out;
@@ -319,7 +333,10 @@
         const map = {};
         Object.keys(LEGACY_KEYS).forEach(function (field) {
             try {
-                map[field] = parseJson(localStorage.getItem(LEGACY_KEYS[field]), field === 'stickerData' ? null : {});
+                map[field] = parseJson(
+                    localStorage.getItem(LEGACY_KEYS[field]),
+                    field === 'stickerData' ? null : (field === 'favorites' ? [] : {})
+                );
             } catch (e) { }
         });
         try {
@@ -391,6 +408,7 @@
         window.callLogs = snap.callLogs;
         window.chatUnread = snap.unread;
         window.familyCardState = snap.familyCards;
+        window.favorites = Array.isArray(snap.favorites) ? snap.favorites : [];
         window.memoryArchiveStore = snap.memoryArchive;
         if (snap.stickerData !== null && snap.stickerData !== undefined) window.stickerData = snap.stickerData;
     }
@@ -405,6 +423,7 @@
         out.callLogs = isObject(window.callLogs) ? clone(window.callLogs) : {};
         out.unread = isObject(window.chatUnread) ? clone(window.chatUnread) : {};
         out.familyCards = isObject(window.familyCardState) ? clone(window.familyCardState) : {};
+        out.favorites = Array.isArray(window.favorites) ? clone(window.favorites) : [];
         out.memoryArchive = isObject(window.memoryArchiveStore) ? clone(window.memoryArchiveStore) : {};
         out.stickerData = window.stickerData === undefined ? null : clone(window.stickerData);
         return out;
