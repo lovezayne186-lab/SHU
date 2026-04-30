@@ -1803,7 +1803,6 @@ async function callAI(systemPrompt, historyMessages, userMessage, onSuccess, onE
     const slowTimeoutMs = Math.max(1000, parseInt(requestOptions.slowTimeoutMs, 10) || requestTimeoutMs);
     const onSlow = typeof requestOptions.onSlow === 'function' ? requestOptions.onSlow : null;
     const shouldDeliver = typeof requestOptions.shouldDeliver === 'function' ? requestOptions.shouldDeliver : null;
-    const onCancelled = typeof requestOptions.onCancelled === 'function' ? requestOptions.onCancelled : null;
     const frequencyPenalty = Number.isFinite(Number(requestOptions.frequencyPenalty))
         ? clampNumber(Number(requestOptions.frequencyPenalty), -2, 2, 0.5)
         : 0.5;
@@ -1822,15 +1821,6 @@ async function callAI(systemPrompt, historyMessages, userMessage, onSuccess, onE
         } catch (e) {
             return false;
         }
-    };
-    let cancelNotified = false;
-    const notifyCancelled = function () {
-        if (cancelNotified) return;
-        cancelNotified = true;
-        if (!onCancelled) return;
-        try {
-            onCancelled();
-        } catch (e) { }
     };
 
     const shouldUseBusyShortcut = !!modernPromptMeta && (
@@ -1862,10 +1852,7 @@ async function callAI(systemPrompt, historyMessages, userMessage, onSuccess, onE
                     busyKind: busyState.isSleepingTime ? 'sleep' : 'busy'
                 }));
                 setTimeout(function () {
-                    if (!canDeliverResponse()) {
-                        notifyCancelled();
-                        return;
-                    }
+                    if (!canDeliverResponse()) return;
                     try {
                         onSuccess(String(JSON.stringify(payload)));
                     } catch (e0) {
@@ -3116,6 +3103,9 @@ try {
         sticker: true,
         transfer: true,
         redpacket: true,
+        family_card: true,
+        takeout_card: true,
+        gift_card: true,
         ai_secret_photo: true,
         voice: true,
         listen_invite_accepted: true,
@@ -3422,10 +3412,7 @@ try {
             const timer = null;
             const slowTimer = softTimeoutNoAbort && onSlow
                 ? setTimeout(function () {
-                    if (!canDeliverResponse()) {
-                        notifyCancelled();
-                        return;
-                    }
+                    if (!canDeliverResponse()) return;
                     try { onSlow(); } catch (e) { }
                 }, slowTimeoutMs)
                 : null;
@@ -3462,10 +3449,7 @@ try {
         }
 
         let response = await doRequest(messages);
-        if (!canDeliverResponse()) {
-            notifyCancelled();
-            return;
-        }
+        if (!canDeliverResponse()) return;
         if (!response.ok && response.status === 500 && imageUrls.length > 0) {
             let fallbackText = '';
             if (userMessage && typeof userMessage === 'object') {
@@ -3486,10 +3470,7 @@ try {
                 busyShortcut: false
             }));
             response = await doRequest(retryMessages);
-            if (!canDeliverResponse()) {
-                notifyCancelled();
-                return;
-            }
+            if (!canDeliverResponse()) return;
         }
 
         const rawResponseText = String(await response.text() || '').replace(/^\uFEFF/, '').trim();
@@ -3519,10 +3500,7 @@ try {
                 };
             }
         } catch (e0) { }
-        if (!canDeliverResponse()) {
-            notifyCancelled();
-            return;
-        }
+        if (!canDeliverResponse()) return;
         if (!response.ok) {
             let detail = '';
             if (rawResponseText) {
@@ -3574,10 +3552,7 @@ try {
             }
         } catch (e0) { }
 
-        if (!canDeliverResponse()) {
-            notifyCancelled();
-            return;
-        }
+        if (!canDeliverResponse()) return;
         if (data && data.choices && data.choices.length > 0) {
             let aiText = data.choices[0].message.content;
             if (typeof aiText !== 'string') {
@@ -3617,10 +3592,7 @@ try {
 
             // 3. 发送清洗后的文本给 onSuccess
             // (chat.js 会再次解析它，但这次不会因为有 markdown 而失败了)
-            if (!canDeliverResponse()) {
-                notifyCancelled();
-                return;
-            }
+            if (!canDeliverResponse()) return;
             onSuccess(cleanText);
 
         } else {
@@ -3668,10 +3640,7 @@ try {
                 };
             }
         } catch (e0) { }
-        if (!canDeliverResponse()) {
-            notifyCancelled();
-            return;
-        }
+        if (!canDeliverResponse()) return;
         if (error && error.name === 'AbortError') {
             onError(`请求超时（>${Math.round(requestTimeoutMs / 1000)}秒），请检查 API 站点状态后重试`);
             return;

@@ -546,8 +546,6 @@
             let secretSpaceForageLoadInFlight = null;
             let secretSpaceAiTyping = false;
             let secretSpaceViewMode = 'normal';
-            let secretSpaceMessageLongPressTimer = null;
-            let secretSpaceMessageLongPressActive = false;
 
             function secretSpaceReadUiState() {
                 try {
@@ -604,7 +602,6 @@
                         : 'message';
                 let messageType = String(it.messageType || '').trim().toLowerCase();
                 if (!messageType && rawType === 'transfer_card') messageType = 'transfer_card';
-                if (!messageType && (rawType === 'translated_text' || rawType === 'translated')) messageType = 'translated_text';
                 if (!messageType) messageType = 'text';
                 const text = String(it.text || it.content || it.msg || '').trim();
                 if (!ts) return null;
@@ -624,83 +621,7 @@
                     };
                 }
                 if (!text) return null;
-                return { type, messageType, ts, text };
-            }
-
-            function secretSpaceSerializeTranslatedPayload(payload) {
-                if (!payload || typeof payload !== 'object' || typeof window.parseTranslatedTextPayload !== 'function') return '';
-                const parsed = window.parseTranslatedTextPayload(payload);
-                const foreignText = String(parsed && (parsed.foreignText || parsed.bodyText) || '').trim();
-                const translationText = String(parsed && (parsed.translationText || parsed.foreignText || parsed.bodyText) || '').trim();
-                if (!(foreignText || translationText)) return '';
-                return JSON.stringify({
-                    foreign: foreignText || translationText,
-                    translation: translationText || foreignText
-                });
-            }
-
-            function secretSpaceNormalizeStructuredPayload(rawValue) {
-                const normalizeCandidate = typeof window.normalizeStructuredTranslatedCandidate === 'function'
-                    ? window.normalizeStructuredTranslatedCandidate
-                    : null;
-                const parseBubble = typeof window.parseTranslatedBubbleText === 'function'
-                    ? window.parseTranslatedBubbleText
-                    : null;
-
-                if (rawValue && typeof rawValue === 'object') {
-                    if (String(rawValue.type || rawValue.kind || '').trim() === 'transfer_card') {
-                        return { mode: 'transfer_card', payload: rawValue };
-                    }
-                    const serialized = secretSpaceSerializeTranslatedPayload(rawValue);
-                    if (serialized) return { mode: 'translated_text', text: serialized };
-                    const objectText = String(rawValue.text != null ? rawValue.text : rawValue.content || '').trim();
-                    if (!objectText) return null;
-                    const objectCandidate = normalizeCandidate ? normalizeCandidate(objectText) : null;
-                    if (objectCandidate && objectCandidate.mode === 'translated_text') {
-                        return {
-                            mode: 'translated_text',
-                            text: JSON.stringify({
-                                foreign: String(objectCandidate.foreign || '').trim(),
-                                translation: String(objectCandidate.translation || '').trim()
-                            })
-                        };
-                    }
-                    const objectBubble = parseBubble ? parseBubble(objectText) : null;
-                    if (objectBubble && objectBubble.hasTranslation) {
-                        return {
-                            mode: 'translated_text',
-                            text: JSON.stringify({
-                                foreign: String(objectBubble.foreignText || objectBubble.bodyText || '').trim(),
-                                translation: String(objectBubble.translationText || objectBubble.foreignText || '').trim()
-                            })
-                        };
-                    }
-                    return objectText ? { mode: 'text', text: objectText } : null;
-                }
-
-                const rawText = String(rawValue == null ? '' : rawValue).trim();
-                if (!rawText) return null;
-                const candidate = normalizeCandidate ? normalizeCandidate(rawText) : null;
-                if (candidate && candidate.mode === 'translated_text') {
-                    return {
-                        mode: 'translated_text',
-                        text: JSON.stringify({
-                            foreign: String(candidate.foreign || '').trim(),
-                            translation: String(candidate.translation || '').trim()
-                        })
-                    };
-                }
-                const bubble = parseBubble ? parseBubble(rawText) : null;
-                if (bubble && bubble.hasTranslation) {
-                    return {
-                        mode: 'translated_text',
-                        text: JSON.stringify({
-                            foreign: String(bubble.foreignText || bubble.bodyText || '').trim(),
-                            translation: String(bubble.translationText || bubble.foreignText || '').trim()
-                        })
-                    };
-                }
-                return { mode: 'text', text: rawText };
+                return { type, messageType: 'text', ts, text };
             }
 
             function secretSpaceReadMessagesFromLocal() {
@@ -809,31 +730,26 @@
             }
 
             function secretSpaceAppendAiMessage(payload) {
-                const normalizedPayload = secretSpaceNormalizeStructuredPayload(payload);
-                if (!normalizedPayload) return false;
+                const isObj = !!payload && typeof payload === 'object';
+                const msg = isObj ? '' : String(payload || '').trim();
+                if (!isObj && !msg) return false;
                 const list = secretSpaceReadMessages();
-                if (normalizedPayload.mode === 'transfer_card') {
-                    const transferPayload = normalizedPayload.payload || {};
-                    const amount = Number(transferPayload.amount || 0) || 0;
+                if (isObj && String(payload.type || '').trim() === 'transfer_card') {
+                    const amount = Number(payload.amount || 0) || 0;
                     if (!(amount > 0)) return false;
-                    const content = String(transferPayload.content || '拿去花').trim() || '拿去花';
+                    const content = String(payload.content || '拿去花').trim() || '拿去花';
                     list.push({
                         type: 'ai_message',
                         messageType: 'transfer_card',
                         ts: Date.now(),
                         text: content,
                         amount: Math.round(amount * 100) / 100,
-                        color: String(transferPayload.color || 'pink').trim() || 'pink',
+                        color: String(payload.color || 'pink').trim() || 'pink',
                         content: content,
-                        status: String(transferPayload.status || 'pending').trim() || 'pending'
+                        status: String(payload.status || 'pending').trim() || 'pending'
                     });
                 } else {
-                    list.push({
-                        type: 'ai_message',
-                        messageType: normalizedPayload.mode === 'translated_text' ? 'translated_text' : 'text',
-                        ts: Date.now(),
-                        text: String(normalizedPayload.text || '').trim()
-                    });
+                    list.push({ type: 'ai_message', messageType: 'text', ts: Date.now(), text: msg });
                 }
                 secretSpaceWriteMessages(list);
                 return true;
@@ -1002,8 +918,7 @@
                 const content = String(it.content || it.text || '').trim();
                 if (!timestamp || !content) return null;
                 const display = String(it.display || it.displayText || content).trim() || content;
-                const messageType = String(it.messageType || '').trim().toLowerCase();
-                return { role, content, display, timestamp, messageType: messageType === 'translated_text' ? 'translated_text' : 'text' };
+                return { role, content, display, timestamp };
             }
 
             function secretSpaceReadPeerChatHistoryFromLocal() {
@@ -1096,20 +1011,10 @@
             }
 
             function secretSpaceAppendPeerUsageAiMessage(text) {
-                const normalizedPayload = secretSpaceNormalizeStructuredPayload(text);
-                if (!normalizedPayload || normalizedPayload.mode === 'transfer_card') return false;
-                const msg = String(normalizedPayload.text || '').trim();
+                const msg = String(text || '').trim();
                 if (!msg) return false;
                 const list = secretSpaceReadPeerChatHistory();
-                list.push({
-                    role: 'ai',
-                    content: msg,
-                    display: normalizedPayload.mode === 'translated_text'
-                        ? String((resolveCoupleSpaceTranslatedPayload(msg) || {}).translation || '').trim() || msg
-                        : msg,
-                    timestamp: Date.now(),
-                    messageType: normalizedPayload.mode === 'translated_text' ? 'translated_text' : 'text'
-                });
+                list.push({ role: 'ai', content: msg, display: msg, timestamp: Date.now() });
                 secretSpaceWritePeerChatHistory(list);
                 secretSpaceRender();
                 return true;
@@ -1138,11 +1043,10 @@
                     if (!it || typeof it !== 'object') continue;
                     const role = String(it.role || '').trim();
                     const text = String(it.display || it.content || '').trim();
-                    const messageType = String(it.messageType || '').trim().toLowerCase() === 'translated_text' ? 'translated_text' : 'text';
                     const ts = Number(it.timestamp || 0) || 0;
                     if (!text || !ts) continue;
                     if (role === 'ai') {
-                        list.push({ type: 'ai_message', messageType, ts, text: messageType === 'translated_text' ? String(it.content || text).trim() : text });
+                        list.push({ type: 'ai_message', messageType: 'text', ts, text });
                     } else {
                         list.push({ type: 'message', ts, text });
                     }
@@ -1206,62 +1110,17 @@
                 try {
                     if (typeof pw.openChatApp === 'function') pw.openChatApp();
                 } catch (e) { }
+                try {
+                    if (typeof pw.switchWechatTab === 'function') pw.switchWechatTab('me');
+                } catch (e2) { }
                 setTimeout(() => {
                     try {
-                        if (pw.Wallet && typeof pw.Wallet.open === 'function') {
-                            pw.Wallet.open();
-                            return;
-                        }
+                        if (pw.MineCore && typeof pw.MineCore.show === 'function') pw.MineCore.show();
                     } catch (e3) { }
                     try {
-                        if (typeof pw.switchWechatTab === 'function') pw.switchWechatTab('me');
-                    } catch (e4) { }
-                    try {
-                        if (pw.MineCore && typeof pw.MineCore.show === 'function') pw.MineCore.show();
-                    } catch (e5) { }
-                    try {
                         if (pw.Wallet && typeof pw.Wallet.open === 'function') pw.Wallet.open();
-                    } catch (e6) { }
-                }, 40);
-            }
-
-            function secretSpaceResolveTranslatedPayload(item) {
-                const it = item && typeof item === 'object' ? item : null;
-                if (!it) return null;
-                const rawText = String(it.text || '').trim();
-                if (!rawText) return null;
-                const parsePayload = typeof window.parseTranslatedTextPayload === 'function'
-                    ? window.parseTranslatedTextPayload
-                    : null;
-                const normalizeCandidate = typeof window.normalizeStructuredTranslatedCandidate === 'function'
-                    ? window.normalizeStructuredTranslatedCandidate
-                    : null;
-                const parseBubble = typeof window.parseTranslatedBubbleText === 'function'
-                    ? window.parseTranslatedBubbleText
-                    : null;
-
-                if (String(it.messageType || '').trim() === 'translated_text' && parsePayload) {
-                    const directPayload = parsePayload(rawText);
-                    if (directPayload && directPayload.hasTranslation) return directPayload;
-                }
-
-                if (normalizeCandidate && parsePayload) {
-                    const candidate = normalizeCandidate(rawText);
-                    if (candidate && candidate.mode === 'translated_text') {
-                        const structuredPayload = parsePayload({
-                            foreign: candidate.foreign,
-                            translation: candidate.translation
-                        });
-                        if (structuredPayload && structuredPayload.hasTranslation) return structuredPayload;
-                    }
-                }
-
-                if (parseBubble) {
-                    const plainPayload = parseBubble(rawText);
-                    if (plainPayload && plainPayload.hasTranslation) return plainPayload;
-                }
-
-                return null;
+                    } catch (e4) { }
+                }, 60);
             }
 
             function secretSpaceCreditWallet(amount) {
@@ -1336,27 +1195,11 @@
                     const el = textEls[i];
                     if (!el) continue;
                     el.classList.remove('is-overflow');
-                    const fullText = String(el.getAttribute('data-full-text') || el.textContent || '').trim();
-                    if (!fullText) continue;
-                    el.textContent = fullText;
                     try {
                         el.style.removeProperty('--scroll-distance');
                     } catch (e0) { }
                     const overflow = Number(el.scrollWidth || 0) - Number(el.clientWidth || 0);
                     if (overflow <= 8) continue;
-                    const track = document.createElement('span');
-                    track.className = 'activity-log-text-track';
-                    const main = document.createElement('span');
-                    main.className = 'activity-log-text-main';
-                    main.textContent = fullText;
-                    const copy = document.createElement('span');
-                    copy.className = 'activity-log-text-copy';
-                    copy.setAttribute('aria-hidden', 'true');
-                    copy.textContent = fullText;
-                    track.appendChild(main);
-                    track.appendChild(copy);
-                    el.textContent = '';
-                    el.appendChild(track);
                     el.classList.add('is-overflow');
                     try {
                         el.style.setProperty('--scroll-distance', `${Math.ceil(overflow + 18)}px`);
@@ -1376,8 +1219,6 @@
                     if (it.type === 'message') {
                         const row = document.createElement('div');
                         row.className = 'secret-message-row';
-                        row.setAttribute('data-message-type', 'message');
-                        row.setAttribute('data-message-ts', String(Number(it.ts || 0) || 0));
 
                         const bubble = document.createElement('div');
                         bubble.className = 'secret-message-bubble';
@@ -1397,8 +1238,6 @@
                     if (it.type === 'ai_message') {
                         const row = document.createElement('div');
                         row.className = 'secret-ai-message-row';
-                        row.setAttribute('data-message-type', 'ai_message');
-                        row.setAttribute('data-message-ts', String(Number(it.ts || 0) || 0));
 
                         const avatar = document.createElement('img');
                         avatar.className = 'secret-message-avatar';
@@ -1438,23 +1277,7 @@
                         } else {
                             bubble = document.createElement('div');
                             bubble.className = 'secret-ai-message-bubble';
-                            const translatedPayload = secretSpaceResolveTranslatedPayload(it);
-                            if (translatedPayload && typeof window.buildTranslatedBubbleInnerHtml === 'function') {
-                                bubble.classList.add('translated-message-shell', 'secret-translated-message-shell');
-                                bubble.innerHTML = window.buildTranslatedBubbleInnerHtml(translatedPayload, {
-                                    baseClass: 'translated-message-bubble secret-translated-message-bubble',
-                                    foreignClass: 'translated-message-foreign secret-translated-message-foreign',
-                                    dividerClass: 'translated-message-divider secret-translated-message-divider',
-                                    translationClass: 'translated-message-translation secret-translated-message-translation',
-                                    title: '点击收起或展开翻译'
-                                });
-                                const translatedBubble = bubble.querySelector('[data-translation-bubble="1"]');
-                                if (translatedBubble && typeof window.bindTranslatedBubbleToggle === 'function') {
-                                    window.bindTranslatedBubbleToggle(translatedBubble);
-                                }
-                            } else {
-                                bubble.textContent = it.text || '';
-                            }
+                            bubble.textContent = it.text || '';
                         }
 
                         row.appendChild(avatar);
@@ -1482,7 +1305,6 @@
 
                     const textEl = document.createElement('span');
                     textEl.className = 'activity-log-text';
-                    textEl.setAttribute('data-full-text', text || '');
                     textEl.textContent = text || '';
 
                     pill.appendChild(iconEl);
@@ -1545,106 +1367,23 @@
 
             function secretSpaceBindInputEvents() {
                 const input = document.getElementById('secret-space-input');
-                if (input && input.dataset.secretBound !== '1') {
-                    input.dataset.secretBound = '1';
-                    input.addEventListener('keydown', (e) => {
-                        if (!e || e.key !== 'Enter') return;
-                        e.preventDefault();
-                        const panel = document.getElementById('secret-space-modal');
-                        const sendBtn = panel && panel.querySelector
-                            ? panel.querySelector('[data-action="send-secret"]')
-                            : null;
-                        if (sendBtn && typeof sendBtn.click === 'function') {
-                            sendBtn.click();
-                            return;
-                        }
-                        if (secretSpaceSendMessage(input.value)) {
-                            input.value = '';
-                        }
-                    });
-                }
+                if (!input || input.dataset.secretBound === '1') return;
+                input.dataset.secretBound = '1';
 
-                const main = document.getElementById('secret-space-main');
-                if (!main || main.dataset.secretMessageBound === '1') return;
-                main.dataset.secretMessageBound = '1';
-
-                const resolveLongPressTarget = function (target) {
-                    const row = target && target.closest
-                        ? target.closest('.secret-message-row[data-message-ts], .secret-ai-message-row[data-message-ts]')
-                        : null;
-                    if (!row) return null;
-                    const ts = Number(row.getAttribute('data-message-ts') || 0) || 0;
-                    const type = String(row.getAttribute('data-message-type') || '').trim();
-                    if (!ts || (type !== 'message' && type !== 'ai_message')) return null;
-                    return { ts, type };
-                };
-
-                const deleteMessageAt = function (meta) {
-                    if (!meta || !meta.ts || !meta.type) return false;
-                    if (!confirm('确定删除这条秘密空间消息吗？')) return false;
-                    if (secretSpaceViewMode === 'peer_usage') {
-                        const history = secretSpaceReadPeerChatHistory();
-                        const next = history.filter(function (item) {
-                            if (!item || typeof item !== 'object') return false;
-                            const role = String(item.role || '').trim();
-                            const ts = Number(item.timestamp || 0) || 0;
-                            const matchesRole = meta.type === 'ai_message' ? role === 'ai' : role !== 'ai';
-                            return !(matchesRole && ts === meta.ts);
-                        });
-                        if (next.length === history.length) return false;
-                        secretSpaceWritePeerChatHistory(next);
-                        secretSpaceRender();
-                        return true;
-                    }
-                    const list = secretSpaceReadMessages();
-                    const next = list.filter(function (item) {
-                        if (!item || typeof item !== 'object') return false;
-                        return !(Number(item.ts || 0) === meta.ts && String(item.type || '') === meta.type);
-                    });
-                    if (next.length === list.length) return false;
-                    secretSpaceWriteMessages(next);
-                    secretSpaceRender();
-                    return true;
-                };
-
-                const startLongPress = function (e) {
-                    const meta = resolveLongPressTarget(e && e.target ? e.target : null);
-                    if (!meta) return;
-                    secretSpaceMessageLongPressActive = true;
-                    if (secretSpaceMessageLongPressTimer) {
-                        clearTimeout(secretSpaceMessageLongPressTimer);
-                        secretSpaceMessageLongPressTimer = null;
-                    }
-                    secretSpaceMessageLongPressTimer = setTimeout(function () {
-                        secretSpaceMessageLongPressTimer = null;
-                        if (!secretSpaceMessageLongPressActive) return;
-                        deleteMessageAt(meta);
-                    }, 520);
-                };
-
-                const cancelLongPress = function () {
-                    secretSpaceMessageLongPressActive = false;
-                    if (secretSpaceMessageLongPressTimer) {
-                        clearTimeout(secretSpaceMessageLongPressTimer);
-                        secretSpaceMessageLongPressTimer = null;
-                    }
-                };
-
-                main.addEventListener('touchstart', startLongPress, { passive: true });
-                main.addEventListener('touchend', cancelLongPress, { passive: true });
-                main.addEventListener('touchcancel', cancelLongPress, { passive: true });
-                main.addEventListener('touchmove', cancelLongPress, { passive: true });
-                main.addEventListener('mousedown', function (e) {
-                    if (e && e.button !== 0) return;
-                    startLongPress(e);
-                });
-                main.addEventListener('mouseup', cancelLongPress);
-                main.addEventListener('mouseleave', cancelLongPress);
-                main.addEventListener('contextmenu', function (e) {
-                    const meta = resolveLongPressTarget(e && e.target ? e.target : null);
-                    if (!meta) return;
+                input.addEventListener('keydown', (e) => {
+                    if (!e || e.key !== 'Enter') return;
                     e.preventDefault();
-                    deleteMessageAt(meta);
+                    const panel = document.getElementById('secret-space-modal');
+                    const sendBtn = panel && panel.querySelector
+                        ? panel.querySelector('[data-action="send-secret"]')
+                        : null;
+                    if (sendBtn && typeof sendBtn.click === 'function') {
+                        sendBtn.click();
+                        return;
+                    }
+                    if (secretSpaceSendMessage(input.value)) {
+                        input.value = '';
+                    }
                 });
             }
 
@@ -1665,7 +1404,6 @@
                 buildPeerUsagePromptLogText: secretSpaceBuildPeerUsagePromptLogText,
                 bindInputEvents: secretSpaceBindInputEvents,
                 loadForageCache: secretSpaceLoadForageCache,
-                normalizeIncomingPayload: secretSpaceNormalizeStructuredPayload,
                 storageKey: secretSpaceMessagesStorageKey,
             };
 
@@ -2404,215 +2142,6 @@
             return text || 'Ta';
         }
 
-        function readCoupleRoleProfile(roleId) {
-            const rid = String(roleId || '').trim();
-            if (!rid) return {};
-            const pw = getParentWindow();
-            try {
-                const profiles = pw && pw.charProfiles && typeof pw.charProfiles === 'object' ? pw.charProfiles : null;
-                if (profiles && profiles[rid] && typeof profiles[rid] === 'object') {
-                    return profiles[rid];
-                }
-            } catch (e) { }
-            try {
-                const raw = localStorage.getItem('wechat_charProfiles') || '{}';
-                const parsed = safeJsonParse(raw, {});
-                return parsed && parsed[rid] && typeof parsed[rid] === 'object' ? parsed[rid] : {};
-            } catch (e2) {
-                return {};
-            }
-        }
-
-        function isLikelyForeignLanguageHint(text) {
-            const raw = String(text || '').trim();
-            if (!raw) return false;
-            const lower = raw.toLowerCase();
-            if (/(中文|汉语|漢語|普通话|普通話|国语|國語|mandarin|simplified chinese|简体|簡體|zh[-_ ]?(cn|hans)?)/i.test(lower)) {
-                return false;
-            }
-            return /(英语|英語|英文|日语|日語|韩语|韓語|韩文|韓文|法语|法語|德语|德語|西班牙语|西班牙語|俄语|俄語|阿拉伯语|阿拉伯語|葡萄牙语|葡萄牙語|意大利语|意大利語|粤语|粵語|繁体|繁體|文言|english|japanese|korean|french|german|spanish|russian|arabic|portuguese|italian|thai|vietnamese|traditional chinese|cantonese|classical chinese|zh[-_ ]?(tw|hk|hant)|ja[-_ ]?jp|ko[-_ ]?kr|en[-_ ]?(us|gb))/i.test(lower);
-        }
-
-        function isLikelyForeignLocaleHint(text) {
-            const raw = String(text || '').trim();
-            if (!raw) return false;
-            const lower = raw.toLowerCase();
-            return /(日本|日本人|韩国|韓國|韩国人|韓國人|美国|美國|美国人|美國人|英国|英國|法国|法國|德国|德國|西班牙|意大利|義大利|俄罗斯|俄羅斯|阿拉伯|葡萄牙|荷兰|荷蘭|泰国|泰國|越南|japan|japanese|korea|korean|america|american|britain|british|france|french|germany|german|spain|spanish|italy|italian|russia|russian|arab|arabic|portugal|portuguese|netherlands|dutch|thailand|thai|vietnam|vietnamese)/i.test(lower);
-        }
-
-        function isLikelyNonSimplifiedChineseHint(text) {
-            const raw = String(text || '').trim();
-            if (!raw) return false;
-            if (/(繁體|繁体|正體|正体|traditional chinese|cantonese|粤语|粵語|文言|classical chinese|zh[-_ ]?(tw|hk|hant))/i.test(raw)) {
-                return true;
-            }
-            const hits = (raw.match(/[這個們為來時後會說話讓還愛歡學習覺應實體點開關於與臺灣廣東電腦網頁貓車鐘鍾門裡見聽買麼嗎係嘅咗喺冇唔佢哋啲咩]/g) || []).length;
-            return hits >= 2;
-        }
-
-        function isCoupleSpaceBilingualRole(roleId) {
-            const profile = readCoupleRoleProfile(roleId);
-            const explicit = [
-                { value: profile.language, kind: 'language' },
-                { value: profile.lang, kind: 'language' },
-                { value: profile.nativeLanguage, kind: 'language' },
-                { value: profile.native_language, kind: 'language' },
-                { value: profile.spokenLanguage, kind: 'language' },
-                { value: profile.spoken_language, kind: 'language' },
-                { value: profile.locale, kind: 'locale' },
-                { value: profile.nationality, kind: 'locale' }
-            ];
-            for (let i = 0; i < explicit.length; i++) {
-                const item = explicit[i] || {};
-                const value = String(item.value || '').trim();
-                if (!value) continue;
-                if (item.kind === 'locale') {
-                    if (isLikelyForeignLocaleHint(value) || isLikelyForeignLanguageHint(value)) return true;
-                } else if (isLikelyForeignLanguageHint(value) || isLikelyNonSimplifiedChineseHint(value)) {
-                    return true;
-                }
-            }
-            const sampleText = [
-                profile.realName,
-                profile.real_name,
-                profile.nickName,
-                profile.name,
-                profile.character_name,
-                profile.characterName,
-                profile.title,
-                profile.desc,
-                profile.description,
-                profile.persona,
-                profile.prompt,
-                profile.system_prompt,
-                profile.systemPrompt,
-                profile.scenario,
-                profile.first_mes,
-                profile.mes_example,
-                profile.creator_notes,
-                profile.post_history_instructions,
-                Array.isArray(profile.tags) ? profile.tags.join(' ') : String(profile.tags || '')
-            ];
-            for (let i = 0; i < sampleText.length; i++) {
-                if (isLikelyForeignLanguageHint(sampleText[i]) || isLikelyNonSimplifiedChineseHint(sampleText[i])) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        function resolveCoupleSpaceTranslatedPayload(rawValue) {
-            if (rawValue == null) return null;
-            if (typeof window.normalizeStructuredTranslatedCandidate === 'function') {
-                try {
-                    const structured = window.normalizeStructuredTranslatedCandidate(rawValue);
-                    if (structured && structured.mode === 'translated_text') {
-                        return {
-                            foreign: String(structured.foreign || '').trim(),
-                            translation: String(structured.translation || '').trim()
-                        };
-                    }
-                } catch (e0) { }
-            }
-            if (typeof window.parseTranslatedTextPayload === 'function' && rawValue && typeof rawValue === 'object') {
-                try {
-                    const parsedObj = window.parseTranslatedTextPayload(rawValue);
-                    if (parsedObj && parsedObj.hasTranslation) {
-                        return {
-                            foreign: String(parsedObj.foreignText || parsedObj.bodyText || '').trim(),
-                            translation: String(parsedObj.translationText || parsedObj.foreignText || '').trim()
-                        };
-                    }
-                } catch (e1) { }
-            }
-            if (typeof window.parseTranslatedBubbleText === 'function') {
-                try {
-                    const parsedText = window.parseTranslatedBubbleText(String(rawValue == null ? '' : rawValue));
-                    if (parsedText && parsedText.hasTranslation) {
-                        return {
-                            foreign: String(parsedText.foreignText || parsedText.bodyText || '').trim(),
-                            translation: String(parsedText.translationText || parsedText.foreignText || '').trim()
-                        };
-                    }
-                } catch (e2) { }
-            }
-            return null;
-        }
-
-        function extractCoupleSpaceBilingualPairs(rawText) {
-            const direct = resolveCoupleSpaceTranslatedPayload(rawText);
-            if (direct && direct.foreign && direct.translation) {
-                return [direct];
-            }
-            const raw = String(rawText == null ? '' : rawText).trim();
-            if (!raw) return [];
-
-            const blocks = raw
-                .split(/\n{2,}/)
-                .map((item) => String(item || '').trim())
-                .filter(Boolean);
-            const units = blocks.length >= 2
-                ? blocks
-                : raw.split(/\r?\n+/).map((item) => String(item || '').trim()).filter(Boolean);
-            if (units.length < 2) return [];
-
-            const pairs = [];
-            for (let i = 0; i < units.length; i++) {
-                const current = units[i];
-                const single = resolveCoupleSpaceTranslatedPayload(current);
-                if (single && single.foreign && single.translation) {
-                    pairs.push(single);
-                    continue;
-                }
-                if (i + 1 >= units.length) continue;
-                const pair = resolveCoupleSpaceTranslatedPayload(current + '\n' + units[i + 1]);
-                if (pair && pair.foreign && pair.translation) {
-                    pairs.push(pair);
-                    i++;
-                }
-            }
-            return pairs;
-        }
-
-        function normalizeCoupleSpaceDiaryContent(roleId, rawText) {
-            const text = String(rawText == null ? '' : rawText).trim();
-            if (!text || !isCoupleSpaceBilingualRole(roleId)) return text;
-            const pairs = extractCoupleSpaceBilingualPairs(text);
-            if (!pairs.length) return text;
-            return pairs.map((pair) => {
-                return `${String(pair.foreign || '').trim()}\n\n${String(pair.translation || '').trim()}`;
-            }).join('\n\n');
-        }
-
-        function renderCoupleSpaceDiaryContentHtml(roleId, rawText) {
-            const text = String(rawText == null ? '' : rawText).trim();
-            if (!text) return '';
-            const pairs = isCoupleSpaceBilingualRole(roleId) ? extractCoupleSpaceBilingualPairs(text) : [];
-            if (!pairs.length) return escapeHtml(text);
-            return pairs.map((pair) => {
-                const foreign = escapeHtml(String(pair.foreign || '').trim());
-                const translation = escapeHtml(String(pair.translation || '').trim());
-                return (
-                    '<div class="note-translation-pair">' +
-                    `<div class="note-translation-foreign">${foreign}</div>` +
-                    `<div class="note-translation-translation">${translation}</div>` +
-                    '</div>'
-                );
-            }).join('');
-        }
-
-        function buildCoupleSpaceDiaryLanguageRule(roleId) {
-            if (!isCoupleSpaceBilingualRole(roleId)) return '';
-            return [
-                '当前角色是外语或非简体中文角色。',
-                '你写出的日记 content 必须保持“双语段落配对”格式。',
-                '严格使用“上一段写角色真正会说的原文，下一段单独写对应的简体中文翻译”的顺序。',
-                '原文段和翻译段必须分成两个独立段落，绝对不要放在同一行、同一段、同一对括号里。',
-                '即使整篇日记很短，也至少要保留 1 组“原文段 + 中文翻译段”。',
-                'mood 字段仍然只允许输出中文心情词。'
-            ].join('\n');
-        }
-
         function isCoupleSpaceAppNowVisible() {
             if (coupleSpaceAppVisible) return true;
             try {
@@ -2850,7 +2379,7 @@
                     '.korean-window{position:absolute;width:min(260px,calc(100vw - 24px));background:rgba(245,245,245,.9);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);border-radius:8px;box-shadow:0 15px 35px rgba(0,0,0,.1),0 5px 10px rgba(0,0,0,.05);border:1px solid rgba(255,255,255,.6);pointer-events:auto;animation:windowAppear .4s cubic-bezier(.175,.885,.32,1.275) forwards;user-select:none;}' +
                     '@keyframes windowAppear{from{opacity:0;transform:scale(.8) translateY(20px);}to{opacity:1;transform:scale(1) translateY(0);}}' +
                     '.kw-header{display:flex;align-items:center;padding:12px 15px;border-bottom:1px solid rgba(0,0,0,.03);}.kw-dot{width:8px;height:8px;border-radius:50%;margin-right:6px;}.kw-dot.red{background:#e8a5a5;}.kw-dot.yellow{background:#ebd4a0;}.kw-dot.green{background:#a8ccba;}.kw-title{font-size:10px;font-weight:700;color:#aaa;letter-spacing:1px;margin-left:auto;text-transform:uppercase;}' +
-                    '.kw-body{padding:20px;text-align:center;}.kw-msg{font-size:14px;color:#555;line-height:1.6;margin-bottom:20px;font-weight:500;}.kw-msg-translated{display:flex;flex-direction:column;gap:6px;}.kw-msg-foreign{font-size:14px;color:#4b5563;font-weight:700;white-space:pre-wrap;word-break:break-word;}.kw-msg-translation{font-size:12px;color:#8b8b95;line-height:1.6;white-space:pre-wrap;word-break:break-word;}.kw-footer{display:flex;gap:10px;justify-content:center;}.kw-btn{padding:8px 16px;border-radius:8px;font-size:12px;border:none;transition:all .2s;font-weight:600;cursor:pointer;}.kw-btn.primary{background:#555;color:#fff;}.kw-btn.secondary{background:rgba(0,0,0,.05);color:#888;}.kw-btn:active{transform:scale(.95);opacity:.8;}';
+                    '.kw-body{padding:20px;text-align:center;}.kw-msg{font-size:14px;color:#555;line-height:1.6;margin-bottom:20px;font-weight:500;}.kw-footer{display:flex;gap:10px;justify-content:center;}.kw-btn{padding:8px 16px;border-radius:8px;font-size:12px;border:none;transition:all .2s;font-weight:600;cursor:pointer;}.kw-btn.primary{background:#555;color:#fff;}.kw-btn.secondary{background:rgba(0,0,0,.05);color:#888;}.kw-btn:active{transform:scale(.95);opacity:.8;}';
                 d.head.appendChild(style);
             }
             return overlay;
@@ -2864,40 +2393,14 @@
             return s;
         }
 
-        function normalizeJealousyLinePayload(rawValue) {
-            if (rawValue == null) return null;
-            const translated = resolveCoupleSpaceTranslatedPayload(rawValue);
-            if (translated && translated.foreign && translated.translation) {
-                return {
-                    foreign: sanitizeJealousyLine(translated.foreign),
-                    translation: sanitizeJealousyLine(translated.translation)
-                };
-            }
-            const text = sanitizeJealousyLine(typeof rawValue === 'string' ? rawValue : (rawValue && rawValue.text ? rawValue.text : ''));
-            return text ? { text } : null;
-        }
-
-        function getJealousyLineDisplayText(item) {
-            const entry = item && typeof item === 'object' ? item : null;
-            if (!entry) return '';
-            if (entry.translation || entry.foreign) {
-                return String(entry.translation || entry.foreign || '').trim();
-            }
-            return String(entry.text || '').trim();
-        }
-
         function parseJealousyLines(rawText) {
             const arr = extractJsonArray(rawText);
             let list = Array.isArray(arr) ? arr : [];
             if (!list.length) {
                 list = String(rawText || '').split(/\r?\n+/).map((line) => line.trim()).filter(Boolean);
             }
-            list = list.map(normalizeJealousyLinePayload).filter(Boolean).slice(0, 3);
-            const fallback = [
-                { text: '还要和他聊多久？' },
-                { text: '你答应过我的专属时间呢。' },
-                { text: '现在回头看看我，好不好？' }
-            ];
+            list = list.map(sanitizeJealousyLine).filter(Boolean).slice(0, 3);
+            const fallback = ['还要和他聊多久？', '你答应过我的专属时间呢。', '现在回头看看我，好不好？'];
             while (list.length < 3) {
                 list.push(fallback[list.length]);
             }
@@ -2919,23 +2422,17 @@
                 `你是情侣空间里的正宫角色「${roleName}」，你知道用户正在和别人聊天太久。`,
                 '请根据你的人设、关系亲密度和说话风格，生成 3 句会显示在屏幕小弹窗里的短句。',
                 '语气可以吃醋、委屈、占有欲、冷静警告或撒娇，但不要威胁现实安全，不要血腥暴力，不要要求用户伤害自己或他人。',
-                isCoupleSpaceBilingualRole(roleId)
-                    ? '如果你是外语或非简体中文角色，每条都必须输出成 {"foreign":"角色原话","translation":"对应的简体中文翻译"}，原文要短，中文翻译也要短。'
-                    : '每句 8~24 个中文字符左右，要像角色本人临时打断用户时说的话。'
+                '每句 8~24 个中文字符左右，要像角色本人临时打断用户时说的话。'
             ].join('\n');
             const userPrompt = [
-                isCoupleSpaceBilingualRole(roleId)
-                    ? '请只输出严格 JSON 数组，数组里必须正好 3 项；每项都必须是 {"foreign":"...","translation":"..."}。'
-                    : '请只输出严格 JSON 数组，数组里必须正好 3 个字符串。',
+                '请只输出严格 JSON 数组，数组里必须正好 3 个字符串。',
                 '不要输出 Markdown、解释、编号或额外字段。',
                 `聊天对象：${otherName}`,
                 `停留时长：约 ${minutes} 分钟`
             ].join('\n');
             try {
                 const raw = await callRoleDiaryLLM(roleId, [], userPrompt, extraSystemPrompt, {
-                    outputInstructions: isCoupleSpaceBilingualRole(roleId)
-                        ? '只输出严格 JSON 数组，正好 3 项；每项都是 {"foreign":"...","translation":"..."}。'
-                        : '只输出严格 JSON 数组，正好 3 个字符串，不要解释，不要代码块。',
+                    outputInstructions: '只输出严格 JSON 数组，正好 3 个字符串，不要解释，不要代码块。',
                     useLitePrompt: true
                 });
                 return parseJealousyLines(raw);
@@ -2977,17 +2474,7 @@
                     '<div class="kw-body"><p class="kw-msg"></p><div class="kw-footer"><button class="kw-btn primary" type="button">回到我身边</button><button class="kw-btn secondary" type="button">晚点再说</button></div></div>';
             }
             const msgEl = card.querySelector('.kw-msg');
-            if (msgEl) {
-                if (message && typeof message === 'object' && message.translation && message.foreign) {
-                    msgEl.classList.add('kw-msg-translated');
-                    msgEl.innerHTML =
-                        `<div class="kw-msg-foreign">${escapeHtml(message.foreign)}</div>` +
-                        `<div class="kw-msg-translation">${escapeHtml(message.translation)}</div>`;
-                } else {
-                    msgEl.classList.remove('kw-msg-translated');
-                    msgEl.textContent = getJealousyLineDisplayText(message);
-                }
-            }
+            if (msgEl) msgEl.textContent = message;
             const width = Math.max(320, Number(doc.documentElement && doc.documentElement.clientWidth || 0));
             const height = Math.max(480, Number(doc.documentElement && doc.documentElement.clientHeight || 0));
             const cardW = Math.min(260, width - 24);
@@ -3730,17 +3217,13 @@
         }
 
         function appendSecretSpaceAiMessage(text) {
+            const msg = String(text || '').trim();
+            if (!msg) return false;
             try {
                 if (window.secretSpaceTimeline && typeof window.secretSpaceTimeline.receiveAiMessage === 'function') {
-                    return !!window.secretSpaceTimeline.receiveAiMessage(text);
+                    return !!window.secretSpaceTimeline.receiveAiMessage(msg);
                 }
             } catch (e) { }
-            const normalizedPayload = window.secretSpaceTimeline && typeof window.secretSpaceTimeline.normalizeIncomingPayload === 'function'
-                ? window.secretSpaceTimeline.normalizeIncomingPayload(text)
-                : null;
-            if (!normalizedPayload || normalizedPayload.mode === 'transfer_card') return false;
-            const msg = String(normalizedPayload.text || '').trim();
-            if (!msg) return false;
             try {
                 const link = getCoupleLinkState();
                 const rid = link && link.hasCoupleLinked ? String(link.roleId || '').trim() : '';
@@ -3759,7 +3242,6 @@
                             : 'message';
                     let messageType = String(it.messageType || '').trim().toLowerCase();
                     if (!messageType && rawType === 'transfer_card') messageType = 'transfer_card';
-                    if (!messageType && (rawType === 'translated_text' || rawType === 'translated')) messageType = 'translated_text';
                     if (!messageType) messageType = 'text';
                     const text = String(it.text || it.content || it.msg || '').trim();
                     if (!ts) return null;
@@ -3779,16 +3261,11 @@
                         };
                     }
                     if (!text) return null;
-                    return { type, messageType, ts, text };
+                    return { type, messageType: 'text', ts, text };
                 };
 
                 const normalized = rawList.map(normalize).filter(Boolean);
-                normalized.push({
-                    type: 'ai_message',
-                    messageType: normalizedPayload.mode === 'translated_text' ? 'translated_text' : 'text',
-                    ts: Date.now(),
-                    text: msg
-                });
+                normalized.push({ type: 'ai_message', messageType: 'text', ts: Date.now(), text: msg });
                 normalized.sort((a, b) => Number(a.ts) - Number(b.ts));
 
                 const messages = normalized.filter((it) => it.type === 'message');
@@ -3877,9 +3354,7 @@
                     .filter(Boolean);
                 const extraSystemPrompt = buildSecretPeerUsageSceneExtraPrompt(roleId);
                 const outputInstructions =
-                    isCoupleSpaceBilingualRole(roleId)
-                        ? '输出 4~10 个微信气泡。每个气泡如果是外语或非简体中文，都必须写成 {"type":"translated_text","foreign":"角色原话","translation":"对应的简体中文翻译"}；如果本句本来就是简体中文，才允许直接输出普通文本。先回应用户说的话，再回应你刚才的行为记录。'
-                        : '输出 4~10 行微信短句，每行一句。先回应用户说的话，再回应你刚才的行为记录。第一句要明显表现出你已经读到了角色刚才的行为记录。只输出台词，不要解释。';
+                    '输出 4~10 行微信短句，每行一句。先回应用户说的话，再回应你刚才的行为记录。第一句要明显表现出你已经读到了角色刚才的行为记录。只输出台词，不要解释。';
                 const raw = await callRoleDiaryLLM(roleId, historyForApi, apiUserPrompt, extraSystemPrompt, {
                     outputInstructions
                 });
@@ -3897,11 +3372,11 @@
                 } catch (eHide) { }
                 const avatar = getCoupleSpaceRoleAvatarSrc();
                 const roleName = getRoleDisplayName();
-                showCoupleSpaceIosNotification(avatar, roleName, getSecretSpaceSegmentDisplayText(lines[0]));
+                showCoupleSpaceIosNotification(avatar, roleName, lines[0]);
                 for (let i = 0; i < lines.length; i++) {
                     appendAi(lines[i]);
                     if (i < lines.length - 1) {
-                        const line = getSecretSpaceSegmentDisplayText(lines[i]);
+                        const line = String(lines[i] || '');
                         const rhythm = Math.max(260, Math.min(1200, 280 + line.length * 26 + randomIntInclusive(80, 260)));
                         await new Promise((resolve) => setTimeout(resolve, rhythm));
                     }
@@ -4129,11 +3604,7 @@
                 `用户已被授权查看你的手机使用记录。\n` +
                 `首条用户消息会包含“角色刚才的行为记录”，后续消息不再重复，你要基于历史持续记住它。\n` +
                 `回复规则：先回应用户这句话，再回应你刚才的行为记录；第一句必须自然点明你已经看到记录，语气必须符合人设。\n` +
-                (
-                    isCoupleSpaceBilingualRole(roleId)
-                        ? `输出规则：如果你是外语或非简体中文角色，每个回复气泡都必须保持“原文 + 简体中文翻译”的结构化双语格式。`
-                        : `输出规则：像微信消息一样简短，输出4~10行，每行一句，只输出台词。`
-                )
+                `输出规则：像微信消息一样简短，输出4~10行，每行一句，只输出台词。`
             );
         }
 
@@ -4181,98 +3652,22 @@
             return sections.length ? sections.join('\n') : '（暂无可引用的真实用户动态或操作记录）';
         }
 
-        function getSecretSpaceSegmentDisplayText(segment) {
-            const seg = segment && typeof segment === 'object' ? segment : null;
-            if (!seg) return '';
-            if (seg.kind === 'translated_text') {
-                return String(seg.translation || seg.foreign || '').trim();
-            }
-            return String(seg.text || '').trim();
-        }
-
         function splitSecretSpaceReplyLines(text, maxItems) {
-            const raw = String(text == null ? '' : text).trim();
+            const raw = String(text || '').trim();
             if (!raw) return [];
-            const normalized = typeof window.normalizeStructuredReplySegments === 'function'
-                ? window.normalizeStructuredReplySegments(raw, { offlineMode: false })
-                : [];
-            const structured = Array.isArray(normalized)
-                ? normalized.filter((seg) => {
-                    return seg && (seg.kind === 'text' || seg.kind === 'translated_text');
-                }).map((seg) => {
-                    if (seg.kind === 'translated_text') {
-                        return {
-                            kind: 'translated_text',
-                            foreign: String(seg.foreign || '').trim(),
-                            translation: String(seg.translation || '').trim()
-                        };
-                    }
-                    return {
-                        kind: 'text',
-                        text: String(seg.text || '').trim()
-                    };
-                }).filter((seg) => !!getSecretSpaceSegmentDisplayText(seg))
-                : [];
-            if (structured.length) {
-                const mergedStructured = [];
-                for (let i = 0; i < structured.length; i++) {
-                    const current = structured[i];
-                    if (!current) continue;
-                    if (current.kind === 'translated_text') {
-                        mergedStructured.push(current);
-                        continue;
-                    }
-                    const directPair = resolveCoupleSpaceTranslatedPayload(current.text || '');
-                    if (directPair && directPair.foreign && directPair.translation) {
-                        mergedStructured.push({ kind: 'translated_text', foreign: directPair.foreign, translation: directPair.translation });
-                        continue;
-                    }
-                    const next = structured[i + 1];
-                    if (next && next.kind === 'text') {
-                        const mergedPair = resolveCoupleSpaceTranslatedPayload(String(current.text || '') + '\n' + String(next.text || ''));
-                        if (mergedPair && mergedPair.foreign && mergedPair.translation) {
-                            mergedStructured.push({ kind: 'translated_text', foreign: mergedPair.foreign, translation: mergedPair.translation });
-                            i++;
-                            continue;
-                        }
-                    }
-                    mergedStructured.push(current);
-                }
-                return mergedStructured.slice(0, Math.max(1, Number(maxItems) || 4));
-            }
-
             const preset = raw
                 .split(/\r?\n+/)
                 .map((line) => String(line || '').replace(/^[\-\d\.\)\s]+/, '').trim())
                 .filter(Boolean);
-            const grouped = [];
-            for (let i = 0; i < preset.length; i++) {
-                const current = preset[i];
-                const directPair = resolveCoupleSpaceTranslatedPayload(current);
-                if (directPair && directPair.foreign && directPair.translation) {
-                    grouped.push({ kind: 'translated_text', foreign: directPair.foreign, translation: directPair.translation });
-                    continue;
-                }
-                if (i + 1 < preset.length) {
-                    const pair = resolveCoupleSpaceTranslatedPayload(current + '\n' + preset[i + 1]);
-                    if (pair && pair.foreign && pair.translation) {
-                        grouped.push({ kind: 'translated_text', foreign: pair.foreign, translation: pair.translation });
-                        i++;
-                        continue;
-                    }
-                }
-                grouped.push({ kind: 'text', text: current });
+            let lines = preset;
+            if (lines.length <= 1) {
+                lines = String(raw)
+                    .split(/(?<=[。！？!?；;，,~…])/)
+                    .map((line) => String(line || '').trim())
+                    .filter(Boolean);
             }
-            if (grouped.length > 1) {
-                return grouped.slice(0, Math.max(1, Number(maxItems) || 4));
-            }
-
-            const flatLines = raw
-                .split(/(?<=[。！？!?；;，,~…])/)
-                .map((line) => String(line || '').trim())
-                .filter(Boolean)
-                .map((line) => ({ kind: 'text', text: line }));
-            return flatLines.slice(0, Math.max(1, Number(maxItems) || 4));
+            const n = Math.max(1, Number(maxItems) || 4);
+            return lines.slice(0, n);
         }
 
         async function generateSecretPeerUsageRecords() {
@@ -4474,16 +3869,8 @@
                 const extraSystemPrompt = buildSecretSpaceExtraSystemPrompt(roleId);
                 const userPrompt = buildSecretSpaceUserPrompt(trigger, payload, promptContext);
                 const outputInstructions = trigger === 'secret_heart'
-                    ? (
-                        isCoupleSpaceBilingualRole(roleId)
-                            ? '输出 4~10 个微信气泡。每个气泡如果是外语或非简体中文，都必须写成 {"type":"translated_text","foreign":"角色原话","translation":"对应的简体中文翻译"}；简体中文句子才允许直接输出普通文本。先回复用户说的话，再回复用户操作记录。'
-                            : '输出 4~10 行微信短句，每行一句。先回复用户说的话，再回复用户操作记录。第一句要先让人看出你已经看到了记录。只输出台词，不要解释，不要前缀。'
-                    )
-                    : (
-                        isCoupleSpaceBilingualRole(roleId)
-                            ? '输出 3~6 个微信气泡。每个气泡如果是外语或非简体中文，都必须写成 {"type":"translated_text","foreign":"角色原话","translation":"对应的简体中文翻译"}；简体中文句子才允许直接输出普通文本。'
-                            : '输出 3~6 行简短自然的微信式中文消息，第一句要让人看出你已经看到了刚刚的操作记录。不要解释，不要输出 JSON、代码块或前缀。'
-                    );
+                    ? '输出 4~10 行微信短句，每行一句。先回复用户说的话，再回复用户操作记录。第一句要先让人看出你已经看到了记录。只输出台词，不要解释，不要前缀。'
+                    : '输出 3~6 行简短自然的微信式中文消息，第一句要让人看出你已经看到了刚刚的操作记录。不要解释，不要输出 JSON、代码块或前缀。';
                 const text = await callRoleDiaryLLM(roleId, historyForApi, userPrompt, extraSystemPrompt, { outputInstructions });
                 const trimmed = normalizeAiReplyText(text);
                 if (!trimmed) return;
@@ -4494,7 +3881,7 @@
                 const lines = splitSecretSpaceReplyLines(trimmed, maxLines);
                 if (!lines.length) return;
                 if (shouldBarrage) hideSecretSpaceBarrage();
-                showCoupleSpaceIosNotification(avatar, roleName, getSecretSpaceSegmentDisplayText(lines[0]));
+                showCoupleSpaceIosNotification(avatar, roleName, lines[0]);
                 for (let i = 0; i < lines.length; i++) {
                     appendSecretSpaceAiMessage(lines[i]);
                 }
@@ -4719,7 +4106,6 @@
             const diaryText = String(payload && payload.diaryText ? payload.diaryText : '').trim();
             const roleDiaryText = String(payload && payload.roleDiaryText ? payload.roleDiaryText : '').trim();
             const userComment = String(payload && payload.userComment ? payload.userComment : '').trim();
-            const commentThread = String(payload && payload.commentThread ? payload.commentThread : '').trim();
             const diaryImages = Array.isArray(payload && payload.diaryImages ? payload.diaryImages : [])
                 ? payload.diaryImages.filter(Boolean)
                 : [];
@@ -4756,13 +4142,8 @@
                     '你的原始日记：\n' +
                     roleDiaryText +
                     '\n\n' +
-                    (commentThread
-                        ? '这篇日记评论区目前的完整对话：\n' + commentThread + '\n\n'
-                        : '') +
-                    '我刚刚的最新评论：\n' +
-                    userComment +
-                    '\n\n' +
-                    '请优先回应我这条最新评论，同时承接评论区前面的对话，不要像第一次评论一样重新开始。';
+                    '我刚刚的评论：\n' +
+                    userComment;
             } else {
                 throw new Error('未知的评论场景');
             }
@@ -4829,7 +4210,7 @@
         async function upsertRoleDiaryEntryByLabel(roleId, dateKey, moodLabel, content, updatedAtTs) {
             const rid = String(roleId || '').trim();
             const dk = String(dateKey || '').trim();
-            const text = normalizeCoupleSpaceDiaryContent(rid, content);
+            const text = String(content || '').trim();
             if (!rid || !dk || !text) return false;
             let opt = normalizeDiaryMoodByLabel(moodLabel);
             if (!opt) {
@@ -4861,8 +4242,6 @@
             roleDiarySyncToastMessage = buildRoleDiaryGeneratingToastText();
             setGlobalCharacterReplying(true, roleDiarySyncToastMessage);
             const todayKey = toDateKey(new Date(nowTs));
-            const diaryLanguageRule = buildCoupleSpaceDiaryLanguageRule(roleId);
-            const diaryLengthRule = diaryLanguageRule ? '双语总字数尽量控制在 160 字以内。' : '字数严格控制在 100 字以内。';
             const todayChatContext = buildTodayChatMemoryContext(roleId, todayKey, 18);
             const todayTimingPrompt = todayChatContext.hasChat
                 ? `今天的日期是 ${todayKey}。你今天和我有聊天记录，日记内容必须优先围绕今天的聊天、今天的情绪余温和当下关系状态展开。\n【今日聊天记录（带日期时间）】\n${todayChatContext.text}\n\n请把上面这些 ${todayKey} 的聊天当作今天刚发生的事情来参考，不要把更早之前的旧聊天伪装成今天发生。`
@@ -4876,8 +4255,7 @@
                 `心情词必须和今天这一天的状态匹配，不能因为旧聊天记录而写偏时间线。\n` +
                 `心情词只能从以下列表中选择一个：开心、兴奋、心动、平静、伤心、生气、烦躁、心累。\n` +
                 `写一段日记，要符合你选择的心情。如果今天有聊天，可以自然提及今天聊了什么；如果今天没有聊天，就以分享自己生活为主，自然一点，必须符合人设！\n` +
-                (diaryLanguageRule ? (diaryLanguageRule + '\n') : '') +
-                (diaryLengthRule + '\n') +
+                `字数严格控制在 100 字以内。\n` +
                 `必须输出 JSON 格式：{ "mood": "心情词", "content": "日记内容" }\n` +
                 `输出要求：只输出 JSON，不要输出代码块，不要输出解释文字，不要输出任何多余字符。`;
 
@@ -4921,8 +4299,6 @@
         async function generateCatchupRoleDiaryEntries(roleId, historyForApi, shortTermMemory, rawDiffDays, nowTs) {
             const cap = Math.max(1, Math.min(7, rawDiffDays));
             const dateKeys = buildDateKeysForCatchUp(nowTs, cap);
-            const diaryLanguageRule = buildCoupleSpaceDiaryLanguageRule(roleId);
-            const diaryLengthRule = diaryLanguageRule ? '每篇日记的双语总字数尽量控制在 160 字以内。' : '每天的日记字数严格控制在 100 字以内，并选择一个【心情词】。';
             const chatStats = dateKeys.map((dk) => {
                 return { date: dk, chatCount: countChatsForDate(roleId, dk) };
             });
@@ -4942,9 +4318,8 @@
                 `如果某天 chatCount > 0（我们在微信聊天了），日记要表现出聊天的日常感，不要说完全失联；如果 chatCount == 0，才可以表现出没收到消息的想念或孤独。\n` +
                 `今天的日记，必须表达出看到我回到空间的喜悦。如果今天有聊天，优先结合今天的聊天内容；如果今天没有聊天，就以你自己的生活和状态为主，不要把旧聊天误写成今天发生。\n` +
                 `所有日期都要遵守时间线，看到带日期的旧聊天时，不要把它们写成今天刚发生。\n` +
-                (diaryLengthRule + '\n') +
+                `每天的日记字数严格控制在 100 字以内，并选择一个【心情词】。\n` +
                 `心情词只能从以下列表中选择一个：开心、兴奋、心动、平静、伤心、生气、烦躁、心累。\n` +
-                (diaryLanguageRule ? (diaryLanguageRule + '\n') : '') +
                 `必须输出 JSON 格式的数组：\n` +
                 `{ "diaries": [ { "date": "YYYY-MM-DD", "mood": "心情词", "content": "日记内容" } ] }\n` +
                 `输出要求：只输出 JSON，不要输出代码块，不要输出解释文字，不要输出任何多余字符。`;
@@ -6527,7 +5902,7 @@
                             </div>
                             <div class="note-time">${escapeHtml(timeText)}</div>
                         </div>
-                        <div class="note-content">${renderCoupleSpaceDiaryContentHtml(getCoupleLinkState().roleId, roleEntry.text || roleEntry.content || '')}</div>
+                        <div class="note-content">${escapeHtml(roleEntry.text || roleEntry.content || '')}</div>
                         ${imagesHtml}
                         ${commentsHtml}
                     </div>
@@ -6639,23 +6014,6 @@
             return '';
         }
 
-        function buildDiaryCommentThreadText(entry, userName, roleName) {
-            const comments = entry && Array.isArray(entry.comments) ? entry.comments : [];
-            const lines = [];
-            for (let i = 0; i < comments.length; i++) {
-                const c = comments[i];
-                if (!c || typeof c !== 'object') continue;
-                const text = String(c.text || '').replace(/\s+/g, ' ').trim();
-                if (!text) continue;
-                const sender = String(c.sender || '').trim() === 'character'
-                    ? (roleName || '你')
-                    : (userName || '用户');
-                const time = String(c.time || '').trim();
-                lines.push(`${time ? '[' + time + '] ' : ''}${sender}：${text}`);
-            }
-            return lines.slice(-12).join('\n');
-        }
-
         function requestCharacterReplyFromDiaryComment(dateKey, owner) {
             const key = String(dateKey || state.mood.selectedDateKey || '').trim();
             const ownerType = owner === 'character' ? 'character' : 'user';
@@ -6734,7 +6092,6 @@
             const link = getCoupleLinkState();
             if (!link || !link.hasCoupleLinked || !link.roleId) return;
             const roleName = getRoleDisplayName();
-            const userName = getCoupleSpaceUserName();
             const toastText = roleName + ' 收到了你的评论，正在回复中……';
             setGlobalCharacterReplying(true, toastText);
             try {
@@ -6742,7 +6099,6 @@
                     scene: 'comment_on_role_diary',
                     roleDiaryText: entry && (entry.text || entry.content || ''),
                     userComment: userComment || '',
-                    commentThread: buildDiaryCommentThreadText(entry, userName, roleName),
                 });
                 const trimmed = normalizeAiReplyText(reply);
                 if (!trimmed) return;

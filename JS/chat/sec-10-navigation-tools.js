@@ -97,10 +97,6 @@ function markCoupleRoleLinked(roleId) {
 
 function buildCoupleInviteSystemPrompt(roleId) {
     const id = String(roleId || '');
-    const inviteNeedsBilingual = isCoupleInviteBilingualRole(id);
-    const outputInstructions = inviteNeedsBilingual
-        ? '只输出严格 JSON，不要输出多余文字：{"is_accepted": boolean, "reply_bubbles": ["普通文本" 或 {"type":"translated_text","foreign":"角色原话","translation":"对应的简体中文翻译"}]}。如果你发出的文本是外语或非简体中文，就必须逐条使用 translated_text 对象，绝对不要只写原文。'
-        : '只输出严格 JSON，不要输出多余文字：{"is_accepted": boolean, "reply_message": "你的回复文字"}';
     if (typeof window.buildRoleLitePrompt === 'function') {
         return window.buildRoleLitePrompt('couple_invite_decision', id, {
             includeContinuity: true,
@@ -109,10 +105,9 @@ function buildCoupleInviteSystemPrompt(roleId) {
             taskGuidance: [
                 '用户刚刚向你发起了建立情侣关系的邀请。',
                 '你必须根据人设、关系亲疏、最近互动和自己的真实边界，自主判断是否接受。',
-                '如果不愿意，请委婉拒绝；如果愿意，请真诚回应。',
-                inviteNeedsBilingual ? '如果你是外语或非简体中文角色，所有回复气泡都要保持“角色原话 + 简体中文翻译”的结构化双语格式。' : ''
+                '如果不愿意，请委婉拒绝；如果愿意，请真诚回应。'
             ].join('\n'),
-            outputInstructions: outputInstructions
+            outputInstructions: '只输出严格 JSON，不要输出多余文字：{"is_accepted": boolean, "reply_message": "你的回复文字"}'
         });
     }
     const profile = (window.charProfiles && window.charProfiles[id]) ? window.charProfiles[id] : {};
@@ -141,157 +136,6 @@ function buildCoupleInviteSystemPrompt(roleId) {
         if (userPersona.setting) systemPrompt += `用户背景：${userPersona.setting}\n`;
     }
     return systemPrompt;
-}
-
-function isCoupleInviteBilingualRole(roleId) {
-    const id = String(roleId || '').trim();
-    if (!id) return false;
-    const profile = window.charProfiles && window.charProfiles[id] ? window.charProfiles[id] : {};
-    const explicit = [
-        profile.language,
-        profile.lang,
-        profile.nativeLanguage,
-        profile.native_language,
-        profile.spokenLanguage,
-        profile.spoken_language,
-        profile.locale,
-        profile.nationality
-    ];
-    const looksForeign = function (text) {
-        const raw = String(text || '').trim();
-        if (!raw) return false;
-        const lower = raw.toLowerCase();
-        if (/(中文|汉语|漢語|普通话|普通話|简体|簡體|mandarin|simplified chinese|zh[-_ ]?(cn|hans)?)/i.test(lower)) {
-            return false;
-        }
-        if (/(英语|英語|英文|日语|日語|韩语|韓語|韩文|韓文|法语|法語|德语|德語|西班牙语|西班牙語|俄语|俄語|葡萄牙语|葡萄牙語|意大利语|意大利語|粤语|粵語|繁体|繁體|文言|english|japanese|korean|french|german|spanish|russian|portuguese|italian|thai|vietnamese|traditional chinese|cantonese|classical chinese|zh[-_ ]?(tw|hk|hant)|ja[-_ ]?jp|ko[-_ ]?kr|en[-_ ]?(us|gb))/i.test(lower)) {
-            return true;
-        }
-        return /[這個們為來時後會說話讓還愛歡學習覺應實體點開關於與臺灣廣東電腦網頁貓車鐘鍾門裡見聽買麼嗎係嘅咗喺冇唔佢哋啲咩]/.test(raw);
-    };
-    for (let i = 0; i < explicit.length; i++) {
-        if (looksForeign(explicit[i])) return true;
-    }
-    return looksForeign([
-        profile.realName,
-        profile.real_name,
-        profile.nickName,
-        profile.name,
-        profile.character_name,
-        profile.characterName,
-        profile.title,
-        profile.desc,
-        profile.description,
-        profile.persona,
-        profile.prompt,
-        profile.system_prompt,
-        profile.systemPrompt,
-        profile.scenario,
-        profile.first_mes,
-        Array.isArray(profile.tags) ? profile.tags.join(' ') : String(profile.tags || '')
-    ].join(' '));
-}
-
-function buildCoupleInviteReplySegments(rawValue) {
-    const normalized = typeof normalizeStructuredReplySegments === 'function'
-        ? normalizeStructuredReplySegments(rawValue, { offlineMode: false })
-        : [];
-    const structured = Array.isArray(normalized) ? normalized : [];
-    if (structured.length) {
-        const normalizedStructured = structured
-            .filter(function (seg) {
-                return seg && (seg.kind === 'text' || seg.kind === 'translated_text');
-            })
-            .map(function (seg) {
-                if (seg.kind === 'translated_text') {
-                    return {
-                        kind: 'translated_text',
-                        foreign: String(seg.foreign || '').trim(),
-                        translation: String(seg.translation || '').trim()
-                    };
-                }
-                return {
-                    kind: 'text',
-                    text: String(seg.text || '').trim()
-                };
-            })
-            .filter(function (seg) {
-                return seg.kind === 'translated_text'
-                    ? !!(seg.foreign || seg.translation)
-                    : !!seg.text;
-            });
-        const mergedStructured = [];
-        for (let i = 0; i < normalizedStructured.length; i++) {
-            const current = normalizedStructured[i];
-            if (!current) continue;
-            if (current.kind === 'translated_text') {
-                mergedStructured.push(current);
-                continue;
-            }
-            const directPair = typeof window.parseTranslatedBubbleText === 'function'
-                ? window.parseTranslatedBubbleText(String(current.text || ''))
-                : null;
-            if (directPair && directPair.hasTranslation) {
-                mergedStructured.push({
-                    kind: 'translated_text',
-                    foreign: String(directPair.foreignText || directPair.bodyText || '').trim(),
-                    translation: String(directPair.translationText || directPair.foreignText || '').trim()
-                });
-                continue;
-            }
-            const next = normalizedStructured[i + 1];
-            if (next && next.kind === 'text' && typeof window.parseTranslatedBubbleText === 'function') {
-                const mergedPair = window.parseTranslatedBubbleText(String(current.text || '') + '\n' + String(next.text || ''));
-                if (mergedPair && mergedPair.hasTranslation) {
-                    mergedStructured.push({
-                        kind: 'translated_text',
-                        foreign: String(mergedPair.foreignText || mergedPair.bodyText || '').trim(),
-                        translation: String(mergedPair.translationText || mergedPair.foreignText || '').trim()
-                    });
-                    i++;
-                    continue;
-                }
-            }
-            mergedStructured.push(current);
-        }
-        return mergedStructured;
-    }
-
-    const raw = String(rawValue == null ? '' : rawValue).trim();
-    if (!raw) return [];
-    const chunks = raw
-        .split(/\|\|\||\n{2,}|\r?\n+/)
-        .map(function (part) { return String(part || '').trim(); })
-        .filter(Boolean);
-    const segments = [];
-    for (let i = 0; i < chunks.length; i++) {
-        const current = chunks[i];
-        const single = typeof window.parseTranslatedBubbleText === 'function'
-            ? window.parseTranslatedBubbleText(current)
-            : null;
-        if (single && single.hasTranslation) {
-            segments.push({
-                kind: 'translated_text',
-                foreign: String(single.foreignText || single.bodyText || '').trim(),
-                translation: String(single.translationText || single.foreignText || '').trim()
-            });
-            continue;
-        }
-        if (i + 1 < chunks.length && typeof window.parseTranslatedBubbleText === 'function') {
-            const pair = window.parseTranslatedBubbleText(current + '\n' + chunks[i + 1]);
-            if (pair && pair.hasTranslation) {
-                segments.push({
-                    kind: 'translated_text',
-                    foreign: String(pair.foreignText || pair.bodyText || '').trim(),
-                    translation: String(pair.translationText || pair.foreignText || '').trim()
-                });
-                i++;
-                continue;
-            }
-        }
-        segments.push({ kind: 'text', text: current });
-    }
-    return segments;
 }
 
 function promptOfflineSessionName(defaultName) {
@@ -438,12 +282,9 @@ function requestCoupleInviteDecision(roleId, inviteId) {
 
     const baseHistory = (window.chatData && Array.isArray(window.chatData[id])) ? window.chatData[id] : [];
     const historyForApiBase = typeof buildApiMemoryHistory === 'function' ? buildApiMemoryHistory(id, baseHistory) : baseHistory.slice(-50);
-    const inviteNeedsBilingual = isCoupleInviteBilingualRole(id);
     const inject = {
         role: 'system',
-        content: inviteNeedsBilingual
-            ? `[系统插播：用户刚才向你发起了建立情侣关系的邀请。你必须根据人设以及你和用户的关系，自信判断是否同意。\n如果不愿意，请委婉拒绝；如果欣然同意，请真诚回应。\n如果你是外语或非简体中文角色，所有回复气泡都必须写成带简体中文翻译的 structured translated_text 格式。\n你必须只输出严格 JSON，不要输出任何多余文字或 Markdown：{"is_accepted": boolean, "reply_bubbles": ["普通文本" 或 {"type":"translated_text","foreign":"角色原话","translation":"对应的简体中文翻译"}]}]`
-            : `[系统插播：用户刚才向你发起了建立情侣关系的邀请。你必须根据人设以及你和用户的关系，自信判断是否同意。\n如果不愿意，请委婉拒绝；如果欣然同意，请真诚回应。\n你必须只输出严格 JSON，不要输出任何多余文字或 Markdown：{"is_accepted": boolean, "reply_message": "你的回复文字"}]`,
+        content: `[系统插播：用户刚才向你发起了建立情侣关系的邀请。你必须根据人设以及你和用户的关系，自信判断是否同意。\n如果不愿意，请委婉拒绝；如果欣然同意，请真诚回应。\n你必须只输出严格 JSON，不要输出任何多余文字或 Markdown：{"is_accepted": boolean, "reply_message": "你的回复文字"}]`,
         timestamp: Date.now()
     };
     const historyForApi = Array.isArray(historyForApiBase) ? historyForApiBase.concat([inject]) : [inject];
@@ -486,42 +327,41 @@ function requestCoupleInviteDecision(roleId, inviteId) {
             const payload = tryParseCoupleInviteDecision(aiResponseText) || {};
             const decisionText = String(payload.decision || payload.status || payload.result || '').trim().toLowerCase();
             const baseAccepted = payload.is_accepted === true || payload.isAccepted === true || payload.accepted === true || /^(accept|accepted|agree|yes|同意|接受|愿意)$/.test(decisionText);
-            const replyCandidate = payload.reply_bubbles != null
-                ? payload.reply_bubbles
-                : (payload.reply_message != null
-                    ? payload.reply_message
-                    : (payload.replyMessage != null ? payload.replyMessage : (typeof aiResponseText === 'string' ? aiResponseText.trim() : '')));
-            const replyTextForDirective = typeof replyCandidate === 'string'
-                ? replyCandidate
-                : (typeof payload.reply_message === 'string'
-                    ? payload.reply_message
-                    : (typeof payload.replyMessage === 'string' ? payload.replyMessage : ''));
-            const replyDirective = parseCoupleInviteDecisionDirective(replyTextForDirective);
+            const reply = typeof payload.reply_message === 'string'
+                ? payload.reply_message
+                : (typeof payload.replyMessage === 'string' ? payload.replyMessage : (typeof aiResponseText === 'string' ? aiResponseText.trim() : ''));
+            const replyDirective = parseCoupleInviteDecisionDirective(reply);
             const stringAccepted = /^(true|accept|accepted|agree|yes|同意|接受|愿意)$/.test(String(payload.is_accepted || payload.isAccepted || payload.accepted || '').trim().toLowerCase());
             const accepted = baseAccepted || stringAccepted || !!(replyDirective && replyDirective.is_accepted === true);
 
-            let cleanReplyCandidate = replyCandidate;
-            if (typeof cleanReplyCandidate === 'string') {
-                cleanReplyCandidate = stripCoupleInviteDecisionDirectives(String(cleanReplyCandidate || '').trim()) || '我收到了你的邀请。';
+            const cleanReply = stripCoupleInviteDecisionDirectives(String(reply || '').trim()) || '我收到了你的邀请。';
+            let textSegments = [];
+            try {
+                if (typeof normalizeStructuredReplySegments === 'function') {
+                    textSegments = normalizeStructuredReplySegments(cleanReply, { offlineMode: false })
+                        .filter(function (seg) {
+                            return seg && seg.kind === 'text' && String(seg.text || '').trim();
+                        })
+                        .map(function (seg) {
+                            return String(seg.text || '').trim();
+                        });
+                }
+            } catch (eSeg) { }
+            if (!textSegments.length) {
+                textSegments = String(cleanReply)
+                    .split(/\|\|\||\r?\n+/)
+                    .map(function (part) { return String(part || '').trim(); })
+                    .filter(Boolean);
             }
-            let replySegments = buildCoupleInviteReplySegments(cleanReplyCandidate);
-            if (!replySegments.length && typeof cleanReplyCandidate === 'string' && cleanReplyCandidate) {
-                replySegments = [{ kind: 'text', text: cleanReplyCandidate }];
-            }
+            if (!textSegments.length) textSegments = [cleanReply];
 
             window.chatData = window.chatData || {};
             if (!window.chatData[id]) window.chatData[id] = [];
-            const newMessages = replySegments.slice(0, 10).map(function (part, index) {
-                const isTranslated = part && part.kind === 'translated_text';
+            const newMessages = textSegments.slice(0, 10).map(function (part, index) {
                 const aiMsg = {
                     role: 'ai',
-                    content: isTranslated
-                        ? JSON.stringify({
-                            foreign: String(part.foreign || '').trim(),
-                            translation: String(part.translation || '').trim()
-                        })
-                        : String(part && part.text || '').trim(),
-                    type: isTranslated ? 'translated_text' : 'text',
+                    content: String(part || '').trim(),
+                    type: 'text',
                     timestamp: Date.now() + index,
                     status: 'sent'
                 };
@@ -533,7 +373,7 @@ function requestCoupleInviteDecision(roleId, inviteId) {
             if (!newMessages.length) {
                 const aiMsg = {
                     role: 'ai',
-                    content: typeof cleanReplyCandidate === 'string' ? cleanReplyCandidate : '我收到了你的邀请。',
+                    content: cleanReply,
                     type: 'text',
                     timestamp: Date.now(),
                     status: 'sent'

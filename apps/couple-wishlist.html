@@ -359,86 +359,13 @@
             try { return window.parent && window.parent !== window ? window.parent : null; } catch (e) { return null; }
         }
 
-        function getAccessibleWindows() {
-            const list = [];
-            const push = function (target) {
-                try {
-                    if (!target || list.indexOf(target) !== -1) return;
-                    list.push(target);
-                } catch (e) {}
-            };
-            push(window);
-            try {
-                push(window.parent);
-                if (window.parent && window.parent !== window) push(window.parent.parent);
-            } catch (e0) {}
-            try { push(window.top); } catch (e1) {}
-            try { push(window.opener); } catch (e2) {}
-            return list;
-        }
-
-        function resolveCallAI() {
-            const wins = getAccessibleWindows();
-            for (let i = 0; i < wins.length; i++) {
-                try {
-                    if (wins[i] && typeof wins[i].callAI === 'function') return wins[i].callAI;
-                } catch (e) {}
-            }
-            return null;
-        }
-
-        async function withAiRoleContext(roleId, task) {
-            const rid = String(roleId || runtime.roleId || resolveRoleId() || '').trim();
-            if (!rid) throw new Error('尚未绑定情侣角色');
-            const wins = getAccessibleWindows();
-            const snapshots = wins.map((target) => {
-                let currentChatRole = '';
-                let currentCharacterId = '';
-                try { currentChatRole = String(target.currentChatRole || ''); } catch (e0) {}
-                try { currentCharacterId = String(target.currentCharacterId || ''); } catch (e1) {}
-                return { target, currentChatRole, currentCharacterId };
-            });
-            let prevChatId = '';
-            try {
-                prevChatId = String(localStorage.getItem('currentChatId') || '');
-                localStorage.setItem('currentChatId', rid);
-            } catch (e0) {}
-            try {
-                snapshots.forEach((item) => {
-                    try { item.target.currentChatRole = rid; } catch (e0) {}
-                    try { if ('currentCharacterId' in item.target) item.target.currentCharacterId = rid; } catch (e1) {}
-                });
-                return await task();
-            } finally {
-                snapshots.forEach((item) => {
-                    try { item.target.currentChatRole = item.currentChatRole; } catch (e0) {}
-                    try { if ('currentCharacterId' in item.target) item.target.currentCharacterId = item.currentCharacterId; } catch (e1) {}
-                });
-                try {
-                    if (prevChatId) localStorage.setItem('currentChatId', prevChatId);
-                    else localStorage.removeItem('currentChatId');
-                } catch (e1) {}
-            }
-        }
-
         function resolveRoleId() {
             try {
                 const has = localStorage.getItem('couple_has_linked_v1') === 'true';
                 const rid = String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
                 if (has && rid) return rid;
             } catch (e) {}
-            const wins = getAccessibleWindows();
-            for (let i = 0; i < wins.length; i++) {
-                try {
-                    const rid = String(wins[i].currentChatRole || wins[i].currentCharacterId || '').trim();
-                    if (rid) return rid;
-                } catch (e2) {}
-            }
-            try {
-                return String(localStorage.getItem('currentChatId') || '').trim();
-            } catch (e3) {
-                return '';
-            }
+            return String(localStorage.getItem('currentChatId') || '').trim();
         }
 
         function normalizeWorldBookIds(raw) {
@@ -723,7 +650,8 @@
         }
 
         async function callWishlistAI() {
-            const callAI = resolveCallAI();
+            const pw = getParentWindow();
+            const callAI = (pw && pw.callAI) || window.callAI;
             if (!callAI) {
                 alert('AI 接口未初始化');
                 return;
@@ -734,13 +662,11 @@
             logWishlistPromptDebug('生成角色心愿', prompts.systemPrompt, prompts.userPrompt);
             
             try {
-                const text = await withAiRoleContext(runtime.roleId, function () {
-                    return new Promise((resolve, reject) => {
-                        callAI(prompts.systemPrompt, [], { text: prompts.userPrompt }, (rawText) => {
-                            resolve(String(rawText || ''));
-                        }, (err) => {
-                            reject(new Error(String(err || '请求失败')));
-                        });
+                const text = await new Promise((resolve, reject) => {
+                    callAI(prompts.systemPrompt, [], { text: prompts.userPrompt }, (rawText) => {
+                        resolve(String(rawText || ''));
+                    }, (err) => {
+                        reject(new Error(String(err || '请求失败')));
                     });
                 });
                 const cleanText = String(text || '').replace(/```json/ig, '').replace(/```/g, '').trim();
