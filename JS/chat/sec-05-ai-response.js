@@ -1128,7 +1128,35 @@ function getTrackedChatResponseRequestInfo(roleId) {
     return info && typeof info === 'object' ? info : null;
 }
 
+function getTrackedChatResponseRequestMaxAgeMs() {
+    return 90 * 1000;
+}
+
+function cleanupStaleTrackedChatResponseRequest(roleId) {
+    const rid = String(roleId || '').trim();
+    if (!rid) return false;
+    const store = window.__chatInflightRequestByRole || {};
+    const info = store[rid];
+    if (!info || typeof info !== 'object') return false;
+    const startedAt = Number(info.startedAt || 0);
+    if (!startedAt) return false;
+    if (Date.now() - startedAt < getTrackedChatResponseRequestMaxAgeMs()) return false;
+    try {
+        delete store[rid];
+        window.__lastTrackedChatRequestAutoCleared = {
+            roleId: rid,
+            requestId: String(info.id || ''),
+            startedAt: startedAt,
+            clearedAt: Date.now(),
+            reason: 'stale_timeout'
+        };
+    } catch (e) { }
+    refreshTrackedChatResponseIndicators(rid);
+    return true;
+}
+
 function isTrackedChatResponsePending(roleId) {
+    cleanupStaleTrackedChatResponseRequest(roleId);
     return !!getTrackedChatResponseRequestInfo(roleId);
 }
 
@@ -1153,6 +1181,7 @@ function refreshTrackedChatResponseIndicators(roleId) {
 window.getTrackedChatResponseRequestInfo = getTrackedChatResponseRequestInfo;
 window.isTrackedChatResponsePending = isTrackedChatResponsePending;
 window.refreshTrackedChatResponseIndicators = refreshTrackedChatResponseIndicators;
+window.cleanupStaleTrackedChatResponseRequest = cleanupStaleTrackedChatResponseRequest;
 
 function getMoneyActionKind(info, fallbackText) {
     const item = info && typeof info === 'object' ? info : {};
@@ -1470,15 +1499,17 @@ function isLikelyThoughtLeakText(text) {
     if (!compact) return false;
 
     if (/(?:^|[\s"'])?(?:thought|inner_monologue|system_event|quoteId|quote_id|reply_to|actions|status)\s*[:：]/i.test(compact)) return true;
+    if (/(?:^|[\s{,"])(?:reply|reply_bubbles|content|type)\s*[:：]/i.test(compact) && /(?:thought|inner_monologue|system_event|quoteId|actions|status)/i.test(compact)) return true;
     if (/(?:输出格式铁律|角色扮演核心规则|指令使用原则与动机|个人状态的动态管理|元数据铁律|你的角色设定|对话者的角色设定|当前情景|世界观|长期记忆|关系与身份档案|可用表情包|可用指令列表|情景感知|可用资源)/.test(compact)) return true;
     if (/^#{1,6}\s*.*(?:回复|回应|回答|翻译|格式|说明|示例|message|output|response)/i.test(compact)) return true;
+    if (/^(?:第一步|第二步|步骤\d+|输出要求|格式要求|最终输出|示例输出)\s*[:：]/.test(compact)) return true;
     if (/^(?:理解|气氛|氛围|关系温度|关系状态|策略|动作|分析|判断|回复策略|互动策略|本轮策略)\s*[:：]/.test(compact)) return true;
     if (/(?:理解|气氛|策略|动作)\s*[:：].{0,40}(?:理解|气氛|策略|动作)\s*[:：]/.test(compact)) return true;
     if (/(?:我(?:该|得|先|需要|应该|必须)|先在)\s*(?:分析|判断|想想|思考|决定|考虑|确认|规划|组织|回复|怎么回复|怎么接|怎么说)/.test(compact)) return true;
     if (/(?:当前|现在的)\s*(?:气氛|氛围|关系|关系温度|关系状态)/.test(compact)) return true;
     if (/(?:要不要|是否需要)\s*触发(?:引用|语音|位置|通话|金钱|动作)?/.test(compact)) return true;
     if (/(?:不能前后打架|严格服从|内部思维链|隐藏思维链|不对用户可见|用户可见内容)/.test(compact)) return true;
-    if (/(?:你的回复必须是一个JSON数组|数组中的每个对象都必须包含|第一个元素必须是|不要输出Markdown|不要输出代码块|不要输出任何解释|只输出JSON|禁止泄露|禁止输出任何思考过程|系统提示词|提示词来源)/.test(compact)) return true;
+    if (/(?:你的回复必须是一个JSON数组|数组中的每个对象都必须包含|第一个元素必须是|不要输出Markdown|不要输出代码块|不要输出任何解释|只输出JSON|禁止泄露|禁止输出任何思考过程|系统提示词|提示词来源|不要解释原因|以下是回复)/.test(compact)) return true;
     if (/^[（(].*(?:不必要|而是|应该|必须|格式|翻译|原文|中文|外语|消息|回复).*[）)]$/.test(compact)) return true;
     return false;
 }
@@ -1957,6 +1988,50 @@ function serializeReplySegmentsForDirectiveParsing(segments) {
     }).filter(Boolean).join('|||');
 }
 
+function buildCommerceSegmentSignature(seg) {
+    if (!seg || typeof seg !== 'object') return '';
+    if (seg.kind === 'takeout_card') {
+        const items = Array.isArray(seg.items) ? seg.items.map(function (item) {
+            return String(item || '').trim();
+        }).filter(Boolean).join('|') : '';
+        return [
+            'takeout',
+            String(seg.shopName || '').trim(),
+            String(seg.foodName || '').trim(),
+            items,
+            String(seg.price || '').trim(),
+            String(seg.paymentMode || '').trim()
+        ].join('::');
+    }
+    if (seg.kind === 'gift_card') {
+        return [
+            'gift',
+            String(seg.itemName || '').trim(),
+            String(seg.price || '').trim(),
+            String(seg.paymentMode || '').trim(),
+            seg.anonymous === true ? 'anonymous' : 'named'
+        ].join('::');
+    }
+    return '';
+}
+
+function dedupeCommerceReplySegments(segments) {
+    const list = Array.isArray(segments) ? segments : [];
+    const seen = Object.create(null);
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+        const seg = list[i];
+        if (!seg || typeof seg !== 'object') continue;
+        const signature = buildCommerceSegmentSignature(seg);
+        if (signature) {
+            if (seen[signature]) continue;
+            seen[signature] = true;
+        }
+        out.push(seg);
+    }
+    return out;
+}
+
 function stripControlDirectivesFromText(text) {
     let s = String(text || '');
     if (!s) return '';
@@ -1996,10 +2071,21 @@ function sanitizeReplySegmentsForDisplay(segments, options) {
         }
         const cleaned = stripPromptLeakageText(stripControlDirectivesFromText(seg.text || ''));
         if (!cleaned) continue;
+        if (isLikelyThoughtLeakText(cleaned)) continue;
         const normalized = normalizeStructuredReplySegments(cleaned, { offlineMode: offlineMode });
-        if (Array.isArray(normalized) && normalized.length) out.push.apply(out, normalized);
+        if (!Array.isArray(normalized) || !normalized.length) continue;
+        normalized.forEach(function (item) {
+            if (!item || typeof item !== 'object') return;
+            if (item.kind === 'text') {
+                const text = stripLikelyThoughtLeakLines(item.text || '');
+                if (!text || isLikelyThoughtLeakText(text)) return;
+                out.push({ kind: 'text', text: text });
+                return;
+            }
+            out.push(item);
+        });
     }
-    return out;
+    return dedupeCommerceReplySegments(out);
 }
 
 function normalizeImageUrlCandidate(url) {
@@ -2385,6 +2471,14 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
         }
         finishTrackedChatResponseRequest(roleId, requestId);
     };
+    const cancelRequestQuietly = function () {
+        if (!isCurrentRequest()) return;
+        if (String(window.__busyReplyQueueFlushRoleId || '') === String(roleId || '')) {
+            window.__busyReplyQueueFlushRoleId = '';
+        }
+        restoreHeaderTitle();
+        finishRequest();
+    };
     const clearBusyReplyQueueIfNeeded = function () {
         if (String(window.__busyReplyQueueFlushRoleId || '') !== String(roleId || '')) return;
         if (typeof window.clearBusyReplyQueue === 'function') {
@@ -2405,26 +2499,27 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
             userMessage,
             async (aiResponseText) => {
                 if (!isCurrentRequest()) return;
-                let rawText = typeof aiResponseText === 'string' ? aiResponseText : '';
-                const originalAiResponseText = rawText;
                 try {
-                    window.__lastAiRawResponseDebug = {
-                        at: Date.now(),
-                        roleId: roleId,
-                        textPreview: String(originalAiResponseText || '').slice(0, 1000)
-                    };
-                } catch (e) { }
-                const wasOfflineMeeting = isRoleCurrentlyOfflineMeeting(roleId);
-                let backgroundReplyNoticeMsg = null;
+                    let rawText = typeof aiResponseText === 'string' ? aiResponseText : '';
+                    const originalAiResponseText = rawText;
+                    try {
+                        window.__lastAiRawResponseDebug = {
+                            at: Date.now(),
+                            roleId: roleId,
+                            textPreview: String(originalAiResponseText || '').slice(0, 1000)
+                        };
+                    } catch (e) { }
+                    const wasOfflineMeeting = isRoleCurrentlyOfflineMeeting(roleId);
+                    let backgroundReplyNoticeMsg = null;
 
-                let jsonPayload = null;
-                let thoughtText = '';
-                let innerMonologueText = '';
-                let replyText = '';
-                let replySegments = [];
-                let systemEventText = '';
-                let actions = null;
-                let busyGuardMeta = null;
+                    let jsonPayload = null;
+                    let thoughtText = '';
+                    let innerMonologueText = '';
+                    let replyText = '';
+                    let replySegments = [];
+                    let systemEventText = '';
+                    let actions = null;
+                    let busyGuardMeta = null;
 
                 // =================================================
                 // 🛠️ 增强解析：确保能吃掉各种格式的 JSON
@@ -3174,6 +3269,33 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                 }
                 restoreHeaderTitle();
                 finishRequest();
+                } catch (err) {
+                    if (!isCurrentRequest()) return;
+                    console.error('[invokeAIWithCommonHandlers] reply handling failed:', err);
+                    try {
+                        window.__lastAiReplyHandlingError = {
+                            at: Date.now(),
+                            roleId: roleId,
+                            requestId: requestId,
+                            error: err && err.message ? String(err.message) : String(err || ''),
+                            responsePreview: typeof aiResponseText === 'string' ? aiResponseText.slice(0, 1200) : ''
+                        };
+                    } catch (eDebug) { }
+                    if (String(window.__busyReplyQueueFlushRoleId || '') === String(roleId || '')) {
+                        window.__busyReplyQueueFlushRoleId = '';
+                    }
+                    if (typeof window.clearChatAiRequestInFlight === 'function') {
+                        window.clearChatAiRequestInFlight(roleId, requestId);
+                    }
+                    restoreHeaderTitle();
+                    finishRequest();
+                    try {
+                        saveData();
+                    } catch (eSave) { }
+                    try {
+                        appendSystemStatusToDOM(roleId, '系统提示：这次回复处理失败了，你可以再点一次回复。');
+                    } catch (eAppend) { }
+                }
             },
             (errorMessage) => {
                 if (!isCurrentRequest()) return;
@@ -3194,6 +3316,9 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                 softTimeoutNoAbort: true,
                 onSlow: function () {
                     setTrackedChatResponseHeaderText(headerTitle, roleId, requestId, '对方正在输入（网络较慢）...');
+                },
+                onCancelled: function () {
+                    cancelRequestQuietly();
                 },
                 shouldDeliver: function () {
                     return isCurrentRequest();

@@ -352,6 +352,58 @@
             }
         }
 
+        function getAccessibleWindows() {
+            const list = [];
+            const push = function (target) {
+                try {
+                    if (!target || list.indexOf(target) !== -1) return;
+                    list.push(target);
+                } catch (e) {}
+            };
+            push(window);
+            try {
+                push(window.parent);
+                if (window.parent && window.parent !== window) push(window.parent.parent);
+            } catch (e0) {}
+            try { push(window.top); } catch (e1) {}
+            try { push(window.opener); } catch (e2) {}
+            return list;
+        }
+
+        async function withAiRoleContext(roleId, task) {
+            const rid = String(roleId || runtime.roleId || resolveRoleId() || '').trim();
+            if (!rid) throw new Error('尚未绑定情侣角色');
+            const wins = getAccessibleWindows();
+            const snapshots = wins.map((target) => {
+                let currentChatRole = '';
+                let currentCharacterId = '';
+                try { currentChatRole = String(target.currentChatRole || ''); } catch (e0) {}
+                try { currentCharacterId = String(target.currentCharacterId || ''); } catch (e1) {}
+                return { target, currentChatRole, currentCharacterId };
+            });
+            let prevChatId = '';
+            try {
+                prevChatId = String(localStorage.getItem('currentChatId') || '');
+                localStorage.setItem('currentChatId', rid);
+            } catch (e0) {}
+            try {
+                snapshots.forEach((item) => {
+                    try { item.target.currentChatRole = rid; } catch (e0) {}
+                    try { if ('currentCharacterId' in item.target) item.target.currentCharacterId = rid; } catch (e1) {}
+                });
+                return await task();
+            } finally {
+                snapshots.forEach((item) => {
+                    try { item.target.currentChatRole = item.currentChatRole; } catch (e0) {}
+                    try { if ('currentCharacterId' in item.target) item.target.currentCharacterId = item.currentCharacterId; } catch (e1) {}
+                });
+                try {
+                    if (prevChatId) localStorage.setItem('currentChatId', prevChatId);
+                    else localStorage.removeItem('currentChatId');
+                } catch (e1) {}
+            }
+        }
+
         function escapeHtml(text) {
             return String(text || '')
                 .replace(/&/g, '&amp;')
@@ -373,6 +425,13 @@
                 const rid = String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
                 if (has && rid) return rid;
             } catch (e) {}
+            const wins = getAccessibleWindows();
+            for (let i = 0; i < wins.length; i++) {
+                try {
+                    const rid = String(wins[i].currentChatRole || wins[i].currentCharacterId || '').trim();
+                    if (rid) return rid;
+                } catch (e1) {}
+            }
             try {
                 return String(localStorage.getItem('currentChatId') || '').trim();
             } catch (e2) {
@@ -512,11 +571,12 @@
         }
 
         function resolveCallAI() {
-            if (typeof window.callAI === 'function') return window.callAI;
-            try {
-                const pw = getParentWindow();
-                if (pw && typeof pw.callAI === 'function') return pw.callAI;
-            } catch (e) {}
+            const wins = getAccessibleWindows();
+            for (let i = 0; i < wins.length; i++) {
+                try {
+                    if (wins[i] && typeof wins[i].callAI === 'function') return wins[i].callAI;
+                } catch (e) {}
+            }
             return null;
         }
 
@@ -698,12 +758,14 @@
             if (!callAI) return [];
             const prompts = buildFuturePlanningPrompts();
             logFuturePlanningPromptDebug('生成未来规划', prompts.systemPrompt, prompts.userPrompt);
-            const raw = await new Promise((resolve) => {
-                try {
+            const raw = await withAiRoleContext(runtime.roleId, function () {
+                return new Promise((resolve) => {
+                    try {
                     callAI(prompts.systemPrompt, [], { text: prompts.userPrompt }, (text) => resolve(String(text || '')), () => resolve(''));
-                } catch (e) {
-                    resolve('');
-                }
+                    } catch (e) {
+                        resolve('');
+                    }
+                });
             });
             const parsed = parseWishlistArray(raw);
             return normalizeGeneratedItems(parsed);

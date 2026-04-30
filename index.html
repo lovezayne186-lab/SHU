@@ -102,11 +102,8 @@
         (function () {
             function shouldShowIosDebug() {
                 try {
-                    if (/(?:\?|&)iosDebug=1(?:&|$)/i.test(location.search || '')) {
-                        try { localStorage.setItem('ios_pwa_debug', '1'); } catch (e0) { }
-                        return true;
-                    }
-                    return localStorage.getItem('ios_pwa_debug') === '1';
+                    if (/(?:\?|&)iosDebug=1(?:&|$)/i.test(location.search || '')) return true;
+                    return localStorage.getItem('ios_pwa_debug_manual') === '1';
                 } catch (e) {
                     return false;
                 }
@@ -253,10 +250,11 @@
                 }));
                 bar.appendChild(makeButton('关闭', function () {
                     try { localStorage.removeItem('ios_pwa_debug'); } catch (e) { }
+                    try { localStorage.removeItem('ios_pwa_debug_manual'); } catch (e2) { }
                     panel.remove();
                 }));
                 bar.appendChild(makeButton('常开', function () {
-                    try { localStorage.setItem('ios_pwa_debug', '1'); } catch (e) { }
+                    try { localStorage.setItem('ios_pwa_debug_manual', '1'); } catch (e) { }
                     refresh();
                 }));
 

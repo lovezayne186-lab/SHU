@@ -29,6 +29,7 @@ const DB = {
         callLogs: 'wechat_callLogs',
         chatUnread: 'wechat_unread',
         familyCards: 'wechat_family_cards',
+        favorites: 'wechat_favorites_v2',
         stickerData: 'wechat_sticker_data'
     },
     isLargeStoreReady: function () {
@@ -989,6 +990,7 @@ async function initData(options) {
                 const savedCallLogs = localStorage.getItem(DB.keys.callLogs);
                 const savedUnread = localStorage.getItem(DB.keys.chatUnread);
                 const savedFamilyCards = localStorage.getItem(DB.keys.familyCards);
+                const savedFavorites = localStorage.getItem(DB.keys.favorites);
                 const savedStickerData = localStorage.getItem('stickerData_v2') || localStorage.getItem('stickerData');
 
                 if (savedProfiles) window.charProfiles = normalizeStoredValue(savedProfiles, {});
@@ -999,6 +1001,7 @@ async function initData(options) {
                 if (savedCallLogs) window.callLogs = normalizeStoredValue(savedCallLogs, {});
                 if (savedUnread) window.chatUnread = normalizeStoredValue(savedUnread, {});
                 if (savedFamilyCards) window.familyCardState = normalizeStoredValue(savedFamilyCards, {});
+                if (savedFavorites) window.favorites = normalizeStoredValue(savedFavorites, []);
                 if (savedStickerData) window.stickerData = normalizeStoredValue(savedStickerData, null);
             } catch (e) { console.error("读取存档失败", e); }
             return;
@@ -1054,6 +1057,7 @@ async function initData(options) {
         window.callLogs = normalizeStoredValue(byKey[DB.keys.callLogs], window.callLogs || {});
         window.chatUnread = normalizeStoredValue(byKey[DB.keys.chatUnread], window.chatUnread || {});
         window.familyCardState = normalizeStoredValue(byKey[DB.keys.familyCards], window.familyCardState || {});
+        window.favorites = normalizeStoredValue(byKey[DB.keys.favorites], window.favorites || []);
         window.stickerData = normalizeStoredValue(await window.localforage.getItem(DB.keys.stickerData), window.stickerData || null);
         syncLegacyWechatMirror();
     })();
@@ -1080,7 +1084,8 @@ function syncLegacyWechatMirror() {
     try { localStorage.setItem(DB.keys.callLogs, JSON.stringify(window.callLogs || {})); } catch (e5) { }
     try { localStorage.setItem(DB.keys.chatUnread, JSON.stringify(window.chatUnread || {})); } catch (e6) { }
     try { localStorage.setItem(DB.keys.familyCards, JSON.stringify(window.familyCardState || {})); } catch (e7) { }
-    try { localStorage.setItem('stickerData_v2', JSON.stringify(window.stickerData || null)); } catch (e8) { }
+    try { localStorage.setItem(DB.keys.favorites, JSON.stringify(window.favorites || [])); } catch (e8) { }
+    try { localStorage.setItem('stickerData_v2', JSON.stringify(window.stickerData || null)); } catch (e9) { }
     if (!legacyWechatMirrorWarned) {
         legacyWechatMirrorWarned = true;
         console.info('[WechatStorage] 已写入 wechat_v2，并同步保留旧 localStorage 镜像用于刷新恢复');
@@ -1104,6 +1109,7 @@ async function flushSaveData() {
         localStorage.setItem(DB.keys.callLogs, JSON.stringify(window.callLogs));
         localStorage.setItem(DB.keys.chatUnread, JSON.stringify(window.chatUnread));
         localStorage.setItem(DB.keys.familyCards, JSON.stringify(window.familyCardState));
+        localStorage.setItem(DB.keys.favorites, JSON.stringify(window.favorites || []));
         localStorage.setItem('stickerData_v2', JSON.stringify(window.stickerData || null));
         return;
     }
@@ -1117,6 +1123,7 @@ async function flushSaveData() {
         window.localforage.setItem(DB.keys.callLogs, window.callLogs || {}),
         window.localforage.setItem(DB.keys.chatUnread, window.chatUnread || {}),
         window.localforage.setItem(DB.keys.familyCards, window.familyCardState || {}),
+        window.localforage.setItem(DB.keys.favorites, window.favorites || []),
         window.localforage.setItem(DB.keys.stickerData, window.stickerData || null)
     ]);
 
@@ -1199,6 +1206,7 @@ window.charProfiles = window.charProfiles || {};
 window.userPersonas = window.userPersonas || {};
 window.chatBackgrounds = window.chatBackgrounds || {};
 window.callLogs = window.callLogs || {};
+window.favorites = Array.isArray(window.favorites) ? window.favorites : [];
 window.currentChatRole = localStorage.getItem('currentChatId') || "";
 const STICKER_STORE_VERSION = 2;
 const STICKER_STORE_PRIMARY_KEY = 'stickerData_v2';
@@ -1747,10 +1755,13 @@ function isLikelyLeakedThoughtLine(line) {
     if (!s) return false;
     if (/^(?:理解|气氛|氛围|关系温度|关系状态|策略|动作|分析|判断|回复策略|互动策略|本轮策略)\s*[:：]/.test(s)) return true;
     if (/(?:thought|inner_monologue|system_event|quoteId|quote_id|reply_to|actions|status)\s*[:：]/i.test(s)) return true;
+    if (/(?:^|[\s{,"])(?:reply|reply_bubbles|content|type)\s*[:：]/i.test(s) && /(?:thought|inner_monologue|system_event|quoteId|actions|status)/i.test(s)) return true;
+    if (/^(?:第一步|第二步|步骤\d+|输出要求|格式要求|最终输出|示例输出)\s*[:：]/.test(s)) return true;
     if (/(?:我(?:该|得|先|需要|应该|必须)|先在)\s*(?:分析|判断|想想|思考|决定|考虑|确认|规划|组织|回复|怎么回复|怎么接|怎么说)/.test(s)) return true;
     if (/(?:当前|现在的)\s*(?:气氛|氛围|关系|关系温度|关系状态)/.test(s)) return true;
     if (/(?:要不要|是否需要)\s*触发(?:引用|语音|位置|通话|金钱|动作)?/.test(s)) return true;
     if (/(?:不能前后打架|严格服从|内部思维链|隐藏思维链|不对用户可见|用户可见内容)/.test(s)) return true;
+    if (/(?:系统提示词|只输出JSON|不要输出代码块|不要输出markdown|不要解释原因|以下是回复)/i.test(s)) return true;
     return false;
 }
 
@@ -1878,6 +1889,26 @@ function getMessagePlainText(msg) {
     if (msg.type === 'transfer') return '[转账]';
     if (msg.type === 'redpacket') return '[红包]';
     if (msg.type === 'family_card') return '[亲属卡]';
+    if (msg.type === 'takeout_card') {
+        try {
+            const item = typeof msg.content === 'string' ? JSON.parse(msg.content || '{}') : (msg.content || {});
+            const name = String(item.foodName || item.shopName || '').trim() || '外卖';
+            return '[外卖卡片] ' + name;
+        } catch (e) {
+            return '[外卖卡片]';
+        }
+    }
+    if (msg.type === 'gift_card') {
+        try {
+            const item = typeof msg.content === 'string' ? JSON.parse(msg.content || '{}') : (msg.content || {});
+            const name = item && item.anonymous === true
+                ? '匿名包裹'
+                : (String(item.itemName || '').trim() || '礼物');
+            return '[礼物卡片] ' + name;
+        } catch (e) {
+            return '[礼物卡片]';
+        }
+    }
     return String(msg.content || '');
 }
 
@@ -2192,8 +2223,11 @@ window.scrollToChatMessageById = function (msgId) {
 };
 
 function loadFavoritesState() {
+    if (Array.isArray(window.favorites) && window.favorites.length) {
+        return window.favorites.slice();
+    }
     try {
-        const raw = localStorage.getItem('wechat_favorites_v2');
+        const raw = localStorage.getItem(DB.keys.favorites);
         if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
@@ -2223,7 +2257,7 @@ function loadFavoritesState() {
                         timestamp: ts
                     };
                 });
-                localStorage.setItem('wechat_favorites_v2', JSON.stringify(migrated));
+                localStorage.setItem(DB.keys.favorites, JSON.stringify(migrated));
                 console.log('[收藏] 迁移旧数据成功，共', migrated.length, '条');
                 return migrated;
             }
@@ -2235,14 +2269,61 @@ function loadFavoritesState() {
     return [];
 }
 
+function normalizeFavoriteList(list) {
+    const source = Array.isArray(list) ? list : [];
+    const seen = Object.create(null);
+    const out = [];
+    for (let i = source.length - 1; i >= 0; i--) {
+        const item = source[i];
+        if (!item || typeof item !== 'object') continue;
+        const roleId = String(item.roleId || '').trim();
+        const messageId = String(item.messageId || '').trim();
+        const id = String(item.id || '').trim();
+        const content = String(item.content || '').trim();
+        const ts = typeof item.timestamp === 'number' && isFinite(item.timestamp) ? item.timestamp : Date.now();
+        const dedupeKey = messageId
+            ? ('msg:' + roleId + ':' + messageId)
+            : ('fallback:' + roleId + ':' + String(item.type || 'text') + ':' + content + ':' + ts);
+        if (seen[dedupeKey]) continue;
+        seen[dedupeKey] = true;
+        out.push({
+            id: id || makeChatMessageId(ts),
+            roleId: roleId,
+            messageId: messageId,
+            senderName: String(item.senderName || '').trim(),
+            senderAvatar: String(item.senderAvatar || '').trim(),
+            senderRole: String(item.senderRole || '').trim(),
+            content: content,
+            type: String(item.type || 'text').trim() || 'text',
+            previewUrl: String(item.previewUrl || '').trim(),
+            description: String(item.description || '').trim(),
+            timestamp: ts
+        });
+    }
+    out.reverse();
+    return out.slice(-800);
+}
+
 function saveFavoritesState(list) {
+    const normalized = normalizeFavoriteList(list);
+    window.favorites = normalized;
     try {
-        const data = JSON.stringify(Array.isArray(list) ? list : []);
-        localStorage.setItem('wechat_favorites_v2', data);
-        console.log('[收藏] 保存成功，共', Array.isArray(list) ? list.length : 0, '条');
+        const data = JSON.stringify(normalized);
+        localStorage.setItem(DB.keys.favorites, data);
+        console.log('[收藏] 保存成功，共', normalized.length, '条');
     } catch (e) {
         console.error('[收藏] 保存失败:', e);
     }
+    try {
+        if (typeof window.saveData === 'function') {
+            window.saveData();
+        }
+    } catch (e2) { }
+    try {
+        if (typeof window.flushSaveDataImmediately === 'function') {
+            window.flushSaveDataImmediately().catch(function () { });
+        }
+    } catch (e3) { }
 }
 
 function resolveFavoritePreviewUrl(msg) {
@@ -2290,7 +2371,7 @@ function buildFavoriteItem(roleId, msg) {
     };
 }
 
-window.favorites = loadFavoritesState();
+window.favorites = normalizeFavoriteList(loadFavoritesState());
 window.getFavorites = function () {
     return Array.isArray(window.favorites) ? window.favorites.slice() : [];
 };
@@ -2301,8 +2382,16 @@ window.addFavoriteMessage = function (roleId, msg) {
     }
     if (!Array.isArray(window.favorites)) window.favorites = [];
     const item = buildFavoriteItem(roleId, msg);
-    window.favorites = window.favorites.concat([item]).slice(-800);
-    saveFavoritesState(window.favorites);
+    const exists = window.favorites.some(function (fav) {
+        return String(fav && fav.roleId || '').trim() === String(item.roleId || '').trim() &&
+            String(fav && fav.messageId || '').trim() &&
+            String(fav && fav.messageId || '').trim() === String(item.messageId || '').trim();
+    });
+    if (exists) {
+        console.log('[收藏] 跳过重复收藏:', item.content ? item.content.substring(0, 30) : '(无内容)');
+        return item;
+    }
+    saveFavoritesState(window.favorites.concat([item]));
     console.log('[收藏] 添加成功:', item.content ? item.content.substring(0, 30) : '(无内容)');
     return item;
 };

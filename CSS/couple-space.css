@@ -664,6 +664,27 @@
             word-break: break-word;
         }
 
+        .note-translation-pair + .note-translation-pair {
+            margin-top: 12px;
+        }
+
+        .note-translation-foreign {
+            font-size: 13px;
+            font-weight: 700;
+            color: #3f3f46;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .note-translation-translation {
+            margin-top: 6px;
+            font-size: 12px;
+            line-height: 1.7;
+            color: #7a7a86;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
         .note-images {
             margin-top: 12px;
             width: 100%;
@@ -1398,8 +1419,23 @@
             will-change: transform;
         }
 
+        .activity-log-text-track {
+            display: inline-flex;
+            align-items: center;
+            gap: 18px;
+            min-width: max-content;
+            transform: translateX(0);
+        }
+
+        .activity-log-text-copy {
+            flex: 0 0 auto;
+        }
+
         .activity-log-text.is-overflow {
             text-overflow: clip;
+        }
+
+        .activity-log-text.is-overflow .activity-log-text-track {
             animation: secret-log-marquee 8.5s linear infinite alternate;
         }
 
@@ -1549,6 +1585,52 @@
             font-weight: 700;
             border-radius: 18px 18px 18px 4px;
             overflow-wrap: anywhere;
+        }
+
+        .secret-ai-message-bubble.secret-translated-message-shell {
+            padding: 0;
+            background: transparent;
+            box-shadow: none;
+            overflow: visible;
+        }
+
+        .secret-ai-message-bubble .secret-translated-message-bubble {
+            background: #E9E9EB;
+            border-radius: 18px 18px 18px 4px;
+            padding: 10px 12px;
+            color: #111;
+            line-height: 1.4;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .secret-ai-message-bubble .secret-translated-message-foreign,
+        .secret-ai-message-bubble .secret-translated-message-translation {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .secret-ai-message-bubble .secret-translated-message-foreign {
+            font-size: 14px;
+        }
+
+        .secret-ai-message-bubble .secret-translated-message-divider {
+            height: 1px;
+            margin: 8px 0 7px;
+            background: rgba(17, 17, 17, 0.12);
+        }
+
+        .secret-ai-message-bubble .secret-translated-message-translation {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.72);
+        }
+
+        .secret-ai-message-bubble .secret-translated-message-bubble.is-collapsed .secret-translated-message-divider,
+        .secret-ai-message-bubble .secret-translated-message-bubble.is-collapsed .secret-translated-message-translation {
+            display: none;
         }
 
         .secret-transfer-card {

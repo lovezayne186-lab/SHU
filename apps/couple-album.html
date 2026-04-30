@@ -1090,36 +1090,85 @@
             finalizeUpload(moodInputText.value.trim());
         });
 
-        function resolveCallAI() {
-            if (typeof window.callAI === 'function') return window.callAI;
+        function getAccessibleWindows() {
+            const list = [];
+            const push = function (target) {
+                try {
+                    if (!target || list.indexOf(target) !== -1) return;
+                    list.push(target);
+                } catch (e) {}
+            };
+            push(window);
             try {
-                if (window.parent && window.parent !== window && typeof window.parent.callAI === 'function') return window.parent.callAI;
+                push(window.parent);
+                if (window.parent && window.parent !== window) push(window.parent.parent);
+            } catch (e0) {}
+            try {
+                push(window.top);
+            } catch (e1) {}
+            try {
+                push(window.opener);
             } catch (e) {}
+            return list;
+        }
+
+        function resolveCallAI() {
+            const wins = getAccessibleWindows();
+            for (let i = 0; i < wins.length; i++) {
+                try {
+                    if (wins[i] && typeof wins[i].callAI === 'function') return wins[i].callAI;
+                } catch (e) {}
+            }
             return null;
         }
 
         function getCurrentRoleId() {
-            let roleId = String(window.currentChatRole || '').trim();
-            if (roleId) return roleId;
-            try {
-                if (window.parent && window.parent !== window) {
-                    roleId = String(window.parent.currentChatRole || '').trim();
+            const wins = getAccessibleWindows();
+            for (let i = 0; i < wins.length; i++) {
+                try {
+                    const roleId = String(wins[i].currentChatRole || wins[i].currentCharacterId || '').trim();
                     if (roleId) return roleId;
+                } catch (e) {}
+            }
+            try {
+                const linked = String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
+                if (linked) return linked;
+            } catch (e2) {}
+            try {
+                const current = String(localStorage.getItem('currentChatId') || '').trim();
+                if (current) return current;
+            } catch (e3) {}
+            return '';
+        }
+
+        function findWindowValue(propName, roleId) {
+            const wins = getAccessibleWindows();
+            for (let i = 0; i < wins.length; i++) {
+                try {
+                    const value = wins[i] && wins[i][propName];
+                    if (!value || typeof value !== 'object') continue;
+                    if (!roleId || value[roleId]) return value;
+                } catch (e) {}
+            }
+            return {};
+        }
+
+        function findChatHistoryFromWindows(roleId) {
+            const wins = getAccessibleWindows();
+            for (let i = 0; i < wins.length; i++) {
+                try {
+                    const data = wins[i] && wins[i].chatData;
+                    if (data && Array.isArray(data[roleId])) return data[roleId].slice();
+                } catch (e) {}
                 }
-            } catch (e) {}
-            roleId = String(localStorage.getItem('currentChatId') || '').trim();
-            if (roleId) return roleId;
-            return String(localStorage.getItem('couple_linked_role_id_v1') || '').trim();
+            return [];
         }
 
         function readChatHistory(roleId) {
             const rid = String(roleId || '').trim();
             if (!rid) return [];
-            try {
-                if (window.parent && window.parent !== window && window.parent.chatData && Array.isArray(window.parent.chatData[rid])) {
-                    return window.parent.chatData[rid].slice();
-                }
-            } catch (e) {}
+            const fromWindows = findChatHistoryFromWindows(rid);
+            if (fromWindows.length) return fromWindows;
             try {
                 const raw = localStorage.getItem('wechat_chatData') || '{}';
                 const parsed = JSON.parse(raw);
@@ -1131,14 +1180,8 @@
 
         function readAlbumPromptMeta(roleId) {
             const rid = String(roleId || '').trim();
-            let profiles = {};
-            let personas = {};
-            try {
-                if (window.parent && window.parent !== window) {
-                    profiles = window.parent.charProfiles && typeof window.parent.charProfiles === 'object' ? window.parent.charProfiles : {};
-                    personas = window.parent.userPersonas && typeof window.parent.userPersonas === 'object' ? window.parent.userPersonas : {};
-                }
-            } catch (e) {}
+            let profiles = findWindowValue('charProfiles', rid);
+            let personas = findWindowValue('userPersonas', rid);
             if (!profiles[rid]) {
                 try {
                     const raw = localStorage.getItem('wechat_charProfiles') || '{}';
@@ -1162,6 +1205,59 @@
             };
         }
 
+        function normalizeHistorySpeaker(rawRole) {
+            const role = String(rawRole || '').trim().toLowerCase();
+            if (!role) return '';
+            if (role === 'me' || role === 'user' || role === 'human' || role === 'self' || role === 'message') {
+                return 'user';
+            }
+            if (role === 'ai' || role === 'assistant' || role === 'role' || role === 'char' || role === 'character' || role === 'bot' || role === 'model') {
+                return 'role';
+            }
+            return '';
+        }
+
+        async function withAiRoleContext(roleId, task) {
+            const rid = String(roleId || getCurrentRoleId() || '').trim();
+            if (!rid) {
+                throw new Error('尚未绑定情侣角色');
+            }
+            const runner = typeof task === 'function' ? task : async function () {};
+            const targets = getAccessibleWindows();
+            const snapshots = targets.map(function (target) {
+                let currentChatRole = '';
+                let currentCharacterId = '';
+                try { currentChatRole = String(target.currentChatRole || ''); } catch (e0) {}
+                try { currentCharacterId = String(target.currentCharacterId || ''); } catch (e1) {}
+                return {
+                    target: target,
+                    currentChatRole: currentChatRole,
+                    currentCharacterId: currentCharacterId
+                };
+            });
+            let prevChatId = '';
+            try {
+                prevChatId = String(localStorage.getItem('currentChatId') || '');
+                localStorage.setItem('currentChatId', rid);
+            } catch (e2) {}
+            try {
+                snapshots.forEach(function (item) {
+                    try { item.target.currentChatRole = rid; } catch (e0) {}
+                    try { if ('currentCharacterId' in item.target) item.target.currentCharacterId = rid; } catch (e1) {}
+                });
+                return await runner();
+            } finally {
+                snapshots.forEach(function (item) {
+                    try { item.target.currentChatRole = item.currentChatRole; } catch (e0) {}
+                    try { if ('currentCharacterId' in item.target) item.target.currentCharacterId = item.currentCharacterId; } catch (e1) {}
+                });
+                try {
+                    if (prevChatId) localStorage.setItem('currentChatId', prevChatId);
+                    else localStorage.removeItem('currentChatId');
+                } catch (e3) {}
+            }
+        }
+
         function buildShortTermMemory() {
             const roleId = getCurrentRoleId();
             const meta = readAlbumPromptMeta(roleId);
@@ -1170,11 +1266,11 @@
             for (let i = 0; i < history.length; i++) {
                 const msg = history[i];
                 if (!msg || typeof msg !== 'object') continue;
-                const role = String(msg.role || '').trim();
-                if (role !== 'me' && role !== 'ai') continue;
+                const speaker = normalizeHistorySpeaker(msg.role);
+                if (!speaker) continue;
                 const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
                 if (!content) continue;
-                lines.push(`${role === 'me' ? meta.userName : meta.roleName}：${content}`);
+                lines.push(`${speaker === 'user' ? meta.userName : meta.roleName}：${content}`);
             }
             if (!lines.length) return `${meta.roleName}和${meta.userName}最近聊天较少，整体氛围偏日常、温柔、亲密。`;
             return lines.slice(-24).join('\n');
@@ -1457,16 +1553,25 @@
 
         async function askAi(systemPrompt, text, imageBase64) {
             const callAI = resolveCallAI();
-            if (!callAI) return '';
-            return new Promise((resolve) => {
-                try {
-                    const payload = imageBase64
-                        ? { type: 'image', base64: imageBase64, text }
-                        : { text };
-                    callAI(systemPrompt, [], payload, (reply) => resolve(String(reply || '')), () => resolve(''));
-                } catch (e) {
-                    resolve('');
-                }
+            if (!callAI) throw new Error('AI 接口未初始化');
+            const roleId = getCurrentRoleId();
+            return withAiRoleContext(roleId, async function () {
+                return await new Promise((resolve, reject) => {
+                    try {
+                        const payload = imageBase64
+                            ? { type: 'image', base64: imageBase64, text }
+                            : { text };
+                        callAI(
+                            systemPrompt,
+                            [],
+                            payload,
+                            function (reply) { resolve(String(reply || '')); },
+                            function (err) { reject(new Error(String(err || '请求失败'))); }
+                        );
+                    } catch (e) {
+                        reject(e instanceof Error ? e : new Error(String(e || '请求失败')));
+                    }
+                });
             });
         }
 
@@ -1573,6 +1678,9 @@
                 if (!result || !result.ok) {
                     showTypewriterModal('这次没有生成出有效内容，没有再塞默认占位文案，你可以直接再点一次重试。');
                 }
+            } catch (e) {
+                const msg = e && e.message ? String(e.message) : '请稍后再试';
+                showTypewriterModal(`生成失败：${msg}`);
             } finally {
                 fabBtn.classList.remove('loading');
             }
@@ -1669,6 +1777,8 @@
                 
                 renderMine();
                 await saveState();
+            } catch (e) {
+                detailCommentEl.textContent = `生成失败：${e && e.message ? e.message : '请稍后再试'}`;
             } finally {
                 detailAiBtn.textContent = originalText;
                 detailAiBtn.classList.remove('loading');

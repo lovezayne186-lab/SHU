@@ -1049,6 +1049,7 @@ function buildWechatPrivatePromptV2(options) {
 
     const coreRulesLayer = formatPromptLayer('角色扮演核心规则层', joinPromptParts([
         '【先思后行】\n- 在生成任何 reply、actions 或 system_event 之前，你必须先在 `thought` 中完成本轮思维链。\n- 这条思维链至少要交代四件事：你如何理解用户这句话、当前气氛/关系温度、本轮准备采取的互动策略、是否需要触发引用/语音/位置/通话/金钱等动作。\n- 你后续真正输出给用户的内容，必须严格服从你在 `thought` 里定下的策略，不能前后打架。',
+        '【思维链硬约束】\n- `thought` 是必填字段，不能为空、不能只写一句敷衍短语，也不能拿 `status.inner_monologue` 代替。\n- 如果你漏写 `thought`，或只写“略”“同上”“继续”等偷懒内容，整条输出都视为格式错误。',
         '【对话节奏】\n- 模拟真人的微信聊天习惯，把想说的话拆成 3 到 10 个短气泡。\n- 每轮条数尽量不要机械重复；单个气泡只承载一个完整意思，不要写成大段小作文。',
         '【主动性】\n- 你不是被动问答器。只要符合人设、关系和当前局势，你可以主动推进互动、调整气氛、触发功能或更新状态。\n- 但一切主动性都必须建立在人设与现实聊天情境之上，不能为用功能而用功能。',
         '【线上边界】\n- 当前是线上私聊。除非系统真的切到线下见面模式，否则严禁直接发展面对面动作、肢体接触或同处一室的叙事。'
@@ -1084,6 +1085,7 @@ function buildWechatPrivatePromptV2(options) {
         '【发送照片】\n- 照片/图片和表情包是两种不同消息。照片/图片用于真实场景、自拍、饭、房间、窗外、路上、物品等画面分享，必须使用对象格式：`{"type":"photo","content":"照片画面描述"}`。\n- 绝对不要在文本里写“发了一张照片”。聊到穿搭、房间、窗外、饭、宠物、路上、天气、礼物或其他有画面感的内容时，可以主动分享照片对象，让对话更有生活感；不要每轮都发，也不要用照片替代所有回应。',
         '【发送位置】\n- 使用对象格式：`[{"type":"location","name":"地点名称","address":"详细地址"}]`。\n- 如果你想向用户分享你的位置，这是普通位置卡片；如果你想和用户见面或让对方来找你，必须优先触发实时位置共享邀请，不要混为一谈。\n- 角色只要有明确见面意图，也必须先触发实时位置共享邀请。',
         '【点外卖卡片（强制落地）】\n- 一旦你在语义上已经决定给用户点外卖、买吃的、点奶茶、买宵夜、叫跑腿送饭，就绝对不能只做口头承诺，必须在 `reply` 中实际输出一个外卖卡片对象：`{"type":"takeout_card","shopName":"店铺名称","items":["商品1","商品2"],"price":"总价","remark":"备注/留言"}`。\n- 换句话说，只要你说出了类似“我给你点”“我给你买”“我下单了”“我给你叫个外卖”这类意思，就必须真的发 `takeout_card`，不能只发安慰文字。\n- 典型触发场景：用户说自己没吃饭、饿了、胃不舒服、忙得顾不上吃、情绪低落，而你此刻有明显照顾、投喂、哄人、补偿的意图时，应优先考虑 `takeout_card`。\n- 推荐写法：先发 1 到 3 条情绪铺垫气泡，再发外卖卡片。示例：`["别嘴硬了。","先吃点热的。",{"type":"takeout_card","shopName":"海底捞外卖","items":["番茄锅底","肥牛卷"],"price":"68.00","remark":"给你点点热的"}]`。',
+        '【外卖/礼物防重复】\n- 如果你刚刚已经发出过外卖卡片或礼物卡片，而用户这次并没有明确要求“再来一份 / 换一家 / 重新下单 / 再送一个 / 补发 / 改内容”，就不要重复发送同类卡片。\n- 卡片已经发出后，后续优先接“让对方记得收下、解释为什么送、跟进感受、确认有没有吃/收到”，而不是继续重复下单。',
         '【送礼物卡片】\n- 当你已经决定给用户买礼物、寄礼物、送一个实物心意、准备惊喜包裹时，不能只口头说“我给你买了”，必须在 `reply` 中实际输出一个礼物卡片对象：`{"type":"gift_card","itemName":"商品名称","price":"金额","anonymous":false,"paymentMode":"paid","bubbleTitle":"送你一份心意"}`。\n- `anonymous` 表示是否匿名包裹：如果你想制造惊喜、让用户先猜是什么，设为 true；普通礼物设为 false。匿名时 reply 文字也不要提前暴露具体商品名称。\n- `paymentMode` 默认用 "paid"，表示你已经买好送出；如果你想让用户替你代付，才用 "pay_on_behalf"。不要把代付和已购买混在一起。\n- 礼物金额必须符合你的人设财力和关系阶段。豪门/慷慨人设可以大方，普通/学生/拮据人设要克制。\n- 推荐写法：先发 1 到 3 条自然铺垫，再发礼物卡片。示例：`["别问，先收。","我挑了很久。",{"type":"gift_card","itemName":"小熊夜灯","price":"188.00","anonymous":true,"paymentMode":"paid","bubbleTitle":"送你一份匿名心意"}]`。',
         allowOfflineInvite
             ? '【见面触发】\n- 如果决定去找用户，先在 reply 中自然说出理由，再在 reply 数组的最后一个气泡使用纯文本 `:::ACTION_TRIGGER_LOCATION:::`。'
@@ -1113,6 +1115,7 @@ function buildWechatPrivatePromptV2(options) {
 
     const guardLayer = formatPromptLayer('约束收口层（CRITICAL FATAL ERROR WARNING）', joinPromptParts([
         '【防思考泄露锁】：绝对禁止把 thought 或 status.inner_monologue 里的分析、动作描写（如“深吸一口气”、“努力压制怒火”）写进 reply 中！reply 只能是你在微信对话框里打出去的字或发的语音。一旦泄露，系统将判定为 FATAL ERROR！',
+        '【防字段泄露锁】：reply 里绝对禁止出现 `thought:`、`status:`、`actions:`、`reply:`、`system_event:`、`quoteId:`、`理解:`、`策略:`、`动作:`、`输出要求:` 这类元字段或提纲句。一旦出现，说明你把内部结构泄露到了前台，属于严重错误。',
         '【防气泡粘连锁】：绝对禁止在 reply 的文本元素中使用换行符（\\n）！如果你想分段，必须拆分成数组里的新元素（发新气泡）！',
         '【防口头承诺落空锁】：如果 reply 里出现“给你点外卖 / 给你买吃的 / 我给你叫吃的 / 给你点奶茶”这类已经作出实际投喂承诺的表达，就必须同时输出 `takeout_card`；如果 reply 里出现“给你买礼物 / 给你寄礼物 / 送你个东西 / 给你准备了包裹”这类已经作出实际送礼承诺，就必须同时输出 `gift_card`。只说不发卡片视为格式错误。',
         '【防金钱卡片口播锁】：reply 文本里禁止出现 `[转账]金额`、`[红包]金额`、`[已收款金额]`、`[已领取红包]`、`[红包已领取]` 等卡片占位符或 UI 状态。金钱卡片只通过 actions.transfer 生成；收款/拆红包只通过约定标记触发，不把标记解释给用户。',
@@ -1365,6 +1368,11 @@ async function triggerAI() {
     try {
         localStorage.setItem('currentChatId', roleId);
     } catch (e0) { }
+    if (typeof window.cleanupStaleTrackedChatResponseRequest === 'function') {
+        try {
+            window.cleanupStaleTrackedChatResponseRequest(roleId);
+        } catch (eTracked) { }
+    }
     if (typeof window.cleanupStaleChatAiRequestLock === 'function') {
         try {
             const cleared = window.cleanupStaleChatAiRequestLock(roleId);

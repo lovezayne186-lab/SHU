@@ -557,8 +557,157 @@
                 userName: String(u.name || localStorage.getItem('user_name') || '你').trim() || '你',
                 rolePrompt: String(p.desc || p.persona || p.style || '').trim(),
                 userBackground: String(u.setting || u.persona || u.background || '').trim(),
-                worldBookPrompt: String(worldBookPrompt || '').trim()
+                worldBookPrompt: String(worldBookPrompt || '').trim(),
+                roleProfile: p && typeof p === 'object' ? p : {},
+                userPersona: u && typeof u === 'object' ? u : {}
             };
+        }
+
+        function normalizeLetterHistorySpeaker(rawRole) {
+            const role = String(rawRole || '').trim().toLowerCase();
+            if (!role) return '';
+            if (role === 'me' || role === 'user' || role === 'human' || role === 'self' || role === 'message') {
+                return 'user';
+            }
+            if (role === 'ai' || role === 'assistant' || role === 'role' || role === 'char' || role === 'character' || role === 'bot' || role === 'model') {
+                return 'role';
+            }
+            return '';
+        }
+
+        function isLetterLikelyForeignLanguageHint(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return false;
+            const lower = raw.toLowerCase();
+            if (/(中文|汉语|漢語|普通话|普通話|国语|國語|mandarin|simplified chinese|简体|簡體|zh[-_ ]?(cn|hans)?)/i.test(lower)) {
+                return false;
+            }
+            return /(英语|英語|英文|日语|日語|韩语|韓語|韩文|韓文|法语|法語|德语|德語|西班牙语|西班牙語|俄语|俄語|阿拉伯语|阿拉伯語|葡萄牙语|葡萄牙語|意大利语|意大利語|粤语|粵語|繁体|繁體|文言|english|japanese|korean|french|german|spanish|russian|arabic|portuguese|italian|thai|vietnamese|traditional chinese|cantonese|classical chinese|zh[-_ ]?(tw|hk|hant)|ja[-_ ]?jp|ko[-_ ]?kr|en[-_ ]?(us|gb))/i.test(lower);
+        }
+
+        function isLetterLikelyForeignLocaleHint(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return false;
+            const lower = raw.toLowerCase();
+            return /(日本|日本人|韩国|韓國|韩国人|韓國人|美国|美國|美国人|美國人|英国|英國|法国|法國|德国|德國|西班牙|意大利|義大利|俄罗斯|俄羅斯|阿拉伯|葡萄牙|荷兰|荷蘭|泰国|泰國|越南|japan|japanese|korea|korean|america|american|britain|british|france|french|germany|german|spain|spanish|italy|italian|russia|russian|arab|arabic|portugal|portuguese|netherlands|dutch|thailand|thai|vietnam|vietnamese)/i.test(lower);
+        }
+
+        function isLetterLikelyNonSimplifiedChineseHint(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return false;
+            if (/(繁體|繁体|正體|正体|traditional chinese|cantonese|粤语|粵語|文言|classical chinese|zh[-_ ]?(tw|hk|hant))/i.test(raw)) {
+                return true;
+            }
+            const hits = (raw.match(/[這個們為來時後會說話讓還愛歡學習覺應實體點開關於與臺灣廣東電腦網頁貓車鐘鍾門裡見聽買麼嗎係嘅咗喺冇唔佢哋啲咩]/g) || []).length;
+            return hits >= 2;
+        }
+
+        function isLetterBilingualRole(meta) {
+            const profile = meta && meta.roleProfile && typeof meta.roleProfile === 'object' ? meta.roleProfile : {};
+            const explicit = [
+                { value: profile.language, kind: 'language' },
+                { value: profile.lang, kind: 'language' },
+                { value: profile.nativeLanguage, kind: 'language' },
+                { value: profile.native_language, kind: 'language' },
+                { value: profile.spokenLanguage, kind: 'language' },
+                { value: profile.spoken_language, kind: 'language' },
+                { value: profile.locale, kind: 'locale' },
+                { value: profile.nationality, kind: 'locale' }
+            ];
+            for (let i = 0; i < explicit.length; i++) {
+                const item = explicit[i] || {};
+                const value = String(item.value || '').trim();
+                if (!value) continue;
+                if (item.kind === 'locale') {
+                    if (isLetterLikelyForeignLocaleHint(value) || isLetterLikelyForeignLanguageHint(value)) return true;
+                } else if (isLetterLikelyForeignLanguageHint(value) || isLetterLikelyNonSimplifiedChineseHint(value)) {
+                    return true;
+                }
+                return false;
+            }
+            const sampleText = [
+                profile.realName,
+                profile.real_name,
+                profile.nickName,
+                profile.name,
+                profile.character_name,
+                profile.characterName,
+                profile.title,
+                profile.desc,
+                profile.description,
+                profile.persona,
+                profile.prompt,
+                profile.system_prompt,
+                profile.systemPrompt,
+                profile.scenario,
+                profile.first_mes,
+                profile.mes_example,
+                profile.creator_notes,
+                profile.post_history_instructions,
+                Array.isArray(profile.tags) ? profile.tags.join(' ') : String(profile.tags || '')
+            ];
+            for (let i = 0; i < sampleText.length; i++) {
+                if (isLetterLikelyForeignLanguageHint(sampleText[i]) || isLetterLikelyNonSimplifiedChineseHint(sampleText[i])) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function buildLetterLanguageRules(meta, todayText) {
+            if (!isLetterBilingualRole(meta)) {
+                return [
+                    '必须是中文。',
+                    `今天的日期固定是 ${todayText}，回信结尾的日期必须只写 ${todayText}，不要编造其他日期。`
+                ];
+            }
+            return [
+                `今天的日期固定是 ${todayText}，回信结尾的日期必须只写 ${todayText}，不要编造其他日期。`,
+                '当前角色是外语或非简体中文角色，这封回信必须使用“双语段落配对”格式。',
+                '每一组都必须严格按照“上一段写角色真正会说的原文，下一段单独写对应的简体中文翻译”的顺序排布。',
+                '原文段和翻译段必须分成两个独立段落，绝对不要放进同一段、同一行、同一对括号里。',
+                '称呼、正文、署名都要保持“原文在上，中文翻译在下”的段落顺序；最后日期单独保留为一行日期即可。',
+                '绝对不要只写中文，也不要只写原文。'
+            ];
+        }
+
+        async function withLetterAiRoleContext(roleId, task) {
+            const rid = String(roleId || resolveLetterRoleId() || '').trim();
+            if (!rid) {
+                throw new Error('尚未绑定情侣角色');
+            }
+            const runner = typeof task === 'function' ? task : async function () {};
+            const targets = [window];
+            const pw = getLetterParentWindow();
+            if (pw) targets.push(pw);
+            const snapshots = targets.map(function (target) {
+                return {
+                    target: target,
+                    currentChatRole: String(target.currentChatRole || ''),
+                    currentCharacterId: String(target.currentCharacterId || '')
+                };
+            });
+            let prevChatId = '';
+            try {
+                prevChatId = String(localStorage.getItem('currentChatId') || '');
+                localStorage.setItem('currentChatId', rid);
+            } catch (e2) {}
+            try {
+                snapshots.forEach(function (item) {
+                    item.target.currentChatRole = rid;
+                    if ('currentCharacterId' in item.target) item.target.currentCharacterId = rid;
+                });
+                return await runner();
+            } finally {
+                snapshots.forEach(function (item) {
+                    item.target.currentChatRole = item.currentChatRole;
+                    if ('currentCharacterId' in item.target) item.target.currentCharacterId = item.currentCharacterId;
+                });
+                try {
+                    if (prevChatId) localStorage.setItem('currentChatId', prevChatId);
+                    else localStorage.removeItem('currentChatId');
+                } catch (e3) {}
+            }
         }
 
         function readLetterChatHistory(roleId) {
@@ -583,11 +732,11 @@
             for (let i = 0; i < history.length; i++) {
                 const msg = history[i];
                 if (!msg || typeof msg !== 'object') continue;
-                const role = String(msg.role || '').trim();
-                if (role !== 'me' && role !== 'ai') continue;
+                const speaker = normalizeLetterHistorySpeaker(msg.role);
+                if (!speaker) continue;
                 const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
                 if (!content) continue;
-                lines.push(`${role === 'me' ? meta.userName : meta.roleName}：${content}`);
+                lines.push(`${speaker === 'user' ? meta.userName : meta.roleName}：${content}`);
             }
             if (!lines.length) {
                 return `${meta.roleName}和${meta.userName}最近聊天不多，整体氛围偏日常、温柔、亲密。`;
@@ -600,6 +749,7 @@
             const shortMemory = buildLetterShortMemory(meta);
             const letterText = String(targetLetter && targetLetter.text ? targetLetter.text : '').trim();
             const todayText = formatLetterDate(new Date());
+            const languageRules = buildLetterLanguageRules(meta, todayText);
             const systemPrompt = [
                 '[[PROMPT_CLASS:ROLE_LITE]]',
                 '[[SCENE:COUPLE_LETTER_REPLY]]',
@@ -621,9 +771,8 @@
                 '这封回复必须像一封正式的信件，而不是聊天消息。',
                 '文笔可以参考沈从文、朱生豪这类温柔、真挚、含蓄又有画面感的书信风格，但不要照抄任何现成句子。',
                 '必须包含：称呼、正文、署名、日期。',
-                `今天的日期固定是 ${todayText}，回信结尾的日期必须只写 ${todayText}，不要编造其他日期。`,
                 '正文要围绕对方这封来信的内容认真回应，既要回应情绪，也要回应细节。',
-                '必须是中文。',
+                languageRules.join('\n'),
                 '总字数不得少于 200 字，500 字左右最佳。',
                 '不要输出解释、不要输出 markdown、不要输出代码块、不要写成诗歌条目。'
             ].filter(Boolean).join('\n');
@@ -636,6 +785,7 @@
                 letterText,
                 '',
                 '【补充提醒】',
+                `写信的人一定是${meta.userName}，回信的人只能是${meta.roleName}，不要把双方身份写反。`,
                 `请以${meta.roleName}的身份回信，既保留恋人之间的亲密，又要保持书信体的正式与完整。`,
                 `末尾日期必须写成：${todayText}`
             ].join('\n');
@@ -836,14 +986,16 @@
             letterReplyLoading = true;
             refreshLetterReplyTrigger();
             try {
-                const raw = await new Promise((resolve, reject) => {
-                    callAI(
-                        prompts.systemPrompt,
-                        [],
-                        { text: prompts.userPrompt },
-                        (text) => resolve(String(text || '')),
-                        (err) => reject(new Error(String(err || '请求失败')))
-                    );
+                const raw = await withLetterAiRoleContext(prompts.meta && prompts.meta.roleId, async function () {
+                    return await new Promise((resolve, reject) => {
+                        callAI(
+                            prompts.systemPrompt,
+                            [],
+                            { text: prompts.userPrompt },
+                            (text) => resolve(String(text || '')),
+                            (err) => reject(new Error(String(err || '请求失败')))
+                        );
+                    });
                 });
                 const now = new Date();
                 const replyText = enforceLetterReplyFooterDate(sanitizeLetterReplyText(raw), now);
