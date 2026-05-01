@@ -1,6 +1,6 @@
 // sw.js - 开发友好版：网络优先 (Network First)
 // 修改后：每次刷新都会尝试获取最新代码，没网时才用缓存
-const APP_SHELL_VERSION = '2026.04.27-sticker-import-file-global';
+const APP_SHELL_VERSION = '2026.05.01-shadow-app-prompts';
 const CACHE_NAME = 'shubao-phone-dev-' + APP_SHELL_VERSION;
 const urlsToCache = [
   './',

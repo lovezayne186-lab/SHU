@@ -12,18 +12,23 @@
         pw.__offlineSyncInProgress = true;
         pw.currentChatRole = rid;
         try {
+            const aiUtils = window.CoupleSpaceAiUtils;
+            const bilingualRule = aiUtils && typeof aiUtils.buildInlineBilingualOutputPrompt === 'function'
+                ? aiUtils.buildInlineBilingualOutputPrompt(rid)
+                : '';
             const extraSystem =
                 '场景：你正在进行「情侣问答」。\n' +
                 '请你以恋人身份、第一人称，温柔自然地回应我刚刚的回答。\n' +
                 '输出时只输出你的回答正文，不要加任何前缀、解释或格式标记。\n' +
-                '字数控制在 60~160 字，避免使用列点。';
+                '字数控制在 60~160 字，避免使用列点。' +
+                (bilingualRule ? '\n\n' + bilingualRule : '');
 
             let systemPrompt = bridge.buildRoleLitePrompt('couple_qa_answer', rid, {
                 includeContinuity: true,
                 maxSummaryLines: 10,
                 sceneIntro: '当前场景是情侣问答里的角色回答。',
                 taskGuidance: extraSystem,
-                outputInstructions: '只输出你的回答正文，不要加前缀、解释、JSON、代码块或格式标记。字数控制在 60~160 字。'
+                outputInstructions: '只输出你的回答正文，不要加前缀、解释、JSON、代码块或格式标记。字数控制在 60~160 字。' + (bilingualRule ? '\n' + bilingualRule : '')
             });
 
             if (!systemPrompt) {

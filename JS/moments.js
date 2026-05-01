@@ -467,9 +467,9 @@ function renderMoments() {
                     const fromId = c.from || '';
                     const fromName = getDisplayNameById(fromId, data);
                     const safeFromName = escapeHtml(fromName).replace(/'/g, "\\'");
-                    html += '              <div class="comment-row" onclick="onReplyComment(\'' + escapeHtml(postId) + '\', \'' + escapeHtml(fromId) + '\', \'' + safeFromName + '\')">';
-                    html += '                  <span class="comment-user">' + escapeHtml(fromName) + '：</span>';
-                    html += '                  <span>' + escapeHtml(c.content || '') + '</span>';
+                html += '              <div class="comment-row" onclick="onReplyComment(\'' + escapeHtml(postId) + '\', \'' + escapeHtml(fromId) + '\', \'' + safeFromName + '\')">';
+                html += '                  <span class="comment-user">' + escapeHtml(fromName) + '：</span>';
+                html += '                  <span class="comment-content">' + escapeHtml(c.content || '') + '</span>';
                     html += '              </div>';
                 }
                 html += '          </div>';
@@ -1485,6 +1485,98 @@ function getUserPersonaForRole(roleId) {
     return p.persona || p.desc || '';
 }
 
+function getMomentsBilingualFieldRule(fieldName) {
+    var field = fieldName || 'comment';
+    return '朋友圈外语显示规则：如果你按人设需要使用外语、繁体、粤语、日语、韩语等非简体中文表达，' +
+        '请让 JSON 的 "' + field + '" 字段写成一个字符串，格式为“角色原话\\n简体中文翻译”。' +
+        '第一行必须是角色真正说出的话，第二行必须是对应简体中文翻译。不要只写外语，不要只写中文，不要写“翻译：”标题。';
+}
+
+function getMomentsBilingualPlainTextRule() {
+    return '朋友圈外语显示规则：如果你按人设需要使用外语、繁体、粤语、日语、韩语等非简体中文表达，' +
+        '回复正文必须写成“角色原话\\n简体中文翻译”。第一行必须是角色真正说出的话，第二行必须是对应简体中文翻译。' +
+        '不要只写外语，不要只写中文，不要写“翻译：”标题。';
+}
+
+function momentsSafeJsonParse(text, fallback) {
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        return fallback;
+    }
+}
+
+function extractMomentsJsonObject(text) {
+    var raw = String(text || '').trim();
+    if (!raw) return null;
+    var fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    var candidate = fenced && fenced[1] ? String(fenced[1]).trim() : raw;
+    var first = candidate.indexOf('{');
+    var last = candidate.lastIndexOf('}');
+    if (first === -1 || last === -1 || last <= first) return null;
+    return momentsSafeJsonParse(candidate.slice(first, last + 1), null);
+}
+
+function momentsTranslatedFieldText(value) {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+    if (Array.isArray(value)) {
+        return value.map(momentsTranslatedFieldText).filter(Boolean).join('\n').trim();
+    }
+    if (typeof value === 'object') {
+        return String(value.text || value.content || value.value || value.message || '').trim();
+    }
+    return '';
+}
+
+function momentsFirstTranslatedField(payload, keys) {
+    var source = payload && typeof payload === 'object' ? payload : {};
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (source[key] != null) return source[key];
+    }
+    return null;
+}
+
+function formatMomentsInlineTranslation(value) {
+    var payload = value;
+    if (typeof payload === 'string') {
+        payload = momentsSafeJsonParse(payload, null) || extractMomentsJsonObject(payload);
+    }
+    if (!payload || typeof payload !== 'object') return '';
+    var rawType = String(payload.type || payload.messageType || payload.kind || '').trim().toLowerCase();
+    var hasTranslatedType = rawType === 'translated_text' || rawType === 'translated';
+    var foreign = momentsFirstTranslatedField(payload, [
+        'foreign',
+        'original',
+        'originalText',
+        'original_text',
+        'source',
+        'sourceText',
+        'foreignText',
+        'foreign_text',
+        'bodyText'
+    ]);
+    var translation = momentsFirstTranslatedField(payload, [
+        'translation',
+        'chinese',
+        'chineseText',
+        'translation_text',
+        'translationText',
+        'zh',
+        'cn'
+    ]);
+    var foreignText = momentsTranslatedFieldText(foreign);
+    var translationText = momentsTranslatedFieldText(translation);
+    if (!hasTranslatedType && !(foreignText && translationText)) return '';
+    var bodyText = foreignText || String(payload.text || payload.content || '').trim();
+    var finalTranslation = translationText || bodyText;
+    if (!bodyText && !finalTranslation) return '';
+    return bodyText && finalTranslation && bodyText !== finalTranslation
+        ? bodyText + '\n' + finalTranslation
+        : (bodyText || finalTranslation);
+}
+
 function buildAIReactionPrompt(post, aiId, aiProfile, userName, userPersona) {
     var aiName = aiProfile && (aiProfile.nickName || aiProfile.name) ? (aiProfile.nickName || aiProfile.name) : aiId || 'AI';
     var contentText = post && post.content ? String(post.content).trim() : '';
@@ -1507,7 +1599,7 @@ function buildAIReactionPrompt(post, aiId, aiProfile, userName, userPersona) {
             maxSummaryLines: 10,
             sceneIntro: '当前场景是角色看到用户新发的朋友圈后，决定要不要互动。',
             taskGuidance: '你可以看到用户刚发的朋友圈，需要基于你们关系、最近互动和角色本身判断是否点赞、评论，或者什么都不做。',
-            outputInstructions: '只输出当前任务要求的 JSON 对象，不要解释，不要代码块。'
+            outputInstructions: '只输出当前任务要求的 JSON 对象，不要解释，不要代码块。若评论需要外语表达，comment 字段使用“角色原话\\n简体中文翻译”。'
         })
         : ('你是聊天中的 AI 角色：' + aiName + '。你和 ' + userLabel + ' 在微信里聊天，你可以看到对方发的朋友圈，并根据关系选择是否点赞或评论。');
 
@@ -1535,7 +1627,8 @@ function buildAIReactionPrompt(post, aiId, aiProfile, userName, userPersona) {
     userMessageParts.push('  "comment": "这里写评论内容，如果不想评论就留空字符串"');
     userMessageParts.push('}');
     userMessageParts.push('注意：你可以什么都不做（既不点赞也不评论），此时请返回 {"like": false, "comment": ""}。');
-    userMessageParts.push('其中 "comment" 字段的值必须是【纯文本的一句话】，禁止包含思考过程、理由说明、代码块、markdown 语法、JSON 字符串或任何额外结构。');
+    userMessageParts.push('其中 "comment" 字段的值必须是可直接显示在朋友圈评论区的纯文本，禁止包含思考过程、理由说明、代码块、markdown 语法、JSON 字符串或任何额外结构。');
+    userMessageParts.push(getMomentsBilingualFieldRule('comment'));
     userMessageParts.push('不要在上面 JSON 之外输出任何内容，不要输出代码块，不要解释你的思路。');
 
     return {
@@ -1635,7 +1728,7 @@ function triggerSingleAIReaction(post, aiId) {
                 }
                 if (!obj || typeof obj !== 'object') return;
                 var like = !!obj.like;
-                var commentText = obj.comment != null ? String(obj.comment) : '';
+                var commentText = obj.comment != null ? obj.comment : '';
                 commentText = sanitizeAIPlainText(commentText);
 
                 var currentData = initMomentsData();
@@ -1700,10 +1793,10 @@ function triggerSingleAIReaction(post, aiId) {
     }
 }
 
-// 🔍 搜索 function sanitizeAIPlainText 并替换为：
 function sanitizeAIPlainText(text) {
     if (text == null) return '';
-    let s = String(text);
+    var translated = formatMomentsInlineTranslation(text);
+    let s = translated || String(text);
 
     // === 1. 尝试从 Markdown/JSON 中提取内容 ===
     try {
@@ -1717,12 +1810,13 @@ function sanitizeAIPlainText(text) {
         if (start !== -1 && end > start) {
             const jsonBody = potentialJson.substring(start, end + 1);
             const obj = JSON.parse(jsonBody);
-            
+            var translatedObj = formatMomentsInlineTranslation(obj);
+            if (translatedObj) return translatedObj;
             // 朋友圈回复常见的字段
-            if (obj.comment) s = String(obj.comment);
-            else if (obj.reply) s = String(obj.reply);
-            else if (obj.content) s = String(obj.content);
-            else if (obj.message) s = String(obj.message);
+            if (obj.comment) s = sanitizeAIPlainText(obj.comment);
+            else if (obj.reply) s = sanitizeAIPlainText(obj.reply);
+            else if (obj.content) s = sanitizeAIPlainText(obj.content);
+            else if (obj.message) s = sanitizeAIPlainText(obj.message);
             // 如果解析成功但没有上述字段，s 保持原样 (可能 AI 把内容放在了别的地方，或者本身就不是 JSON)
         }
     } catch (e) {
@@ -1746,7 +1840,7 @@ function sanitizeAIPlainText(text) {
         if (/^(思考过程|推理过程|解释|思路|分析|推断|system|assistant)\s*[:：]/i.test(line)) continue;
         cleanedLines.push(line);
     }
-    s = cleanedLines.join(' ');
+    s = cleanedLines.join('\n');
     
     return s.replace(/[ \t]{2,}/g, ' ').trim();
 }
@@ -1783,7 +1877,7 @@ function triggerAIResponseToCommentOnAiPost(post, userContent, targetRoleId) {
             maxSummaryLines: 10,
             sceneIntro: '当前场景是用户在角色朋友圈下评论后，角色的轻量回复。',
             taskGuidance: '你需要根据朋友圈原文、评论区上下文和你们的关系，用一句自然的话接住用户的评论。',
-            outputInstructions: '只回复一句自然中文，不要前缀、不要解释、不要 JSON、不要代码块。'
+            outputInstructions: '只回复一句自然的话，不要前缀、不要解释、不要代码块。若需要外语表达，输出“角色原话\\n简体中文翻译”。'
         })
         : ('你是朋友圈中的角色「' + aiName + '」。用户刚刚在你发的朋友圈下面评论了一句话，你需要自然地接话。');
     var userMessageParts = [];
@@ -1801,7 +1895,8 @@ function triggerAIResponseToCommentOnAiPost(post, userContent, targetRoleId) {
         if (recent) userMessageParts.push('【评论区最近对话】\n' + recent);
     }
     userMessageParts.push('【用户的评论】' + userContent);
-    userMessageParts.push('要求：只回复一句话，不要带任何前缀或解释。禁止输出思考过程、分析步骤、代码块、markdown、JSON 或任何额外结构，只输出这句话的正文内容。');
+    userMessageParts.push('要求：只回复一句话，不要带任何前缀或解释。禁止输出思考过程、分析步骤、代码块、markdown 或任何额外结构，只输出这句话的正文内容。');
+    userMessageParts.push(getMomentsBilingualPlainTextRule());
     var userMessage = userMessageParts.join('\n');
 
     var delay = 2000 + Math.floor(Math.random() * 3000);
@@ -1904,7 +1999,7 @@ function triggerAIResponseToReply(post, userContent, targetRoleId) {
             maxSummaryLines: 10,
             sceneIntro: '当前场景是用户回复了角色在朋友圈里的评论。',
             taskGuidance: '你需要根据原贴、你之前的评论和评论区上下文，用一句自然的话继续回复，但不要机械重复上一句观点。',
-            outputInstructions: '只回复一句自然中文，不要前缀、不要解释、不要 JSON、不要代码块。'
+            outputInstructions: '只回复一句自然的话，不要前缀、不要解释、不要代码块。若需要外语表达，输出“角色原话\\n简体中文翻译”。'
         })
         : ('你是朋友圈中的角色「' + aiName + '」。用户刚刚在朋友圈中回复了你的评论。');
     var userMessageParts = [];
@@ -1923,7 +2018,8 @@ function triggerAIResponseToReply(post, userContent, targetRoleId) {
         if (recent) userMessageParts.push('【评论区最近对话】\n' + recent);
     }
     userMessageParts.push('【用户的回复】' + userContent);
-    userMessageParts.push('要求：只回复一句话，不要带任何前缀或解释。禁止输出思考过程、分析步骤、代码块、markdown、JSON 或任何额外结构，只输出这句话的正文内容。');
+    userMessageParts.push('要求：只回复一句话，不要带任何前缀或解释。禁止输出思考过程、分析步骤、代码块、markdown 或任何额外结构，只输出这句话的正文内容。');
+    userMessageParts.push(getMomentsBilingualPlainTextRule());
 
     var userMessage = userMessageParts.join('\n');
 
@@ -2199,7 +2295,8 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
                 '如果这条朋友圈只是表达当下心情、想法、独白或关系余温，post_type 选 thought，只发纯文字。',
                 '如果这条朋友圈更像在分享生活片段、地点、物件、状态、场景或可被看见的东西，post_type 选 share，系统会附带一张图片。',
                 'share 使用的是可点击查看说明的文字图占位，image_description 要写你真正想分享的画面，而不是描述占位图本身。',
-                '长期希望你的朋友圈里 share/带图动态约占 60%，thought/纯文字约占 40%。当两种表达都自然时，请参考当前历史比例做选择。'
+                '长期希望你的朋友圈里 share/带图动态约占 60%，thought/纯文字约占 40%。当两种表达都自然时，请参考当前历史比例做选择。',
+                '如果朋友圈文案按人设需要外语或非简体中文表达，content 字段写成“角色原话\\n简体中文翻译”。'
             ].join('\n')
         })
         : ('你是微信里的 AI 角色「' + (profile.nickName || profile.name || roleId) + '」。你和用户正在微信里聊天。你需要根据自己的人设、世界书和对话记忆，决定现在要不要主动发一条朋友圈。');
@@ -2234,7 +2331,7 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
     msgParts.push('{');
     msgParts.push('  "should_post": true 或 false,');
     msgParts.push('  "post_type": "thought 或 share",');
-    msgParts.push('  "content": "如果要发，这里写朋友圈文案，控制在 50 字以内，纯文本一句话",');
+    msgParts.push('  "content": "如果要发，这里写朋友圈文案；外语角色用 角色原话\\n简体中文翻译",');
     msgParts.push('  "image_description": "post_type 为 share 时，写这张图的详细画面说明；post_type 为 thought 时留空",');
     msgParts.push('  "visibility": "public 或 private 或 friends",');
     msgParts.push('  "mood": "happy 或 neutral 或 sad"');
@@ -2242,7 +2339,8 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
     msgParts.push('要求：');
     msgParts.push('1. 严格只返回上面这个 JSON，不要在前后增加任何解释、思考过程或额外内容。');
     msgParts.push('2. 如果你觉得现在不适合发朋友圈，就返回 {"should_post": false, "post_type": "thought", "content": "", "image_description": "", "visibility": "public", "mood": "neutral"}。');
-    msgParts.push('3. "content" 必须是纯文本，不要包含表情代码、markdown、换行、JSON 或代码块。');
+    msgParts.push('3. "content" 必须是可直接显示在朋友圈正文里的纯文本，不要包含表情代码、markdown、JSON 或代码块；只有外语/非简体中文角色需要用一个换行分隔原文和译文。');
+    msgParts.push(getMomentsBilingualFieldRule('content'));
     msgParts.push('4. post_type 为 thought 时，content 只表达心情或想法，不要提到照片、图片、自拍或配图。');
     msgParts.push('5. post_type 为 share 时，content 像一条自然配图文案；image_description 要具体描述图片画面，方便用户点图查看。');
 
@@ -2272,7 +2370,7 @@ function maybeTriggerRoleProactiveMoment(roleId, roleState) {
             }
             if (!obj || typeof obj !== 'object') return;
             var shouldPost = !!obj.should_post;
-            var content = obj.content != null ? String(obj.content) : '';
+            var content = obj.content != null ? obj.content : '';
             content = sanitizeAIPlainText(content);
             if (!shouldPost || !content) return;
             var postType = String(obj.post_type || '').trim().toLowerCase();

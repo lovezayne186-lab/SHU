@@ -6,12 +6,12 @@
     <meta name="theme-color" content="#e7e7e7">
     <title>情侣空间</title>
     <script src="../vendor/localforage/localforage.min.js"></script>
-    <link rel="stylesheet" href="../CSS/couple-space.css?v=3">
+    <link rel="stylesheet" href="../CSS/couple-space.css?v=5">
     <script src="../JS/couplespace/qa_data.js"></script>
     <script src="../JS/couplespace/adapters/parent-bridge.js"></script>
-    <script src="../JS/couplespace/adapters/ai-utils.js"></script>
+    <script src="../JS/couplespace/adapters/ai-utils.js?v=4"></script>
     <script src="../JS/couplespace/domains/qa/qa-repository.js"></script>
-    <script src="../JS/couplespace/ai/scenes/couple-qa-scene.js"></script>
+    <script src="../JS/couplespace/ai/scenes/couple-qa-scene.js?v=4"></script>
     <script src="../JS/couplespace/domains/qa/qa-service.js"></script>
     <script src="../JS/couplespace/ui/qa/qa-modal.js"></script>
     <script src="../JS/couplespace/domains/settings/settings-service.js"></script>
@@ -478,7 +478,7 @@
     </template>
 
     
-    <script src="../JS/couplespace/couple-space.js?v=3"></script>
+    <script src="../JS/couplespace/couple-space.js?v=12"></script>
     <script>
         // 情书相关逻辑
         const LETTER_STORAGE_KEY = 'couple_space_letters_v1';
@@ -498,9 +498,47 @@
             return String(localStorage.getItem('currentChatId') || '').trim();
         }
 
-        function buildLetterStorageKey() {
-            const rid = resolveLetterRoleId();
+        function getActiveLetterRoleId(extraRoleId) {
+            const explicit = String(extraRoleId || '').trim();
+            if (explicit) return explicit;
+            const resolved = String(resolveLetterRoleId() || '').trim();
+            if (resolved) return resolved;
+            try {
+                const pw = getLetterParentWindow();
+                const parentRid = pw ? String(pw.currentChatRole || '').trim() : '';
+                if (parentRid) return parentRid;
+            } catch (e) {}
+            return '';
+        }
+
+        function getLetterRoleIds(extraRoleId) {
+            const rid = getActiveLetterRoleId(extraRoleId);
+            return rid ? [rid] : [];
+        }
+
+        function buildLetterStorageKey(extraRoleId) {
+            const rid = getActiveLetterRoleId(extraRoleId);
             return rid ? `${LETTER_STORAGE_KEY}__${rid}` : LETTER_STORAGE_KEY;
+        }
+
+        function buildLetterStorageKeys(extraRoleId) {
+            return [buildLetterStorageKey(extraRoleId)];
+        }
+
+        function getLetterForage() {
+            try {
+                const pw = getLetterParentWindow();
+                const lib =
+                    (pw && pw.localforage && typeof pw.localforage.createInstance === 'function')
+                        ? pw.localforage
+                        : (window.localforage && typeof window.localforage.createInstance === 'function')
+                            ? window.localforage
+                            : null;
+                if (!lib) return null;
+                return lib.createInstance({ name: 'shubao_large_store_v1', storeName: 'couple_space' });
+            } catch (e) {
+                return null;
+            }
         }
 
         function formatLetterDate(ts) {
@@ -600,6 +638,9 @@
             const shortMemory = buildLetterShortMemory(meta);
             const letterText = String(targetLetter && targetLetter.text ? targetLetter.text : '').trim();
             const todayText = formatLetterDate(new Date());
+            const bilingualRule = window.CoupleSpaceAiUtils && typeof window.CoupleSpaceAiUtils.buildInlineBilingualOutputPrompt === 'function'
+                ? String(window.CoupleSpaceAiUtils.buildInlineBilingualOutputPrompt(meta.roleId, { format: 'line_break' }) || '').trim()
+                : '';
             const systemPrompt = [
                 '[[PROMPT_CLASS:ROLE_LITE]]',
                 '[[SCENE:COUPLE_LETTER_REPLY]]',
@@ -623,7 +664,8 @@
                 '必须包含：称呼、正文、署名、日期。',
                 `今天的日期固定是 ${todayText}，回信结尾的日期必须只写 ${todayText}，不要编造其他日期。`,
                 '正文要围绕对方这封来信的内容认真回应，既要回应情绪，也要回应细节。',
-                '必须是中文。',
+                bilingualRule || '必须是中文。',
+                bilingualRule ? '这封信如果使用外语，请先写完整外语书信，再另起一段写完整简体中文翻译；不要使用括号翻译，也不要加“中文翻译/Translation”这类标题。' : '',
                 '总字数不得少于 200 字，500 字左右最佳。',
                 '不要输出解释、不要输出 markdown、不要输出代码块、不要写成诗歌条目。'
             ].filter(Boolean).join('\n');
@@ -637,8 +679,9 @@
                 '',
                 '【补充提醒】',
                 `请以${meta.roleName}的身份回信，既保留恋人之间的亲密，又要保持书信体的正式与完整。`,
+                bilingualRule ? '如果你的人设语言不是简体中文，请不要把整封信改成中文；先用角色会写的语言完成整封信，再另起一段给出简体中文译文。' : '',
                 `末尾日期必须写成：${todayText}`
-            ].join('\n');
+            ].filter(Boolean).join('\n');
 
             return { meta, systemPrompt, userPrompt };
         }
@@ -667,21 +710,212 @@
             }
         }
 
-        function readLetterState() {
+        function parseLetterPayload(raw) {
+            const parsed = typeof raw === 'string' && raw ? (() => {
+                try { return JSON.parse(raw); } catch (e) { return null; }
+            })() : raw;
+            if (!parsed) return null;
+            if (Array.isArray(parsed)) return { roleId: '', items: parsed, updatedAt: 0 };
+            if (typeof parsed === 'object') return parsed;
+            return null;
+        }
+
+        function normalizeLetterItems(raw) {
+            const parsed = parseLetterPayload(raw);
+            const list = parsed && Array.isArray(parsed.items)
+                ? parsed.items
+                : (Array.isArray(parsed) ? parsed : []);
+            return list
+                .filter((item) => item && typeof item === 'object')
+                .map((item) => Object.assign({}, item));
+        }
+
+        function getLetterPayloadFingerprint(payload) {
+            const parsed = parseLetterPayload(payload);
+            const items = parsed && Array.isArray(parsed.items) ? parsed.items : [];
+            if (!items.length) return '';
             try {
-                const raw = localStorage.getItem(buildLetterStorageKey());
-                const parsed = raw ? JSON.parse(raw) : null;
-                return parsed && Array.isArray(parsed.items) ? parsed.items : [];
+                return JSON.stringify(items.map((item) => ({
+                    id: item && item.id,
+                    side: item && item.side,
+                    createdAt: item && item.createdAt,
+                    date: item && item.date,
+                    text: item && item.text,
+                    replyTo: item && item.replyTo
+                })));
             } catch (e) {
-                return [];
+                return '';
             }
         }
 
-        function writeLetterState() {
+        function isLegacyLetterPayloadShadowCopy(activeKey, activeRaw) {
+            const fingerprint = getLetterPayloadFingerprint(activeRaw);
+            if (!fingerprint) return false;
+            let foundActive = false;
             try {
-                localStorage.setItem(buildLetterStorageKey(), JSON.stringify({ items: letterData }));
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (!key || key.indexOf(`${LETTER_STORAGE_KEY}__`) !== 0) continue;
+                    if (key === activeKey) {
+                        foundActive = true;
+                        continue;
+                    }
+                    const otherFingerprint = getLetterPayloadFingerprint(localStorage.getItem(key));
+                    if (otherFingerprint && otherFingerprint === fingerprint && !foundActive) return true;
+                }
             } catch (e) {}
+            return false;
         }
+
+        function mergeLetterItems(items) {
+            const map = {};
+            const list = Array.isArray(items) ? items : [];
+            list.forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const id = String(item.id || '');
+                const key = id || [
+                    String(item.side || ''),
+                    String(item.createdAt || ''),
+                    String(item.date || ''),
+                    String(item.text || '')
+                ].join('::');
+                if (!key) return;
+                const prev = map[key];
+                if (!prev || Number(item.createdAt || item.id || 0) >= Number(prev.createdAt || prev.id || 0)) {
+                    map[key] = Object.assign({}, prev || {}, item);
+                }
+            });
+            return Object.keys(map)
+                .map((key) => map[key])
+                .sort((a, b) => Number(a.createdAt || a.id || 0) - Number(b.createdAt || b.id || 0));
+        }
+
+        async function readLetterState() {
+            const allItems = [];
+            const keys = buildLetterStorageKeys();
+            const activeRoleId = getActiveLetterRoleId();
+            keys.forEach((key) => {
+                try {
+                    const raw = localStorage.getItem(key);
+                    const payload = parseLetterPayload(raw);
+                    if (!payload) return;
+                    const payloadRoleId = String(payload.roleId || '').trim();
+                    if (activeRoleId && payloadRoleId && payloadRoleId !== activeRoleId) return;
+                    if (activeRoleId && !payloadRoleId && isLegacyLetterPayloadShadowCopy(key, raw)) return;
+                    allItems.push(...normalizeLetterItems(payload));
+                } catch (e) {}
+            });
+            const forage = getLetterForage();
+            if (forage) {
+                for (let i = 0; i < keys.length; i++) {
+                    try {
+                        const value = await forage.getItem(keys[i]);
+                        const payload = parseLetterPayload(value);
+                        if (!payload) continue;
+                        const payloadRoleId = String(payload.roleId || '').trim();
+                        if (activeRoleId && payloadRoleId && payloadRoleId !== activeRoleId) continue;
+                        if (activeRoleId && !payloadRoleId) continue;
+                        allItems.push(...normalizeLetterItems(payload));
+                    } catch (e2) {}
+                }
+            }
+            return mergeLetterItems(allItems);
+        }
+
+        async function writeLetterState() {
+            const activeRoleId = getActiveLetterRoleId();
+            const payload = { roleId: activeRoleId, items: letterData, updatedAt: Date.now() };
+            const json = JSON.stringify(payload);
+            const keys = buildLetterStorageKeys();
+            keys.forEach((key) => {
+                try {
+                    localStorage.setItem(key, json);
+                } catch (e) {}
+            });
+            const forage = getLetterForage();
+            if (forage) {
+                await Promise.all(keys.map((key) => {
+                    try { return forage.setItem(key, payload); } catch (e2) { return Promise.resolve(); }
+                }));
+            }
+        }
+
+        window.__debugCouplePersistence = async function () {
+            const activeRoleId = getActiveLetterRoleId();
+            const out = {
+                activeRoleId,
+                activeLetterKeys: buildLetterStorageKeys(activeRoleId),
+                letterKeys: [],
+                missKeys: []
+            };
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (!key) continue;
+                    if (key.indexOf(LETTER_STORAGE_KEY) === 0) {
+                        const raw = localStorage.getItem(key);
+                        const payload = parseLetterPayload(raw);
+                        const items = normalizeLetterItems(localStorage.getItem(key));
+                        out.letterKeys.push({
+                            source: 'localStorage',
+                            key,
+                            count: items.length,
+                            roleId: payload && payload.roleId || '',
+                            active: buildLetterStorageKeys(activeRoleId).indexOf(key) !== -1
+                        });
+                    }
+                    if (key.indexOf('couple_space_miss_state_v1') === 0 || key.indexOf('couple_space_data') === 0) {
+                        const raw = localStorage.getItem(key);
+                        let parsed = null;
+                        try { parsed = raw ? JSON.parse(raw) : null; } catch (e) {}
+                        out.missKeys.push({
+                            key,
+                            count: parsed && parsed.count,
+                            roleCount: parsed && parsed.roleCount,
+                            updatedAt: parsed && parsed.updatedAt
+                        });
+                    }
+                }
+            } catch (e) {
+                out.error = String(e && e.message ? e.message : e);
+            }
+            const forage = getLetterForage();
+            if (forage) {
+                try {
+                    await forage.iterate((value, key) => {
+                        if (String(key || '').indexOf(LETTER_STORAGE_KEY) === 0) {
+                            const payload = parseLetterPayload(value);
+                            out.letterKeys.push({
+                                source: 'localforage',
+                                key: String(key || ''),
+                                count: normalizeLetterItems(value).length,
+                                roleId: payload && payload.roleId || '',
+                                active: buildLetterStorageKeys(activeRoleId).indexOf(String(key || '')) !== -1
+                            });
+                        }
+                    });
+                } catch (e2) {
+                    out.forageError = String(e2 && e2.message ? e2.message : e2);
+                }
+            }
+            return out;
+        };
+
+        window.__clearCurrentCoupleLetters = async function () {
+            const keys = buildLetterStorageKeys();
+            keys.forEach((key) => {
+                try { localStorage.removeItem(key); } catch (e) {}
+            });
+            const forage = getLetterForage();
+            if (forage) {
+                await Promise.all(keys.map((key) => {
+                    try { return forage.removeItem(key); } catch (e2) { return Promise.resolve(); }
+                }));
+            }
+            letterData = [];
+            renderLetterTimeline();
+            return { cleared: keys };
+        };
 
         function getLatestPendingUserLetter() {
             for (let i = letterData.length - 1; i >= 0; i--) {
@@ -778,15 +1012,17 @@
             }
         }
 
-        function submitLetter() {
+        async function submitLetter() {
             const text = document.getElementById('letter-textarea').value.trim();
             if (!text) return;
-            
+
             const now = new Date();
             const dateStr = formatLetterDate(now);
-            
+            const activeRoleId = getActiveLetterRoleId();
+
             letterData.push({
                 id: Date.now(),
+                roleId: activeRoleId,
                 side: 'right',
                 date: dateStr,
                 text: text,
@@ -794,11 +1030,11 @@
                 replied: false,
                 createdAt: now.getTime()
             });
-            
+
             closeLetterInput();
-            writeLetterState();
+            await writeLetterState();
             renderLetterTimeline();
-            
+
             // Scroll to bottom
             setTimeout(() => {
                 const scrollEl = document.querySelector('.main-content');
@@ -807,6 +1043,22 @@
         }
 
         function sanitizeLetterReplyText(text) {
+            const aiUtils = window.CoupleSpaceAiUtils;
+            let normalizedByLetterMode = false;
+            if (aiUtils && typeof aiUtils.extractJsonObject === 'function' && typeof aiUtils.normalizeTranslatedPayload === 'function') {
+                const obj = aiUtils.extractJsonObject(text);
+                const translated = obj && typeof obj === 'object'
+                    ? aiUtils.normalizeTranslatedPayload(obj, { format: 'line_break' })
+                    : '';
+                if (translated) {
+                    text = translated;
+                    normalizedByLetterMode = true;
+                }
+            }
+            if (!normalizedByLetterMode && aiUtils && typeof aiUtils.normalizeAiReplyText === 'function') {
+                const normalized = aiUtils.normalizeAiReplyText(text);
+                if (normalized) text = normalized;
+            }
             let clean = String(text || '').replace(/```(?:text|markdown)?/ig, '').replace(/```/g, '').trim();
             clean = clean.replace(/^情书回复[:：]\s*/i, '').trim();
             return clean;
@@ -851,6 +1103,7 @@
                 if (replyText.replace(/\s+/g, '').length < 200) throw new Error('生成的回信过短，请稍后重试');
                 letterData.push({
                     id: Date.now(),
+                    roleId: getActiveLetterRoleId(),
                     side: 'left',
                     date: formatLetterDate(now),
                     text: replyText,
@@ -859,7 +1112,7 @@
                     replyTo: pendingLetter.id
                 });
                 pendingLetter.replied = true;
-                writeLetterState();
+                await writeLetterState();
                 renderLetterTimeline();
                 setTimeout(() => {
                     const scrollEl = document.querySelector('.main-content');
@@ -875,8 +1128,8 @@
         }
 
         // Initialize when ready
-        document.addEventListener('DOMContentLoaded', () => {
-            letterData = readLetterState();
+        document.addEventListener('DOMContentLoaded', async () => {
+            letterData = await readLetterState();
             renderLetterTimeline();
         });
     </script>

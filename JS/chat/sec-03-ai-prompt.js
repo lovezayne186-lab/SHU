@@ -812,6 +812,7 @@ function buildAutoTranslatePromptLayer(roleId, profile) {
         '如果角色原话本身就是简体中文，就直接按普通文本输出，不要包成 translated_text，也不要额外附翻译。',
         '这里的 `foreign` 表示角色真正说出口的原话，`translation` 表示系统附带的简体中文翻译。',
         `当你的角色想要说中文时，需要根据你的角色设定自行判断对于中文的熟悉程度来造句，并直接输出中文消息内容，不要添加“${roleName}的消息：”这类前缀。`,
+        '如果当前非聊天页面明确要求使用“外语原文（简体中文翻译）”这类内联显示格式，请服从当前页面的输出格式，不要输出 `translated_text` 对象。',
         '这条规则的优先级非常高，请务必遵守。',
         '在主聊天场景里，`reply` 或 `reply_bubbles` 数组中的每一个需要翻译的普通文本气泡，都必须单独使用这个 `translated_text` 对象格式。',
         '对于简体中文普通文本，允许也必须直接写回纯字符串；对于非简体中文或外语文本，绝对不允许只输出原文不输出 translation，绝对不允许把原文和翻译拆成两个相邻气泡。',
@@ -834,6 +835,7 @@ function buildForcedAutoTranslateFallbackLayer(roleId, profile) {
         '只有中文以外语言或非简体中文表达的普通文本回复，才必须写成结构化对象：{"type":"translated_text","foreign":"角色原话","translation":"简体中文翻译"}。',
         '如果角色原话本身就是简体中文，就直接输出普通文本字符串，不要包成 translated_text。',
         '对于需要翻译的文本，绝对不允许只输出原文而没有 translation，绝对不允许把原文和翻译拆成两个相邻气泡。',
+        '如果当前非聊天页面明确要求使用“外语原文（简体中文翻译）”这类内联显示格式，请服从当前页面的输出格式，不要输出 `translated_text` 对象。',
         `绝对禁止输出“${roleName}的消息：”这类说话人包装。`,
         '绝对禁止输出括号翻译、标题说明或任何解释性文字。'
     ].join('\n'));
@@ -1265,6 +1267,7 @@ function buildRoleLitePrompt(scene, roleId, options) {
             bundle.userPersona.setting ? `- 用户背景：${bundle.userPersona.setting}` : ''
         ].filter(Boolean).join('\n')),
         (function () {
+            if (opts.suppressAutoTranslateLayer === true) return '';
             const layer = buildAutoTranslatePromptLayer(roleId, bundle.profile);
             if (layer) return layer;
             return isAutoTranslateEnabledForRole(roleId)

@@ -133,7 +133,7 @@
         </div>
     </div>
 
-    <script src="../js/secret-center-core.js"></script>
+    <script src="../js/secret-center-core.js?v=3"></script>
     <script>
         let currentTab = 'orders';
         let shoppingData = { cart: [], footprints: [], orders: [] };
@@ -154,13 +154,24 @@
         }
 
         function resolveExpectedName() {
-            const byStorage = asString(localStorage.getItem('user_name') || localStorage.getItem('UserName') || localStorage.getItem('FangCun_UserName'));
-            if (byStorage) return byStorage;
+            const roleId = window.SecretCenterCore && typeof window.SecretCenterCore.getSelectedRoleId === 'function'
+                ? asString(window.SecretCenterCore.getSelectedRoleId())
+                : asString(localStorage.getItem('SecretCenter_CurrentRoleId') || localStorage.getItem('FangCun_CurrentRoleId'));
             try {
-                if (window.parent && window.parent.momentsData && asString(window.parent.momentsData.userName)) {
-                    return asString(window.parent.momentsData.userName);
+                if (roleId && window.parent && window.parent.userPersonas && window.parent.userPersonas[roleId]) {
+                    const scoped = window.parent.userPersonas[roleId];
+                    const name = asString(scoped.name || scoped.nickname || scoped.groupNickname);
+                    if (name) return name;
                 }
-            } catch (e) {}
+            } catch (e) { }
+            try {
+                const stored = JSON.parse(localStorage.getItem('wechat_userPersonas') || '{}');
+                if (roleId && stored && stored[roleId]) {
+                    const scoped = stored[roleId];
+                    const name = asString(scoped.name || scoped.nickname || scoped.groupNickname);
+                    if (name) return name;
+                }
+            } catch (e2) { }
             return '你';
         }
 
@@ -217,7 +228,7 @@
                     ? (asString(row.maskedName) || asString(row.name) || '评价极高的私人订制')
                     : (asString(row.realName) || asString(row.name) || '未命名商品');
                 const meta = isOrderTab
-                    ? [asString(row.status || '已签收'), asString(row.category || '日常')].filter(Boolean).join(' · ')
+                    ? (shouldMask ? '输入名字后查看' : [asString(row.status || '已签收'), asString(row.category || '日常')].filter(Boolean).join(' · '))
                     : [asString(row.category || '日常'), asString(row.status || (currentTab === 'cart' ? '待下单' : '已浏览'))].filter(Boolean).join(' · ');
                 const note = asString(row.note || '');
                 const thought = asString(row.thought || (isOrderTab ? row.note : ''));
@@ -225,7 +236,7 @@
                 const cardClass = shouldMask ? 'record-card secret' : 'record-card';
                 const secretHint = shouldMask ? '<span class="tag tag-secret">私密</span>' : (isOrderTab && isSecret ? '<span class="tag tag-unlocked">已解锁</span>' : '');
                 const unlockAttr = shouldMask ? ('data-unlock-index="' + String(index) + '"') : '';
-                const price = asString(row.price || '0');
+                const price = shouldMask ? '•••' : ('¥' + asString(row.price || '0'));
 
                 return (
                     '<div class="' + cardClass + '" ' + unlockAttr + '>' +
@@ -233,10 +244,10 @@
                             (dateText ? '<div class="record-date">' + escapeHtml(dateText) + '</div>' : '') +
                             '<div class="record-name">' + escapeHtml(displayName) + secretHint + '</div>' +
                             '<div class="record-meta">' + escapeHtml(meta) + '</div>' +
-                            (isOrderTab && thought ? '<div class="record-thought">想法：' + escapeHtml(thought) + '</div>' : '') +
+                            (isOrderTab && thought && !shouldMask ? '<div class="record-thought">想法：' + escapeHtml(thought) + '</div>' : '') +
                             ((!isOrderTab && note) ? '<div class="record-note">' + escapeHtml(note) + '</div>' : '') +
                         '</div>' +
-                        '<div class="record-price">¥' + escapeHtml(price) + '</div>' +
+                        '<div class="record-price">' + escapeHtml(price) + '</div>' +
                     '</div>'
                 );
             }).join('');
@@ -265,8 +276,7 @@
                 document.getElementById('unlockError').textContent = '请先输入名字';
                 return;
             }
-            const canFallbackUnlock = expectedName === '你';
-            if (!canFallbackUnlock && inputName !== expectedName) {
+            if (inputName !== expectedName) {
                 document.getElementById('unlockError').textContent = '名字不匹配，请重试';
                 return;
             }

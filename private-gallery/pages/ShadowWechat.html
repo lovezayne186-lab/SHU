@@ -333,9 +333,10 @@
         <div style="font-size: 14px; letter-spacing: 2px; color: var(--accent);">正在同步社交网络...</div>
     </div>
 
-    <script src="../js/secret-center-core.js"></script>
+    <script src="../js/secret-center-core.js?v=2"></script>
     <script>
         const SHADOW_SCENE_KEY = 'shadow_wechat';
+        const SHADOW_WECHAT_PROMPT_VERSION = 'shadow_wechat_2026_05_01_v2';
         let currentRoleData = null;
         let currentRoleContext = null;
         let isGenerating = false;
@@ -360,15 +361,28 @@
         }
 
         function getUserAvatarUrl() {
+            const rid = currentRoleContext && currentRoleContext.roleId ? String(currentRoleContext.roleId) : '';
+            try {
+                if (rid && window.parent && window.parent.userPersonas && window.parent.userPersonas[rid]) {
+                    const avatar = String(window.parent.userPersonas[rid].avatar || '').trim();
+                    if (avatar) return avatar;
+                }
+            } catch (e0) { }
+            try {
+                if (rid) {
+                    const stored = JSON.parse(localStorage.getItem('wechat_userPersonas') || '{}');
+                    if (stored && stored[rid] && stored[rid].avatar) return String(stored[rid].avatar);
+                }
+            } catch (e1) { }
             try {
                 const fromStorage = localStorage.getItem('user_avatar');
                 if (fromStorage) return String(fromStorage);
-            } catch (e) { }
+            } catch (e2) { }
             try {
                 if (window.parent && window.parent.momentsData && window.parent.momentsData.userAvatar) {
                     return String(window.parent.momentsData.userAvatar);
                 }
-            } catch (e) { }
+            } catch (e3) { }
             return '';
         }
 
@@ -449,12 +463,14 @@
             const userAvatar = getUserAvatarUrl();
 
             if (pinned) {
+                const pinnedRemark = String(pinned.remark || '').trim();
+                const pinnedName = pinnedRemark || String(pinned.name || '用户');
                 sessions.push({
-                    contactName: String(pinned.name || '用户'),
+                    contactName: pinnedName,
                     isPinned: true,
                     isUserPinned: true,
                     avatarUrl: userAvatar,
-                    remark: String(pinned.remark || ''),
+                    remark: pinnedRemark,
                     lastTime: '',
                     messages: mapPinnedMessages(pinned.recentMessages, roleName, String(pinned.name || '用户'))
                 });
@@ -463,8 +479,9 @@
             const generated = Array.isArray(contacts.generatedContacts) ? contacts.generatedContacts : [];
             generated.forEach(function (c) {
                 const row = c && typeof c === 'object' ? c : {};
+                const displayName = String(row.remark || row.name || '联系人');
                 sessions.push({
-                    contactName: String(row.name || '联系人'),
+                    contactName: displayName,
                     isPinned: false,
                     isUserPinned: false,
                     avatarUrl: '',
@@ -505,7 +522,7 @@
                     + '      <span class="chat-name">' + (s.isPinned ? '<span class="pinned-tag"></span>' : '') + esc(s.contactName) + '</span>'
                     + '      <span class="chat-time">' + esc(s.lastTime || '') + '</span>'
                     + '    </div>'
-                    + '    <div class="chat-preview">' + esc(s.remark || lastMsg) + '</div>'
+                    + '    <div class="chat-preview">' + esc(lastMsg) + '</div>'
                     + '  </div>'
                     + '</div>';
             }).join('');
@@ -589,7 +606,7 @@
                         + '  </div>'
                         + '  <div class="favorite-excerpt">' + esc(excerpt) + '</div>'
                         + (annotation
-                            ? ('<div class="favorite-annotation">角色批注：' + esc(annotation) + '</div>')
+                            ? ('<div class="favorite-annotation">批注：' + esc(annotation) + '</div>')
                             : '')
                         + '</div>';
                 }).join('') + '</div>';
@@ -597,7 +614,7 @@
 
             let html = '';
             html += '<div class="section-title">聊天收藏（真实记录筛选）</div>';
-            html += renderFavoriteCards(chatFavorites, '聊天内容较少，' + favoriteOwnerName + '还没有收藏内容');
+            html += renderFavoriteCards(chatFavorites, '聊天太少，' + favoriteOwnerName + '还没有收藏');
 
             html += '<div class="section-title">角色收藏的推文</div>';
             html += renderFavoriteCards(tweetFavorites, '角色暂时没有额外收藏的推文');
@@ -627,12 +644,24 @@
         }
 
         function showGenerationFailure(message) {
-            const reason = String(message || '').trim() || '本次没有生成出可展示的微信内容。';
+            const reason = '生成失败';
             if (window.SecretCenterCore && typeof window.SecretCenterCore.showGenerationErrorDialog === 'function') {
                 window.SecretCenterCore.showGenerationErrorDialog(reason, '微信子App');
                 return;
             }
             alert(reason);
+        }
+
+        function isCurrentShadowWechatData(data) {
+            const d = data && typeof data === 'object' ? data : {};
+            const meta = d.meta && typeof d.meta === 'object' ? d.meta : {};
+            if (String(meta.shadowWechatPromptVersion || '') !== SHADOW_WECHAT_PROMPT_VERSION) return false;
+            const contacts = d.contacts && typeof d.contacts === 'object' ? d.contacts : {};
+            const generated = Array.isArray(contacts.generatedContacts) ? contacts.generatedContacts : [];
+            return generated.every(function (item) {
+                const row = item && typeof item === 'object' ? item : {};
+                return Array.isArray(row.recentMessages) && row.recentMessages.length >= 10;
+            });
         }
 
         async function runSync() {
@@ -751,7 +780,7 @@
             window.addEventListener('focus', function () {
                 if (currentRoleContext && window.SecretCenterCore && typeof window.SecretCenterCore.readSceneCache === 'function') {
                     const cached = window.SecretCenterCore.readSceneCache(SHADOW_SCENE_KEY, currentRoleContext.roleId);
-                    if (cached && cached.data) applyShadowWechatData(cached.data);
+                    if (cached && cached.data && isCurrentShadowWechatData(cached.data)) applyShadowWechatData(cached.data);
                 }
             });
         }
@@ -769,7 +798,7 @@
             refreshRoleContext();
             if (currentRoleContext && window.SecretCenterCore && typeof window.SecretCenterCore.readSceneCache === 'function') {
                 const cached = window.SecretCenterCore.readSceneCache(SHADOW_SCENE_KEY, currentRoleContext.roleId);
-                if (cached && cached.data) {
+                if (cached && cached.data && isCurrentShadowWechatData(cached.data)) {
                     applyShadowWechatData(cached.data);
                 }
             }

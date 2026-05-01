@@ -1551,6 +1551,128 @@
             overflow-wrap: anywhere;
         }
 
+        .secret-message-selectable .secret-message-bubble,
+        .secret-message-selectable .secret-ai-message-bubble,
+        .secret-message-selectable .secret-transfer-card {
+            position: relative;
+            transition: transform 120ms ease, box-shadow 120ms ease, outline-color 120ms ease;
+            touch-action: manipulation;
+        }
+
+        .secret-message-selectable.is-selection-mode .secret-message-bubble,
+        .secret-message-selectable.is-selection-mode .secret-ai-message-bubble,
+        .secret-message-selectable.is-selection-mode .secret-transfer-card {
+            cursor: pointer;
+        }
+
+        .secret-message-selectable.is-selected .secret-message-bubble,
+        .secret-message-selectable.is-selected .secret-ai-message-bubble,
+        .secret-message-selectable.is-selected .secret-transfer-card {
+            outline: 2px solid #F09AB6;
+            outline-offset: 3px;
+            box-shadow: 0 8px 20px rgba(240, 154, 182, 0.22);
+            transform: scale(0.99);
+        }
+
+        .secret-message-selectable.is-selected .secret-message-bubble::after,
+        .secret-message-selectable.is-selected .secret-ai-message-bubble::after,
+        .secret-message-selectable.is-selected .secret-transfer-card::after {
+            content: "\2713";
+            position: absolute;
+            right: -7px;
+            top: -7px;
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            display: grid;
+            place-items: center;
+            background: #F09AB6;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 900;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+        }
+
+        .secret-selection-bar {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 0 0 12px;
+            padding: 8px 10px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .secret-selection-count {
+            min-width: 0;
+            color: #333;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .secret-selection-actions {
+            display: flex;
+            gap: 8px;
+            flex: 0 0 auto;
+        }
+
+        .secret-selection-btn {
+            border: 0;
+            border-radius: 999px;
+            padding: 7px 12px;
+            background: #F2F2F4;
+            color: #333;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .secret-selection-delete {
+            background: #F09AB6;
+            color: #fff;
+        }
+
+        .secret-selection-btn:disabled {
+            opacity: 0.45;
+            cursor: default;
+        }
+
+        .secret-translated-message-bubble {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            font-weight: 600;
+        }
+
+        .secret-translated-message-foreign,
+        .secret-translated-message-translation {
+            white-space: pre-wrap;
+        }
+
+        .secret-translated-message-foreign {
+            color: #111;
+            font-weight: 700;
+        }
+
+        .secret-translated-message-divider {
+            height: 1px;
+            background: rgba(17, 17, 17, 0.12);
+        }
+
+        .secret-translated-message-translation {
+            color: rgba(17, 17, 17, 0.68);
+            font-size: 13px;
+            line-height: 1.4;
+            font-weight: 600;
+        }
+
         .secret-transfer-card {
             max-width: min(76%, 560px);
             min-width: 180px;

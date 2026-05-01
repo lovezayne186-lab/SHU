@@ -8,6 +8,7 @@
         
         const MOOD_STORAGE_KEY = 'couple_space_mood_entries_v1';
         const ROLE_MOOD_STORAGE_KEY = 'couple_space_role_mood_entries_v1';
+        const MISS_STATE_STORAGE_KEY = 'couple_space_miss_state_v1';
         const AI_MISS_STORAGE_KEY = 'couple_space_ai_miss_counts_v1';
         const COUPLE_SPACE_LAST_EXIT_KEY = 'couple_space_last_exit_time_v1_';
         const COUPLE_SPACE_DIARY_SYNC_LOCK_KEY = 'couple_space_diary_sync_lock_v1';
@@ -187,6 +188,7 @@
 
         const COUPLE_SPACE_FORAGE_BASE_KEYS = [
             'couple_space_data',
+            MISS_STATE_STORAGE_KEY,
             'couple_bg',
             'couple_avatar_user',
             'couple_avatar_role',
@@ -221,7 +223,10 @@
         function isCoupleSpaceSmallStateKey(key) {
             const k = String(key || '').trim();
             if (!k) return false;
-            return k === 'couple_space_data' || k.indexOf('couple_space_data' + COUPLE_SPACE_ROLE_KEY_SEP) === 0;
+            return k === 'couple_space_data' ||
+                k === MISS_STATE_STORAGE_KEY ||
+                k.indexOf('couple_space_data' + COUPLE_SPACE_ROLE_KEY_SEP) === 0 ||
+                k.indexOf(MISS_STATE_STORAGE_KEY + COUPLE_SPACE_ROLE_KEY_SEP) === 0;
         }
 
         async function coupleSpaceGetRoleItem(baseKey, roleId) {
@@ -274,9 +279,11 @@
             let toStore = raw;
             if (
                 k === 'couple_space_data' ||
+                k === MISS_STATE_STORAGE_KEY ||
                 k === MOOD_STORAGE_KEY ||
                 k === ROLE_MOOD_STORAGE_KEY ||
                 k.indexOf('couple_space_data' + COUPLE_SPACE_ROLE_KEY_SEP) === 0 ||
+                k.indexOf(MISS_STATE_STORAGE_KEY + COUPLE_SPACE_ROLE_KEY_SEP) === 0 ||
                 k.indexOf(MOOD_STORAGE_KEY + COUPLE_SPACE_ROLE_KEY_SEP) === 0 ||
                 k.indexOf(ROLE_MOOD_STORAGE_KEY + COUPLE_SPACE_ROLE_KEY_SEP) === 0
             ) {
@@ -546,6 +553,8 @@
             let secretSpaceForageLoadInFlight = null;
             let secretSpaceAiTyping = false;
             let secretSpaceViewMode = 'normal';
+            let secretSpaceSelectionMode = false;
+            let secretSpaceSelectedMessageKeys = new Set();
 
             function secretSpaceReadUiState() {
                 try {
@@ -592,6 +601,79 @@
                 }
             }
 
+            function secretSpaceTranslatedFieldText(value) {
+                if (value == null) return '';
+                if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+                if (Array.isArray(value)) {
+                    return value.map(secretSpaceTranslatedFieldText).filter(Boolean).join('\n').trim();
+                }
+                if (typeof value === 'object') {
+                    return String(value.text || value.content || value.value || value.message || '').trim();
+                }
+                return '';
+            }
+
+            function secretSpaceFirstTranslatedField(payload, keys) {
+                const source = payload && typeof payload === 'object' ? payload : {};
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    if (source[key] != null) return source[key];
+                }
+                return null;
+            }
+
+            function secretSpaceParseTranslatedMessagePayload(value) {
+                let payload = value;
+                if (typeof value === 'string') {
+                    const raw = String(value || '').trim();
+                    if (!raw) return null;
+                    payload = safeJsonParse(raw, null);
+                    if (!payload || typeof payload !== 'object') {
+                        try {
+                            payload = extractJsonObject(raw);
+                        } catch (e0) {
+                            payload = null;
+                        }
+                    }
+                }
+                if (!payload || typeof payload !== 'object') return null;
+                const rawType = String(payload.type || payload.messageType || payload.kind || '').trim();
+                const hasTranslatedType = rawType === 'translated_text' || rawType === 'translated';
+                const foreign = secretSpaceFirstTranslatedField(payload, [
+                    'foreign',
+                    'original',
+                    'originalText',
+                    'original_text',
+                    'source',
+                    'sourceText',
+                    'foreignText',
+                    'foreign_text',
+                    'bodyText'
+                ]);
+                const translation = secretSpaceFirstTranslatedField(payload, [
+                    'translation',
+                    'chinese',
+                    'chineseText',
+                    'translation_text',
+                    'translationText',
+                    'zh',
+                    'cn'
+                ]);
+                const foreignText = secretSpaceTranslatedFieldText(foreign);
+                const translationText = secretSpaceTranslatedFieldText(translation);
+                if (!hasTranslatedType && !(foreignText && translationText)) return null;
+                const bodyText = foreignText || String(payload.text || payload.content || '').trim();
+                const finalTranslation = translationText || bodyText;
+                if (!bodyText && !finalTranslation) return null;
+                return {
+                    foreignText: bodyText,
+                    translationText: finalTranslation,
+                    text: bodyText && finalTranslation && bodyText !== finalTranslation
+                        ? bodyText + '\n' + finalTranslation
+                        : (bodyText || finalTranslation)
+                };
+            }
+
             function secretSpaceNormalizeMessageItem(it) {
                 if (!it || typeof it !== 'object') return null;
                 const ts = Number(it.ts || it.timestamp || it.createdAt || 0) || 0;
@@ -620,8 +702,97 @@
                         status: String(it.status || 'pending').trim() || 'pending'
                     };
                 }
+                const translated = messageType === 'translated_text' || rawType === 'translated_text'
+                    ? secretSpaceParseTranslatedMessagePayload(it)
+                    : secretSpaceParseTranslatedMessagePayload(text);
+                if (translated) {
+                    return {
+                        type,
+                        messageType: 'translated_text',
+                        ts,
+                        text: translated.text,
+                        foreignText: translated.foreignText,
+                        translationText: translated.translationText
+                    };
+                }
                 if (!text) return null;
                 return { type, messageType: 'text', ts, text };
+            }
+
+            function secretSpaceIsPollutedJsonBubbleText(text) {
+                const raw = String(text || '').trim();
+                if (!raw) return false;
+                if (raw === '[object Object]') return true;
+                if (/^[\[\]\{\},]+$/.test(raw)) return true;
+                if (/^["']?(type|foreign|foreignText|foreign_text|translation|translationText|translation_text|chinese|zh|cn)["']?\s*:/.test(raw)) return true;
+                if (/"type"\s*:\s*"translated_text"/i.test(raw)) return true;
+                if (/"foreign(Text|_text)?"\s*:/i.test(raw) && /"translation(Text|_text)?"\s*:/i.test(raw)) return true;
+                return false;
+            }
+
+            function secretSpaceInlineTextFromMessageItem(item) {
+                if (!item || typeof item !== 'object') return '';
+                const translated = secretSpaceParseTranslatedMessagePayload(item);
+                if (translated) {
+                    const foreign = String(translated.foreignText || '').trim();
+                    const translation = String(translated.translationText || '').trim();
+                    if (foreign && translation && foreign !== translation) return `${foreign}（${translation}）`;
+                    return foreign || translation;
+                }
+                return normalizeSecretSpaceReplyVisibleText(item.text || item.content || item.msg || '');
+            }
+
+            function secretSpaceRepairPollutedMessages(list) {
+                const input = Array.isArray(list) ? list : [];
+                const out = [];
+                let buffer = [];
+
+                const flushBuffer = () => {
+                    if (!buffer.length) return;
+                    const joined = buffer.map((it) => String(it && it.text ? it.text : '').trim()).filter(Boolean).join('\n');
+                    const repaired = normalizeSecretSpaceReplyVisibleText(joined);
+                    if (repaired && repaired !== '[object Object]') {
+                        const first = buffer[0] || {};
+                        out.push({
+                            type: 'ai_message',
+                            messageType: 'text',
+                            ts: Number(first.ts || 0) || Date.now(),
+                            text: repaired
+                        });
+                    }
+                    buffer = [];
+                };
+
+                for (let i = 0; i < input.length; i++) {
+                    const item = secretSpaceNormalizeMessageItem(input[i]);
+                    if (!item) continue;
+                    if (item.type === 'ai_message' && String(item.messageType || 'text') === 'translated_text') {
+                        flushBuffer();
+                        const inline = secretSpaceInlineTextFromMessageItem(item);
+                        if (inline && inline !== '[object Object]') {
+                            out.push({ type: 'ai_message', messageType: 'text', ts: item.ts, text: inline });
+                        }
+                        continue;
+                    }
+                    if (item.type === 'ai_message' && String(item.messageType || 'text') === 'text') {
+                        const text = String(item.text || '').trim();
+                        if (secretSpaceIsPollutedJsonBubbleText(text)) {
+                            buffer.push(item);
+                            continue;
+                        }
+                        const repairedSingle = normalizeSecretSpaceReplyVisibleText(text);
+                        flushBuffer();
+                        if (repairedSingle && repairedSingle !== '[object Object]') {
+                            out.push(Object.assign({}, item, { text: repairedSingle }));
+                        }
+                        continue;
+                    }
+                    flushBuffer();
+                    out.push(item);
+                }
+                flushBuffer();
+                out.sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+                return out;
             }
 
             function secretSpaceReadMessagesFromLocal() {
@@ -634,14 +805,14 @@
                 if (!raw) return [];
                 const parsed = safeJsonParse(raw, []);
                 if (!Array.isArray(parsed)) return [];
-                const list = parsed
+                const list = secretSpaceRepairPollutedMessages(parsed
                     .map(secretSpaceNormalizeMessageItem)
                     .filter(Boolean)
-                    .sort((a, b) => Number(a.ts) - Number(b.ts));
-                if (!rawOwn && rawLegacy && list.length && secretSpaceMessagesStorageKey !== secretSpaceLegacyMessagesKey) {
+                    .sort((a, b) => Number(a.ts) - Number(b.ts)));
+                if (secretSpaceMessagesStorageKey !== secretSpaceLegacyMessagesKey) {
                     try {
                         localStorage.setItem(secretSpaceMessagesStorageKey, JSON.stringify(list));
-                        localStorage.removeItem(secretSpaceLegacyMessagesKey);
+                        if (!rawOwn && rawLegacy) localStorage.removeItem(secretSpaceLegacyMessagesKey);
                     } catch (e) { }
                 }
                 return list;
@@ -661,7 +832,7 @@
                 (Array.isArray(a) ? a : []).forEach(push);
                 (Array.isArray(b) ? b : []).forEach(push);
                 out.sort((x, y) => Number(x.ts) - Number(y.ts));
-                return out;
+                return secretSpaceRepairPollutedMessages(out);
             }
 
             function secretSpaceReadMessages() {
@@ -673,10 +844,10 @@
             }
 
             function secretSpaceWriteMessages(list) {
-                const normalized = (Array.isArray(list) ? list : [])
+                const normalized = secretSpaceRepairPollutedMessages((Array.isArray(list) ? list : [])
                     .map(secretSpaceNormalizeMessageItem)
                     .filter(Boolean)
-                    .sort((a, b) => Number(a.ts) - Number(b.ts));
+                    .sort((a, b) => Number(a.ts) - Number(b.ts)));
 
                 const messages = normalized.filter((it) => it.type === 'message');
                 const aiMessages = normalized.filter((it) => it.type === 'ai_message');
@@ -734,7 +905,21 @@
                 const msg = isObj ? '' : String(payload || '').trim();
                 if (!isObj && !msg) return false;
                 const list = secretSpaceReadMessages();
-                if (isObj && String(payload.type || '').trim() === 'transfer_card') {
+                const translated = secretSpaceParseTranslatedMessagePayload(payload);
+                if (translated) {
+                    const inlineText = secretSpaceInlineTextFromMessageItem({
+                        messageType: 'translated_text',
+                        text: translated.text,
+                        foreignText: translated.foreignText,
+                        translationText: translated.translationText
+                    });
+                    list.push({
+                        type: 'ai_message',
+                        messageType: 'text',
+                        ts: Date.now(),
+                        text: inlineText || translated.text
+                    });
+                } else if (isObj && String(payload.type || '').trim() === 'transfer_card') {
                     const amount = Number(payload.amount || 0) || 0;
                     if (!(amount > 0)) return false;
                     const content = String(payload.content || '拿去花').trim() || '拿去花';
@@ -749,7 +934,27 @@
                         status: String(payload.status || 'pending').trim() || 'pending'
                     });
                 } else {
-                    list.push({ type: 'ai_message', messageType: 'text', ts: Date.now(), text: msg });
+                    const translatedFromText = secretSpaceParseTranslatedMessagePayload(msg);
+                    if (translatedFromText) {
+                        const inlineText = secretSpaceInlineTextFromMessageItem({
+                            messageType: 'translated_text',
+                            text: translatedFromText.text,
+                            foreignText: translatedFromText.foreignText,
+                            translationText: translatedFromText.translationText
+                        });
+                        list.push({
+                            type: 'ai_message',
+                            messageType: 'text',
+                            ts: Date.now(),
+                            text: inlineText || translatedFromText.text
+                        });
+                    } else {
+                        const plainText = isObj
+                            ? String(payload.text || payload.content || payload.reply || payload.message || payload.value || '').trim()
+                            : msg;
+                        if (!plainText || plainText === '[object Object]') return false;
+                        list.push({ type: 'ai_message', messageType: 'text', ts: Date.now(), text: plainText });
+                    }
                 }
                 secretSpaceWriteMessages(list);
                 return true;
@@ -915,10 +1120,53 @@
                 const rawRole = String(it.role || it.type || '').trim().toLowerCase();
                 const role = rawRole === 'ai' || rawRole === 'assistant' || rawRole === 'role' ? 'ai' : 'me';
                 const timestamp = Number(it.timestamp || it.ts || it.createdAt || 0) || 0;
-                const content = String(it.content || it.text || '').trim();
+                let content = String(it.content || it.text || '').trim();
                 if (!timestamp || !content) return null;
-                const display = String(it.display || it.displayText || content).trim() || content;
+                let display = String(it.display || it.displayText || content).trim() || content;
+                if (role === 'ai') {
+                    content = normalizeSecretSpaceReplyVisibleText(content);
+                    display = normalizeSecretSpaceReplyVisibleText(display || content);
+                    if (!content && display) content = display;
+                    if (!display && content) display = content;
+                    if (!content || content === '[object Object]') return null;
+                }
                 return { role, content, display, timestamp };
+            }
+
+            function secretSpaceRepairPeerChatHistory(list) {
+                const input = Array.isArray(list) ? list : [];
+                const out = [];
+                let buffer = [];
+
+                const flushBuffer = () => {
+                    if (!buffer.length) return;
+                    const joined = buffer.map((it) => String(it && (it.display || it.content) ? (it.display || it.content) : '').trim()).filter(Boolean).join('\n');
+                    const repaired = normalizeSecretSpaceReplyVisibleText(joined);
+                    if (repaired && repaired !== '[object Object]') {
+                        const first = buffer[0] || {};
+                        out.push({
+                            role: 'ai',
+                            content: repaired,
+                            display: repaired,
+                            timestamp: Number(first.timestamp || 0) || Date.now()
+                        });
+                    }
+                    buffer = [];
+                };
+
+                for (let i = 0; i < input.length; i++) {
+                    const item = secretSpaceNormalizePeerChatHistoryItem(input[i]);
+                    if (!item) continue;
+                    if (item.role === 'ai' && secretSpaceIsPollutedJsonBubbleText(item.display || item.content)) {
+                        buffer.push(item);
+                        continue;
+                    }
+                    flushBuffer();
+                    out.push(item);
+                }
+                flushBuffer();
+                out.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                return out;
             }
 
             function secretSpaceReadPeerChatHistoryFromLocal() {
@@ -931,14 +1179,14 @@
                 if (!raw) return [];
                 const parsed = safeJsonParse(raw, []);
                 if (!Array.isArray(parsed)) return [];
-                const list = parsed
+                const list = secretSpaceRepairPeerChatHistory(parsed
                     .map(secretSpaceNormalizePeerChatHistoryItem)
                     .filter(Boolean)
-                    .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
-                if (!rawOwn && rawLegacy && list.length && secretSpacePeerChatStorageKey !== secretSpaceLegacyPeerChatStorageKey) {
+                    .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0)));
+                if (secretSpacePeerChatStorageKey !== secretSpaceLegacyPeerChatStorageKey) {
                     try {
                         localStorage.setItem(secretSpacePeerChatStorageKey, JSON.stringify(list));
-                        localStorage.removeItem(secretSpaceLegacyPeerChatStorageKey);
+                        if (!rawOwn && rawLegacy) localStorage.removeItem(secretSpaceLegacyPeerChatStorageKey);
                     } catch (e) { }
                 }
                 return list;
@@ -958,7 +1206,7 @@
                 (Array.isArray(a) ? a : []).forEach(push);
                 (Array.isArray(b) ? b : []).forEach(push);
                 out.sort((x, y) => Number(x.timestamp || 0) - Number(y.timestamp || 0));
-                return out;
+                return secretSpaceRepairPeerChatHistory(out);
             }
 
             function secretSpaceReadPeerChatHistory() {
@@ -970,11 +1218,11 @@
             }
 
             function secretSpaceWritePeerChatHistory(list) {
-                const normalized = (Array.isArray(list) ? list : [])
+                const normalized = secretSpaceRepairPeerChatHistory((Array.isArray(list) ? list : [])
                     .map(secretSpaceNormalizePeerChatHistoryItem)
                     .filter(Boolean)
                     .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0))
-                    .slice(-220);
+                    .slice(-220));
                 secretSpacePeerChatCache = normalized;
                 try {
                     localStorage.setItem(secretSpacePeerChatStorageKey, JSON.stringify(normalized));
@@ -1011,7 +1259,7 @@
             }
 
             function secretSpaceAppendPeerUsageAiMessage(text) {
-                const msg = String(text || '').trim();
+                const msg = normalizeSecretSpaceReplyVisibleText(text);
                 if (!msg) return false;
                 const list = secretSpaceReadPeerChatHistory();
                 list.push({ role: 'ai', content: msg, display: msg, timestamp: Date.now() });
@@ -1165,6 +1413,131 @@
                 return true;
             }
 
+            function secretSpaceMessageSelectionKey(item) {
+                if (!item || typeof item !== 'object') return '';
+                const type = String(item.type || '').trim();
+                if (type !== 'message' && type !== 'ai_message') return '';
+                return [
+                    type,
+                    String(item.messageType || 'text').trim(),
+                    String(Number(item.ts || 0) || 0),
+                    String(item.text || '').trim(),
+                    String(item.foreignText || '').trim(),
+                    String(item.translationText || '').trim(),
+                    String(item.amount || '').trim(),
+                    String(item.status || '').trim()
+                ].join('||');
+            }
+
+            function secretSpaceExitSelectionMode() {
+                secretSpaceSelectionMode = false;
+                secretSpaceSelectedMessageKeys = new Set();
+                secretSpaceRender();
+            }
+
+            function secretSpaceToggleMessageSelection(item) {
+                const key = secretSpaceMessageSelectionKey(item);
+                if (!key) return;
+                if (!secretSpaceSelectionMode) secretSpaceSelectionMode = true;
+                if (secretSpaceSelectedMessageKeys.has(key)) {
+                    secretSpaceSelectedMessageKeys.delete(key);
+                } else {
+                    secretSpaceSelectedMessageKeys.add(key);
+                }
+                if (!secretSpaceSelectedMessageKeys.size) {
+                    secretSpaceSelectionMode = false;
+                }
+                secretSpaceRender();
+            }
+
+            function secretSpaceDeleteSelectedMessages() {
+                if (!secretSpaceSelectedMessageKeys || !secretSpaceSelectedMessageKeys.size) return false;
+                const selected = new Set(Array.from(secretSpaceSelectedMessageKeys));
+                const list = secretSpaceReadMessages();
+                const clean = list.filter((item) => !selected.has(secretSpaceMessageSelectionKey(item)));
+                if (clean.length === list.length) {
+                    secretSpaceExitSelectionMode();
+                    return false;
+                }
+                secretSpaceSelectionMode = false;
+                secretSpaceSelectedMessageKeys = new Set();
+                secretSpaceWriteMessages(clean);
+                secretSpaceRender();
+                return true;
+            }
+
+            function secretSpaceBuildSelectionToolbar() {
+                const bar = document.createElement('div');
+                bar.className = 'secret-selection-bar';
+
+                const count = document.createElement('div');
+                count.className = 'secret-selection-count';
+                count.textContent = `已选择 ${secretSpaceSelectedMessageKeys.size} 条`;
+
+                const actions = document.createElement('div');
+                actions.className = 'secret-selection-actions';
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.className = 'secret-selection-btn';
+                cancelBtn.textContent = '取消';
+                cancelBtn.addEventListener('click', secretSpaceExitSelectionMode);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'secret-selection-btn secret-selection-delete';
+                deleteBtn.textContent = '删除';
+                deleteBtn.disabled = !secretSpaceSelectedMessageKeys.size;
+                deleteBtn.addEventListener('click', secretSpaceDeleteSelectedMessages);
+
+                actions.appendChild(cancelBtn);
+                actions.appendChild(deleteBtn);
+                bar.appendChild(count);
+                bar.appendChild(actions);
+                return bar;
+            }
+
+            function secretSpaceBindMessageSelection(row, bubble, item) {
+                const key = secretSpaceMessageSelectionKey(item);
+                if (!row || !bubble || !key) return;
+                row.classList.add('secret-message-selectable');
+                if (secretSpaceSelectionMode) row.classList.add('is-selection-mode');
+                if (secretSpaceSelectedMessageKeys.has(key)) row.classList.add('is-selected');
+
+                let pressTimer = null;
+                const clearPressTimer = () => {
+                    if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
+                };
+                bubble.addEventListener('pointerdown', () => {
+                    clearPressTimer();
+                    pressTimer = setTimeout(() => {
+                        pressTimer = null;
+                        secretSpaceSelectionMode = true;
+                        secretSpaceSelectedMessageKeys.add(key);
+                        secretSpaceRender();
+                    }, 520);
+                });
+                bubble.addEventListener('pointerup', clearPressTimer);
+                bubble.addEventListener('pointercancel', clearPressTimer);
+                bubble.addEventListener('pointerleave', clearPressTimer);
+                bubble.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    clearPressTimer();
+                    secretSpaceSelectionMode = true;
+                    secretSpaceSelectedMessageKeys.add(key);
+                    secretSpaceRender();
+                });
+                bubble.addEventListener('click', (e) => {
+                    if (!secretSpaceSelectionMode) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    secretSpaceToggleMessageSelection(item);
+                }, true);
+            }
+
             function secretSpaceBuildCombinedList() {
                 if (secretSpaceViewMode === 'peer_usage') {
                     const peerLogs = secretSpaceReadPeerActivityLogs();
@@ -1207,6 +1580,47 @@
                 }
             }
 
+            function secretSpaceAppendTranslatedBubbleContent(bubble, item) {
+                if (!bubble || !item) return false;
+                const parsed = secretSpaceParseTranslatedMessagePayload(item) ||
+                    secretSpaceParseTranslatedMessagePayload(item && item.text);
+                let foreignText = parsed
+                    ? String(parsed.foreignText || '').trim()
+                    : String(item.foreignText || '').trim();
+                let translationText = parsed
+                    ? String(parsed.translationText || '').trim()
+                    : String(item.translationText || '').trim();
+                if (!foreignText && !translationText) {
+                    const plain = String(item.text || '').trim();
+                    const parts = plain.split(/\r?\n+/).map((line) => String(line || '').trim()).filter(Boolean);
+                    if (parts.length >= 2) {
+                        foreignText = parts[0];
+                        translationText = parts.slice(1).join('\n');
+                    } else {
+                        foreignText = plain;
+                    }
+                }
+                if (!foreignText && !translationText) return false;
+
+                const foreignEl = document.createElement('div');
+                foreignEl.className = 'secret-translated-message-foreign';
+                foreignEl.textContent = foreignText || translationText;
+                bubble.appendChild(foreignEl);
+
+                if (translationText && translationText !== foreignText) {
+                    const divider = document.createElement('div');
+                    divider.className = 'secret-translated-message-divider';
+                    divider.setAttribute('aria-hidden', 'true');
+                    bubble.appendChild(divider);
+
+                    const translationEl = document.createElement('div');
+                    translationEl.className = 'secret-translated-message-translation';
+                    translationEl.textContent = translationText;
+                    bubble.appendChild(translationEl);
+                }
+                return true;
+            }
+
             function secretSpaceRender() {
                 const container = secretSpaceGetContainerEl();
                 if (!container) return;
@@ -1223,6 +1637,7 @@
                         const bubble = document.createElement('div');
                         bubble.className = 'secret-message-bubble';
                         bubble.textContent = it.text || '';
+                        secretSpaceBindMessageSelection(row, bubble, it);
 
                         const avatar = document.createElement('img');
                         avatar.className = 'secret-message-avatar';
@@ -1269,6 +1684,7 @@
                             bubble.appendChild(amountEl);
                             bubble.appendChild(actionEl);
                             bubble.addEventListener('click', function () {
+                                if (secretSpaceSelectionMode) return;
                                 const nowClaimed = String(it.status || '').trim() === 'claimed';
                                 if (!nowClaimed) secretSpaceClaimTransferCard(it.ts);
                                 secretSpaceOpenWalletFromCard();
@@ -1277,8 +1693,13 @@
                         } else {
                             bubble = document.createElement('div');
                             bubble.className = 'secret-ai-message-bubble';
-                            bubble.textContent = it.text || '';
+                            if (String(it.messageType || 'text') === 'translated_text') {
+                                bubble.textContent = secretSpaceInlineTextFromMessageItem(it) || it.text || '';
+                            } else {
+                                bubble.textContent = it.text || '';
+                            }
                         }
+                        secretSpaceBindMessageSelection(row, bubble, it);
 
                         row.appendChild(avatar);
                         row.appendChild(bubble);
@@ -1337,9 +1758,12 @@
                 }
 
                 container.innerHTML = '';
+                if (secretSpaceSelectionMode) {
+                    container.appendChild(secretSpaceBuildSelectionToolbar());
+                }
                 container.appendChild(wrapper);
                 secretSpaceApplyLogOverflowTicker(wrapper);
-                secretSpaceScrollToBottom();
+                if (!secretSpaceSelectionMode) secretSpaceScrollToBottom();
             }
 
             function secretSpaceSendMessage(text) {
@@ -1357,6 +1781,23 @@
                 const ok = secretSpaceAppendAiMessage(text);
                 if (ok) secretSpaceRender();
                 return ok;
+            }
+
+            function secretSpaceRepairStoredPollution() {
+                const beforeMessages = secretSpaceReadMessages();
+                const repairedMessages = secretSpaceRepairPollutedMessages(beforeMessages);
+                secretSpaceWriteMessages(repairedMessages);
+
+                const beforePeer = secretSpaceReadPeerChatHistory();
+                const repairedPeer = secretSpaceRepairPeerChatHistory(beforePeer);
+                secretSpaceWritePeerChatHistory(repairedPeer);
+                secretSpaceRender();
+                return {
+                    messagesBefore: beforeMessages.length,
+                    messagesAfter: repairedMessages.length,
+                    peerBefore: beforePeer.length,
+                    peerAfter: repairedPeer.length
+                };
             }
 
             function secretSpaceSetAiTyping(isTyping) {
@@ -1402,10 +1843,17 @@
                 appendPeerUsageUserMessage: secretSpaceAppendPeerUsageUserMessage,
                 appendPeerUsageAiMessage: secretSpaceAppendPeerUsageAiMessage,
                 buildPeerUsagePromptLogText: secretSpaceBuildPeerUsagePromptLogText,
+                repairPollution: secretSpaceRepairStoredPollution,
                 bindInputEvents: secretSpaceBindInputEvents,
                 loadForageCache: secretSpaceLoadForageCache,
                 storageKey: secretSpaceMessagesStorageKey,
             };
+
+            try {
+                window.__repairSecretSpaceMessages = secretSpaceRepairStoredPollution;
+                const pw = window.parent && window.parent !== window ? window.parent : null;
+                if (pw) pw.__repairSecretSpaceMessages = secretSpaceRepairStoredPollution;
+            } catch (e) { }
 
             window.addEventListener('couple_space_secret_messages_updated', function () {
                 const modal = document.getElementById('secret-space-modal');
@@ -1926,6 +2374,7 @@
             const rid = String(roleId || '').trim();
             const baseKeys = [
                 'couple_space_data',
+                MISS_STATE_STORAGE_KEY,
                 'couple_bg',
                 'couple_avatar_user',
                 'couple_avatar_role',
@@ -3019,7 +3468,12 @@
             const obj = extractJsonObject(raw);
             let normalized = raw;
             if (obj && typeof obj === 'object') {
-                if (typeof obj.reply === 'string') normalized = obj.reply.trim();
+                const aiUtils = window.CoupleSpaceAiUtils;
+                const translated = aiUtils && typeof aiUtils.normalizeTranslatedPayload === 'function'
+                    ? aiUtils.normalizeTranslatedPayload(obj)
+                    : '';
+                if (translated) normalized = translated.trim();
+                else if (typeof obj.reply === 'string') normalized = obj.reply.trim();
                 else if (typeof obj.text === 'string') normalized = obj.text.trim();
                 else if (typeof obj.content === 'string') normalized = obj.content.trim();
             }
@@ -3041,6 +3495,150 @@
             normalized = normalized.replace(/\s*\|\|\|\s*/g, ' ').trim();
             normalized = normalized.replace(/^\[\[[^\]]+\]\]\s*/g, '').trim();
             return normalized;
+        }
+
+        function buildCoupleSpaceInlineBilingualPrompt(roleId, options) {
+            const aiUtils = window.CoupleSpaceAiUtils;
+            if (!aiUtils || typeof aiUtils.buildInlineBilingualOutputPrompt !== 'function') return '';
+            try {
+                return String(aiUtils.buildInlineBilingualOutputPrompt(roleId, options || {}) || '').trim();
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function normalizeGeneratedRoleText(value) {
+            if (value && typeof value === 'object') {
+                const aiUtils = window.CoupleSpaceAiUtils;
+                const translated = aiUtils && typeof aiUtils.normalizeTranslatedPayload === 'function'
+                    ? aiUtils.normalizeTranslatedPayload(value)
+                    : '';
+                if (translated) return translated.trim();
+                if (typeof value.content === 'string') return normalizeAiReplyText(value.content);
+                if (typeof value.text === 'string') return normalizeAiReplyText(value.text);
+                if (typeof value.reply === 'string') return normalizeAiReplyText(value.reply);
+                return '';
+            }
+            return normalizeAiReplyText(value);
+        }
+
+        function translatedPayloadFieldText(value) {
+            if (value == null) return '';
+            if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+            if (Array.isArray(value)) {
+                return value.map(translatedPayloadFieldText).filter(Boolean).join('\n').trim();
+            }
+            if (typeof value === 'object') {
+                return String(value.text || value.content || value.value || value.message || '').trim();
+            }
+            return '';
+        }
+
+        function firstTranslatedPayloadField(payload, keys) {
+            const source = payload && typeof payload === 'object' ? payload : {};
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
+                if (source[key] != null) return source[key];
+            }
+            return null;
+        }
+
+        function parseSecretSpaceTranslatedMessagePayload(value) {
+            let payload = value;
+            if (typeof value === 'string') {
+                const raw = String(value || '').trim();
+                if (!raw) return null;
+                payload = safeJsonParse(raw, null);
+                if (!payload || typeof payload !== 'object') {
+                    payload = extractJsonObject(raw);
+                }
+            }
+            if (!payload || typeof payload !== 'object') return null;
+            const rawType = String(payload.type || payload.messageType || payload.kind || '').trim();
+            const hasTranslatedType = rawType === 'translated_text' || rawType === 'translated';
+            const foreign = firstTranslatedPayloadField(payload, [
+                'foreign',
+                'original',
+                'originalText',
+                'original_text',
+                'source',
+                'sourceText',
+                'foreignText',
+                'foreign_text',
+                'bodyText'
+            ]);
+            const translation = firstTranslatedPayloadField(payload, [
+                'translation',
+                'chinese',
+                'chineseText',
+                'translation_text',
+                'translationText',
+                'zh',
+                'cn'
+            ]);
+            const foreignText = translatedPayloadFieldText(foreign);
+            const translationText = translatedPayloadFieldText(translation);
+            if (!hasTranslatedType && !(foreignText && translationText)) return null;
+            const bodyText = foreignText || String(payload.text || payload.content || '').trim();
+            const finalTranslation = translationText || bodyText;
+            if (!bodyText && !finalTranslation) return null;
+            return {
+                foreignText: bodyText,
+                translationText: finalTranslation,
+                text: bodyText && finalTranslation && bodyText !== finalTranslation
+                    ? bodyText + '\n' + finalTranslation
+                    : (bodyText || finalTranslation)
+            };
+        }
+
+        function formatSecretSpaceInlineTranslatedText(payload) {
+            const translated = parseSecretSpaceTranslatedMessagePayload(payload);
+            if (!translated) return '';
+            const foreign = String(translated.foreignText || '').trim();
+            const translation = String(translated.translationText || '').trim();
+            if (foreign && translation && foreign !== translation) return `${foreign}（${translation}）`;
+            return foreign || translation;
+        }
+
+        function recoverSecretSpaceTranslatedTextFromJsonish(text) {
+            const raw = String(text || '').trim();
+            if (!raw || raw === '[object Object]') return '';
+            const readField = (names) => {
+                for (let i = 0; i < names.length; i++) {
+                    const name = names[i];
+                    const re = new RegExp("[\"']" + name + "[\"']\\s*:\\s*[\"']([\\s\\S]*?)[\"']", 'i');
+                    const m = raw.match(re);
+                    if (m && m[1]) {
+                        return String(m[1])
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\"/g, '"')
+                            .replace(/\\'/g, "'")
+                            .trim();
+                    }
+                }
+                return '';
+            };
+            const foreign = readField(['foreign', 'foreignText', 'foreign_text', 'original', 'originalText', 'original_text', 'source', 'sourceText']);
+            const translation = readField(['translation', 'translationText', 'translation_text', 'chinese', 'chineseText', 'zh', 'cn']);
+            if (foreign && translation && foreign !== translation) return `${foreign}（${translation}）`;
+            return foreign || translation;
+        }
+
+        function normalizeSecretSpaceReplyVisibleText(value) {
+            if (value == null) return '';
+            const inline = formatSecretSpaceInlineTranslatedText(value);
+            if (inline) return inline;
+            if (typeof value === 'object') {
+                const textValue = value.text || value.content || value.reply || value.message || value.value || '';
+                const nested = normalizeSecretSpaceReplyVisibleText(textValue);
+                if (nested) return nested;
+                return '';
+            }
+            const raw = String(value || '').trim();
+            if (!raw || raw === '[object Object]') return '';
+            const recovered = recoverSecretSpaceTranslatedTextFromJsonish(raw);
+            if (recovered) return recovered;
+            return raw;
         }
 
         function extractJsonArray(text) {
@@ -3077,6 +3675,18 @@
                 }
             }
             return out;
+        }
+
+        function normalizePeerUsageEventText(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return '';
+            const lines = raw.split(/\r?\n+/).map((s) => String(s || '').trim()).filter(Boolean);
+            if (lines.length >= 2) {
+                for (let i = 0; i < lines.length; i++) {
+                    if (/[\u4e00-\u9fff]/.test(lines[i])) return lines[i];
+                }
+            }
+            return raw;
         }
 
         function parseTodayTsByHm(hm, fallbackTs) {
@@ -3197,6 +3807,244 @@
             await saveState();
         }
 
+        function getActiveCoupleSpaceStateRoleId(extraRoleId) {
+            const explicit = String(extraRoleId || '').trim();
+            if (explicit) return explicit;
+            try {
+                const link = getCoupleLinkState();
+                if (link && link.hasCoupleLinked && link.roleId) return String(link.roleId || '').trim();
+            } catch (e) { }
+            try {
+                const linked = localStorage.getItem(COUPLE_HAS_LINKED_KEY) === 'true';
+                const rid = String(localStorage.getItem(COUPLE_ACTIVE_ROLE_KEY) || '').trim();
+                if (linked && rid) return rid;
+            } catch (e1) { }
+            try {
+                const activeRid = String(localStorage.getItem(COUPLE_ACTIVE_ROLE_KEY) || '').trim();
+                if (activeRid) return activeRid;
+            } catch (e1b) { }
+            try {
+                const current = String(localStorage.getItem('currentChatId') || '').trim();
+                if (current) return current;
+            } catch (e2) { }
+            try {
+                const pw = getParentWindow();
+                const parentRid = pw ? String(pw.currentChatRole || '').trim() : '';
+                if (parentRid) return parentRid;
+            } catch (e3) { }
+            return '';
+        }
+
+        function buildMissStatePayload(roleId) {
+            const rid = getActiveCoupleSpaceStateRoleId(roleId);
+            return {
+                roleId: rid,
+                date: new Date().toDateString(),
+                dateKey: toDateKey(new Date()),
+                count: Math.max(0, Math.floor(Number(state.missCountUser || 0))),
+                roleCount: Math.max(0, Math.floor(Number(state.missCountRole || 0))),
+                roleCountTarget: Math.max(0, Math.floor(Number(roleMissCountTarget || state.missCountRole || 0))),
+                updatedAt: Date.now()
+            };
+        }
+
+        function normalizeMissStatePayload(raw, expectedRoleId) {
+            let parsed = raw;
+            if (typeof raw === 'string' && raw) {
+                parsed = safeJsonParse(raw, null);
+            }
+            if (!parsed || typeof parsed !== 'object') return null;
+            const expectedRid = String(expectedRoleId || '').trim();
+            const payloadRid = String(parsed.roleId || '').trim();
+            if (expectedRid && payloadRid && payloadRid !== expectedRid) return null;
+            const todayStr = new Date().toDateString();
+            const todayKey = toDateKey(new Date());
+            const date = String(parsed.date || '');
+            const dateKey = String(parsed.dateKey || '');
+            if (date !== todayStr && dateKey !== todayKey) return null;
+            const count = Number(parsed.count);
+            const roleCount = Number(parsed.roleCount);
+            const roleCountTarget = Number(parsed.roleCountTarget);
+            const updatedAt = Number(parsed.updatedAt || 0);
+            return {
+                roleId: payloadRid || expectedRid,
+                date: todayStr,
+                dateKey: todayKey,
+                count: Number.isFinite(count) && count >= 0 ? Math.floor(count) : 0,
+                roleCount: Number.isFinite(roleCount) && roleCount >= 0 ? Math.floor(roleCount) : 0,
+                roleCountTarget: Number.isFinite(roleCountTarget) && roleCountTarget >= 0
+                    ? Math.floor(roleCountTarget)
+                    : (Number.isFinite(roleCount) && roleCount >= 0 ? Math.floor(roleCount) : 0),
+                updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0
+            };
+        }
+
+        function applyMissStatePayload(payload) {
+            const normalized = normalizeMissStatePayload(payload);
+            if (!normalized) return false;
+            state.missCountUser = normalized.count;
+            state.missCountRole = normalized.roleCount;
+            roleMissCountTarget = normalized.roleCountTarget;
+            return true;
+        }
+
+        function getCoupleSpaceStateRoleIds(extraRoleId) {
+            const rid = getActiveCoupleSpaceStateRoleId(extraRoleId);
+            return rid ? [rid] : [];
+        }
+
+        function buildCoupleSpaceStateKeys(baseKey, extraRoleId) {
+            const keys = [];
+            function add(key) {
+                const k = String(key || '').trim();
+                if (k && keys.indexOf(k) === -1) keys.push(k);
+            }
+            getCoupleSpaceStateRoleIds(extraRoleId).forEach((rid) => add(buildCoupleSpaceRoleKey(baseKey, rid)));
+            if (!keys.length) add(baseKey);
+            return keys;
+        }
+
+        function readStoredMissStateFromLocalStorage(roleId) {
+            const activeRoleId = getActiveCoupleSpaceStateRoleId(roleId);
+            const keys = [
+                ...buildCoupleSpaceStateKeys(MISS_STATE_STORAGE_KEY, activeRoleId),
+                ...buildCoupleSpaceStateKeys('couple_space_data', activeRoleId)
+            ];
+            let best = null;
+            for (let i = 0; i < keys.length; i++) {
+                const key = String(keys[i] || '').trim();
+                if (!key) continue;
+                try {
+                    const row = normalizeMissStatePayload(localStorage.getItem(key), activeRoleId);
+                    if (!row) continue;
+                    if (!best || Number(row.count || 0) > Number(best.count || 0)) {
+                        best = row;
+                    } else if (Number(row.count || 0) === Number(best.count || 0) && Number(row.updatedAt || 0) > Number(best.updatedAt || 0)) {
+                        best = row;
+                    }
+                } catch (e) { }
+            }
+            return best;
+        }
+
+        function protectMissStateAgainstSameDayRegression(roleId) {
+            const stored = readStoredMissStateFromLocalStorage(roleId);
+            if (!stored) return;
+            const storedUser = Math.max(0, Math.floor(Number(stored.count || 0)));
+            const storedRole = Math.max(0, Math.floor(Number(stored.roleCount || 0)));
+            const storedTarget = Math.max(0, Math.floor(Number(stored.roleCountTarget || storedRole || 0)));
+            if (storedUser > Math.max(0, Math.floor(Number(state.missCountUser || 0)))) {
+                state.missCountUser = storedUser;
+            }
+            if (storedRole > Math.max(0, Math.floor(Number(state.missCountRole || 0)))) {
+                state.missCountRole = storedRole;
+            }
+            if (storedTarget > Math.max(0, Math.floor(Number(roleMissCountTarget || 0)))) {
+                roleMissCountTarget = storedTarget;
+            }
+        }
+
+        function writeMissStateMirror(roleId) {
+            const activeRoleId = getActiveCoupleSpaceStateRoleId(roleId);
+            protectMissStateAgainstSameDayRegression(activeRoleId);
+            const payload = buildMissStatePayload(activeRoleId);
+            buildCoupleSpaceStateKeys(MISS_STATE_STORAGE_KEY, roleId)
+                .concat(buildCoupleSpaceStateKeys('couple_space_data', roleId))
+                .forEach((key) => {
+                    try {
+                        localStorage.setItem(key, JSON.stringify(payload));
+                    } catch (e) { }
+                });
+            return payload;
+        }
+
+        function readMissStateMirror(roleId) {
+            const activeRoleId = getActiveCoupleSpaceStateRoleId(roleId);
+            const keys = [
+                ...buildCoupleSpaceStateKeys(MISS_STATE_STORAGE_KEY, roleId),
+                ...buildCoupleSpaceStateKeys('couple_space_data', roleId)
+            ];
+            if (!activeRoleId) {
+                keys.push(MISS_STATE_STORAGE_KEY, 'couple_space_data');
+            }
+            let best = null;
+            for (let i = 0; i < keys.length; i++) {
+                const key = String(keys[i] || '').trim();
+                if (!key) continue;
+                try {
+                    const row = normalizeMissStatePayload(localStorage.getItem(key), activeRoleId);
+                    if (row && (!best || Number(row.updatedAt || 0) >= Number(best.updatedAt || 0))) {
+                        best = row;
+                    }
+                } catch (e) { }
+            }
+            return best;
+        }
+
+        window.__debugCoupleMissState = async function () {
+            const link = getCoupleLinkState();
+            const activeRoleId = getActiveCoupleSpaceStateRoleId(link && link.hasCoupleLinked ? link.roleId : '');
+            const keys = [
+                ...buildCoupleSpaceStateKeys(MISS_STATE_STORAGE_KEY, activeRoleId),
+                ...buildCoupleSpaceStateKeys('couple_space_data', activeRoleId)
+            ];
+            const out = {
+                link,
+                activeRoleId,
+                localStorageRoleId: '',
+                currentChatId: '',
+                state: {
+                    missCountUser: state.missCountUser,
+                    missCountRole: state.missCountRole,
+                    roleMissCountTarget
+                },
+                dom: {
+                    user: document.getElementById('miss-count-user') ? document.getElementById('miss-count-user').innerText : '',
+                    role: document.getElementById('miss-count-role') ? document.getElementById('miss-count-role').innerText : ''
+                },
+                keys: []
+            };
+            try { out.localStorageRoleId = String(localStorage.getItem(COUPLE_ACTIVE_ROLE_KEY) || ''); } catch (e0) { }
+            try { out.currentChatId = String(localStorage.getItem('currentChatId') || ''); } catch (e1) { }
+            for (let i = 0; i < keys.length; i++) {
+                const key = String(keys[i] || '').trim();
+                if (!key) continue;
+                let raw = null;
+                let parsed = null;
+                try {
+                    raw = localStorage.getItem(key);
+                    parsed = normalizeMissStatePayload(raw, activeRoleId);
+                } catch (e2) { }
+                out.keys.push({
+                    source: 'localStorage',
+                    key,
+                    exists: raw != null,
+                    parsed
+                });
+            }
+            const forage = getCoupleSpaceForage();
+            if (forage) {
+                for (let i = 0; i < keys.length; i++) {
+                    const key = String(keys[i] || '').trim();
+                    if (!key) continue;
+                    try {
+                        const value = await forage.getItem(key);
+                        out.keys.push({
+                            source: 'localforage',
+                            key,
+                            exists: value != null,
+                            parsed: normalizeMissStatePayload(value, activeRoleId)
+                        });
+                    } catch (e3) { }
+                }
+            }
+            return out;
+        };
+        try {
+            const pw = getParentWindow();
+            if (pw) pw.__debugCoupleMissState = window.__debugCoupleMissState;
+        } catch (e) { }
+
         function showCoupleSpaceIosNotification(avatar, name, message) {
             const pw = getParentWindow();
             if (pw && typeof pw.showIosNotification === 'function') {
@@ -3217,11 +4065,12 @@
         }
 
         function appendSecretSpaceAiMessage(text) {
-            const msg = String(text || '').trim();
-            if (!msg) return false;
+            const isObj = !!text && typeof text === 'object';
+            const msg = isObj ? '' : String(text || '').trim();
+            if (!isObj && !msg) return false;
             try {
                 if (window.secretSpaceTimeline && typeof window.secretSpaceTimeline.receiveAiMessage === 'function') {
-                    return !!window.secretSpaceTimeline.receiveAiMessage(msg);
+                    return !!window.secretSpaceTimeline.receiveAiMessage(isObj ? text : msg);
                 }
             } catch (e) { }
             try {
@@ -3260,12 +4109,42 @@
                             status: String(it.status || 'pending').trim() || 'pending'
                         };
                     }
+                    const translated = messageType === 'translated_text' || rawType === 'translated_text'
+                        ? parseSecretSpaceTranslatedMessagePayload(it)
+                        : parseSecretSpaceTranslatedMessagePayload(text);
+                    if (translated) {
+                        return {
+                            type,
+                            messageType: 'translated_text',
+                            ts,
+                            text: translated.text,
+                            foreignText: translated.foreignText,
+                            translationText: translated.translationText
+                        };
+                    }
                     if (!text) return null;
                     return { type, messageType: 'text', ts, text };
                 };
 
                 const normalized = rawList.map(normalize).filter(Boolean);
-                normalized.push({ type: 'ai_message', messageType: 'text', ts: Date.now(), text: msg });
+                const translated = parseSecretSpaceTranslatedMessagePayload(isObj ? text : msg);
+                if (translated) {
+                    const inlineText = formatSecretSpaceInlineTranslatedText({
+                        type: 'translated_text',
+                        foreign: translated.foreignText,
+                        translation: translated.translationText
+                    });
+                    normalized.push({
+                        type: 'ai_message',
+                        messageType: 'text',
+                        ts: Date.now(),
+                        text: inlineText || translated.text
+                    });
+                } else {
+                    const plainText = normalizeSecretSpaceReplyVisibleText(isObj ? text : msg);
+                    if (!plainText) return false;
+                    normalized.push({ type: 'ai_message', messageType: 'text', ts: Date.now(), text: plainText });
+                }
                 normalized.sort((a, b) => Number(a.ts) - Number(b.ts));
 
                 const messages = normalized.filter((it) => it.type === 'message');
@@ -3354,13 +4233,17 @@
                     .filter(Boolean);
                 const extraSystemPrompt = buildSecretPeerUsageSceneExtraPrompt(roleId);
                 const outputInstructions =
-                    '输出 4~10 行微信短句，每行一句。先回应用户说的话，再回应你刚才的行为记录。第一句要明显表现出你已经读到了角色刚才的行为记录。只输出台词，不要解释。';
+                    '输出 4~10 行微信短句，每行一句。先回应用户说的话，再回应你刚才的行为记录。第一句要明显表现出你已经读到了角色刚才的行为记录。只输出台词，不要解释。若自动翻译层要求 translated_text 结构，请完整输出该结构，不要把 JSON 拆成多段；秘密空间会把它显示成外语原文（简体中文翻译）。';
                 const raw = await callRoleDiaryLLM(roleId, historyForApi, apiUserPrompt, extraSystemPrompt, {
                     outputInstructions
                 });
-                const trimmed = normalizeAiReplyText(raw);
-                if (!trimmed) return false;
-                const lines = splitSecretSpaceReplyLines(trimmed, 10);
+                let lines = splitSecretSpaceReplyItems(String(raw || '').trim(), 10);
+                if (!lines.length) {
+                    const trimmed = normalizeAiReplyText(raw);
+                    if (!trimmed) return false;
+                    lines = splitSecretSpaceReplyItems(trimmed, 10);
+                }
+                lines = lines.map(normalizeSecretSpaceReplyVisibleText).filter(Boolean);
                 if (!lines.length) return false;
                 const minThinkingMs = randomIntInclusive(650, 1550);
                 const elapsed = Date.now() - requestStartedAt;
@@ -3488,7 +4371,9 @@
                 `4. 如果识别到用户手机电量低于30%，要第一时间提醒她充电，语气要像恋人日常关心，不要像系统通知。\n` +
                 `5. 如果用户在和别人聊天，你会吃醋，并产生想要打断她当前聊天的欲望，试图阻止她。\n` +
                 `6. 平时你要综合“情侣空间操作记录 + 用户在秘密空间里最近说过的话 + 你在秘密空间里最近说过的话”来续接。\n` +
-                `7. 你的回复必须是微信风格短句，至少 3 行，每行一句，分开输出，只输出台词，不要解释。`
+                `7. 你的回复必须是微信风格短句，至少 3 行，每行一句，分开输出，只输出台词，不要解释。\n` +
+                `8. 如果自动翻译层要求你输出 translated_text JSON，请输出完整合法 JSON，不要解释、不要代码块、不要把同一个 JSON 拆成多条消息。\n` +
+                `9. 如果当前没有自动翻译层，但你按人设需要使用外语、繁体、粤语、日语、韩语等非简体中文表达，请直接输出：外语原文（简体中文翻译）。`
             );
         }
 
@@ -3604,7 +4489,7 @@
                 `用户已被授权查看你的手机使用记录。\n` +
                 `首条用户消息会包含“角色刚才的行为记录”，后续消息不再重复，你要基于历史持续记住它。\n` +
                 `回复规则：先回应用户这句话，再回应你刚才的行为记录；第一句必须自然点明你已经看到记录，语气必须符合人设。\n` +
-                `输出规则：像微信消息一样简短，输出4~10行，每行一句，只输出台词。`
+                `输出规则：像微信消息一样简短，输出4~10行，每行一句。若自动翻译层要求 translated_text JSON，请输出完整合法 JSON，不要把同一个 JSON 拆成多条消息；秘密空间会显示成外语原文（简体中文翻译）。没有自动翻译层时，如果按人设需要外语，写成：外语原文（简体中文翻译）。`
             );
         }
 
@@ -3670,6 +4555,86 @@
             return lines.slice(0, n);
         }
 
+        function splitSecretSpaceReplyItems(text, maxItems) {
+            const raw = String(text || '').trim();
+            if (!raw) return [];
+            const n = Math.max(1, Number(maxItems) || 4);
+            const translatedItem = (payload) => {
+                return formatSecretSpaceInlineTranslatedText(payload) || null;
+            };
+            const parseStructuredItems = (payload, depth) => {
+                if (depth > 2 || payload == null) return [];
+                const directTranslated = translatedItem(payload);
+                if (directTranslated) return [directTranslated];
+                if (Array.isArray(payload)) {
+                    const out = [];
+                    payload.forEach((item) => {
+                        if (out.length >= n) return;
+                        const nested = parseStructuredItems(item, depth + 1);
+                        if (nested.length) {
+                            nested.forEach((it) => {
+                                if (out.length < n && it) out.push(it);
+                            });
+                            return;
+                        }
+                        const textValue = item && typeof item === 'object'
+                            ? (item.text || item.content || item.reply || item.message || '')
+                            : item;
+                        const cleanText = normalizeSecretSpaceReplyVisibleText(textValue);
+                        if (cleanText) out.push(cleanText);
+                    });
+                    return out.slice(0, n);
+                }
+                if (payload && typeof payload === 'object') {
+                    const keys = ['messages', 'reply_bubbles', 'replyBubbles', 'replies', 'items', 'lines'];
+                    for (let i = 0; i < keys.length; i++) {
+                        const value = payload[keys[i]];
+                        if (Array.isArray(value)) {
+                            const nested = parseStructuredItems(value, depth + 1);
+                            if (nested.length) return nested.slice(0, n);
+                        }
+                    }
+                    const textKeys = ['reply', 'content', 'text', 'message'];
+                    for (let i = 0; i < textKeys.length; i++) {
+                        const textValue = payload[textKeys[i]];
+                        if (Array.isArray(textValue) || (textValue && typeof textValue === 'object')) {
+                            const nested = parseStructuredItems(textValue, depth + 1);
+                            if (nested.length) return nested.slice(0, n);
+                        }
+                        if (typeof textValue === 'string' && textValue.trim()) {
+                            const nested = splitSecretSpaceReplyItems(textValue, n);
+                            const cleanText = normalizeSecretSpaceReplyVisibleText(textValue);
+                            return nested.length ? nested.slice(0, n) : (cleanText ? [cleanText] : []);
+                        }
+                    }
+                }
+                if (typeof payload === 'string') {
+                    const parsed = safeJsonParse(payload.trim(), null) || extractJsonArray(payload) || extractJsonObject(payload);
+                    if (parsed && parsed !== payload) {
+                        const nested = parseStructuredItems(parsed, depth + 1);
+                        if (nested.length) return nested.slice(0, n);
+                    }
+                }
+                return [];
+            };
+            const parsedRoot = safeJsonParse(raw, null) || extractJsonArray(raw) || extractJsonObject(raw);
+            if (parsedRoot) {
+                const structuredItems = parseStructuredItems(parsedRoot, 0);
+                if (structuredItems.length) return structuredItems.slice(0, n);
+            }
+            const recoveredRaw = recoverSecretSpaceTranslatedTextFromJsonish(raw);
+            if (recoveredRaw) return [recoveredRaw];
+            const rawTranslated = translatedItem(raw);
+            if (rawTranslated) return [rawTranslated];
+            return splitSecretSpaceReplyLines(raw, n).map((line) => {
+                return normalizeSecretSpaceReplyVisibleText(line);
+            }).filter(Boolean);
+        }
+
+        function getSecretSpaceReplyPreview(item) {
+            return normalizeSecretSpaceReplyVisibleText(item);
+        }
+
         async function generateSecretPeerUsageRecords() {
             const link = getCoupleLinkState();
             if (!link || !link.hasCoupleLinked || !link.roleId) {
@@ -3681,12 +4646,15 @@
             const nowText = formatHm(Date.now()) || '00:00';
             const realUserEvidence = buildRealUserEvidenceForPeerUsage(12);
             const extraSystemPrompt =
-                '你将以角色日常习惯来模拟行为记录，事件必须自然、生活化，并符合你的人设与世界书。';
+                '你将以角色日常习惯来模拟行为记录，事件必须自然、生活化，并符合你的人设与世界书。' +
+                '这是系统行为记录，不是角色说出口的对白；event 字段始终使用简体中文描述动作，不使用外语、不使用繁体、不使用括号翻译。';
             const userPrompt =
                 '场景：这是情侣空间 > 秘密空间中的“查看他在干嘛”。\n' +
                 '请一次性生成一批“角色使用手机”的事件记录，供时间线渲染。\n' +
                 '事件方向：打开手机、关闭手机、打开App（微信/钱包/经期/音乐/朋友圈/情侣空间）、播放歌曲、查看电量、点开与某个联系人的聊天框。\n' +
                 '每条事件要简短、具体、像真实发生过；必须符合角色人设。\n' +
+                '强制规则：event 字段只能写简体中文动作记录，比如“在微信里回了几条消息”“打开朋友圈刷了一会儿”“戴上耳机听了一首歌”。\n' +
+                '不要把 event 写成角色台词，不要写外语原文，不要附中文翻译，不要写 JSON 以外的解释。\n' +
                 `用户是${userName}，角色是${roleName}。\n` +
                 `【真实用户动态与操作证据】\n${realUserEvidence}\n` +
                 '严格约束：如果生成的记录提到用户、用户朋友圈、用户发了什么、用户照片、用户和谁聊天、用户刚做了什么，必须能在上面的真实证据里找到依据；没有证据就禁止脑补。\n' +
@@ -3706,7 +4674,7 @@
             const logs = [];
             for (let i = 0; i < parsed.length; i++) {
                 const it = parsed[i] && typeof parsed[i] === 'object' ? parsed[i] : {};
-                const eventRaw = String(it.event || it.text || it.content || '').trim();
+                const eventRaw = normalizePeerUsageEventText(it.event || it.text || it.content || '');
                 if (!eventRaw) continue;
                 const timeRaw = String(it.time || '').trim();
                 const ts = parseTodayTsByHm(timeRaw, base + i * 60000);
@@ -3869,21 +4837,27 @@
                 const extraSystemPrompt = buildSecretSpaceExtraSystemPrompt(roleId);
                 const userPrompt = buildSecretSpaceUserPrompt(trigger, payload, promptContext);
                 const outputInstructions = trigger === 'secret_heart'
-                    ? '输出 4~10 行微信短句，每行一句。先回复用户说的话，再回复用户操作记录。第一句要先让人看出你已经看到了记录。只输出台词，不要解释，不要前缀。'
-                    : '输出 3~6 行简短自然的微信式中文消息，第一句要让人看出你已经看到了刚刚的操作记录。不要解释，不要输出 JSON、代码块或前缀。';
-                const text = await callRoleDiaryLLM(roleId, historyForApi, userPrompt, extraSystemPrompt, { outputInstructions });
-                const trimmed = normalizeAiReplyText(text);
-                if (!trimmed) return;
+                    ? '输出 4~10 行微信短句，每行一句。先回复用户说的话，再回复用户操作记录。第一句要先让人看出你已经看到了记录。只输出台词，不要解释，不要前缀。若自动翻译层要求 translated_text 结构，请完整输出该结构，不要把 JSON 拆成多段；秘密空间会把它显示成外语原文（简体中文翻译）。'
+                    : '输出 3~6 行简短自然的微信式消息，第一句要让人看出你已经看到了刚刚的操作记录。不要解释、代码块或前缀。若自动翻译层要求 translated_text 结构，请完整输出该结构，不要把 JSON 拆成多段；秘密空间会把它显示成外语原文（简体中文翻译）。';
+                const text = await callRoleDiaryLLM(roleId, historyForApi, userPrompt, extraSystemPrompt, {
+                    outputInstructions
+                });
 
                 const avatar = getCoupleSpaceRoleAvatarSrc();
                 const roleName = getRoleDisplayName();
                 const maxLines = trigger === 'secret_heart' ? 10 : 4;
-                const lines = splitSecretSpaceReplyLines(trimmed, maxLines);
-                if (!lines.length) return;
+                const rawReplyText = String(text || '').trim();
+                let items = splitSecretSpaceReplyItems(rawReplyText, maxLines);
+                if (!items.length) {
+                    const trimmed = normalizeAiReplyText(text);
+                    if (!trimmed) return;
+                    items = splitSecretSpaceReplyItems(trimmed, maxLines);
+                }
+                if (!items.length) return;
                 if (shouldBarrage) hideSecretSpaceBarrage();
-                showCoupleSpaceIosNotification(avatar, roleName, lines[0]);
-                for (let i = 0; i < lines.length; i++) {
-                    appendSecretSpaceAiMessage(lines[i]);
+                showCoupleSpaceIosNotification(avatar, roleName, getSecretSpaceReplyPreview(items[0]));
+                for (let i = 0; i < items.length; i++) {
+                    appendSecretSpaceAiMessage(items[i]);
                 }
             } catch (e) {
                 showSecretSpaceReplyError(e);
@@ -4057,6 +5031,7 @@
                         maxSummaryLines: 12,
                         sceneIntro: '当前场景是情侣空间秘密互动中的即时角色反应。',
                         taskGuidance: String(extraSystemPrompt || '').trim(),
+                        suppressAutoTranslateLayer: opts.suppressAutoTranslateLayer === true,
                         outputInstructions: String(opts.outputInstructions || '只输出简短自然的微信式中文消息，不要解释，不要输出 JSON、代码块或前缀。')
                     });
                 } else if (!extraSystemPrompt && typeof pw.buildFullChatPrompt === 'function' && String(userPrompt || '').indexOf('心情日记') !== -1) {
@@ -4084,7 +5059,12 @@
                         (err) => reject(new Error(String(err || '请求失败')))
                     );
                 });
-                return String(text || '');
+                if (typeof text === 'string') return text;
+                try {
+                    return JSON.stringify(text || '');
+                } catch (eJson) {
+                    return String(text || '');
+                }
             } finally {
                 pw.__offlineSyncInProgress = false;
                 pw.currentChatRole = prevRole;
@@ -4106,9 +5086,8 @@
             const diaryText = String(payload && payload.diaryText ? payload.diaryText : '').trim();
             const roleDiaryText = String(payload && payload.roleDiaryText ? payload.roleDiaryText : '').trim();
             const userComment = String(payload && payload.userComment ? payload.userComment : '').trim();
-            const diaryImages = Array.isArray(payload && payload.diaryImages ? payload.diaryImages : [])
-                ? payload.diaryImages.filter(Boolean)
-                : [];
+            const rawDiaryImages = payload && Array.isArray(payload.diaryImages) ? payload.diaryImages : [];
+            const diaryImages = rawDiaryImages.filter(Boolean);
 
             let userPrompt = '';
 
@@ -4148,10 +5127,12 @@
                 throw new Error('未知的评论场景');
             }
 
+            const bilingualRule = buildCoupleSpaceInlineBilingualPrompt(roleId);
             const extraSystemPrompt =
                 '你现在是' +
                 roleName +
-                '，这里是情侣空间里的心情日记评论场景，不是普通微信聊天窗口。请完全根据上面的人设、日记内容和评论内容，以第一人称和亲密恋人的语气回复对方的日记或评论，使用自然流畅的中文。回复时第一句要自然表现出你已经读完了这篇日记/评论。';
+                '，这里是情侣空间里的心情日记评论场景，不是普通微信聊天窗口。请完全根据上面的人设、日记内容和评论内容，以第一人称和亲密恋人的语气回复对方的日记或评论。回复时第一句要自然表现出你已经读完了这篇日记/评论。' +
+                (bilingualRule ? '\n\n' + bilingualRule : '\n如果角色原话本来就是简体中文，请使用自然流畅的中文。');
 
             const text = await callRoleDiaryLLM(roleId, historyForApi, userPrompt, extraSystemPrompt, {
                 outputInstructions: '输出 3~6 行微信短句，每行一句，只输出台词，不要解释，不要前缀。'
@@ -4246,6 +5227,7 @@
             const todayTimingPrompt = todayChatContext.hasChat
                 ? `今天的日期是 ${todayKey}。你今天和我有聊天记录，日记内容必须优先围绕今天的聊天、今天的情绪余温和当下关系状态展开。\n【今日聊天记录（带日期时间）】\n${todayChatContext.text}\n\n请把上面这些 ${todayKey} 的聊天当作今天刚发生的事情来参考，不要把更早之前的旧聊天伪装成今天发生。`
                 : `今天的日期是 ${todayKey}。你今天没有和我聊天。\n今天这篇日记请更像你在记录自己的生活、状态、见闻或日常感受，不要硬提几天前的旧聊天，也不要把旧对话写成今天刚发生。`;
+            const bilingualRule = buildCoupleSpaceInlineBilingualPrompt(roleId, { jsonField: 'content' });
             const promptA =
                 `你现在是我的伴侣，请根据你的人设，写一篇今天当下的【心情日记】。\n` +
                 `${todayTimingPrompt}\n\n` +
@@ -4255,6 +5237,7 @@
                 `心情词必须和今天这一天的状态匹配，不能因为旧聊天记录而写偏时间线。\n` +
                 `心情词只能从以下列表中选择一个：开心、兴奋、心动、平静、伤心、生气、烦躁、心累。\n` +
                 `写一段日记，要符合你选择的心情。如果今天有聊天，可以自然提及今天聊了什么；如果今天没有聊天，就以分享自己生活为主，自然一点，必须符合人设！\n` +
+                (bilingualRule ? `${bilingualRule}\n` : '') +
                 `字数严格控制在 100 字以内。\n` +
                 `必须输出 JSON 格式：{ "mood": "心情词", "content": "日记内容" }\n` +
                 `输出要求：只输出 JSON，不要输出代码块，不要输出解释文字，不要输出任何多余字符。`;
@@ -4263,7 +5246,7 @@
                 let text = await callRoleDiaryLLM(roleId, historyForApi, promptA);
                 let obj = extractJsonObject(text);
                 let mood = obj && typeof obj === 'object' && typeof obj.mood === 'string' ? obj.mood.trim() : '';
-                let content = obj && typeof obj === 'object' && typeof obj.content === 'string' ? obj.content.trim() : '';
+                let content = obj && typeof obj === 'object' ? normalizeGeneratedRoleText(obj.content) : '';
                 if (!content && isDevModeUnlocked()) {
                     appendDevAiParseFailureLog({ scene: 'couple_space_diary_A', roleId: roleId, reason: 'parse_failed_or_empty_content', prompt: promptA, rawText: String(text || '') });
                     const retry = confirm('心情日记解析失败（未得到 JSON content）。是否重试一次？');
@@ -4271,7 +5254,7 @@
                         text = await callRoleDiaryLLM(roleId, historyForApi, promptA + '\n再次强调：只输出 JSON。');
                         obj = extractJsonObject(text);
                         mood = obj && typeof obj === 'object' && typeof obj.mood === 'string' ? obj.mood.trim() : mood;
-                        content = obj && typeof obj === 'object' && typeof obj.content === 'string' ? obj.content.trim() : '';
+                        content = obj && typeof obj === 'object' ? normalizeGeneratedRoleText(obj.content) : '';
                         if (!content) {
                             appendDevAiParseFailureLog({ scene: 'couple_space_diary_A', roleId: roleId, reason: 'retry_parse_failed_or_empty_content', prompt: promptA, rawText: String(text || '') });
                         }
@@ -4307,6 +5290,7 @@
             const todayDiaryRule = todayChatContext.hasChat
                 ? `今天（${todayKey}）和我有聊天记录，所以今天这篇日记必须优先围绕今天的聊天氛围、今天的互动感和今天的情绪变化来写。\n【今天聊天记录（带日期时间）】\n${todayChatContext.text}`
                 : `今天（${todayKey}）没有和我聊天，所以今天这篇日记要更像你自己的生活分享或心情记录，不要硬提几天前的聊天，也不要把旧对话写成今天刚发生。`;
+            const bilingualRule = buildCoupleSpaceInlineBilingualPrompt(roleId, { jsonField: 'content' });
 
             const promptB =
                 `你现在是我的伴侣，请根据你的人设，批量补写过去几天以及今天的【心情日记】。\n` +
@@ -4320,6 +5304,7 @@
                 `所有日期都要遵守时间线，看到带日期的旧聊天时，不要把它们写成今天刚发生。\n` +
                 `每天的日记字数严格控制在 100 字以内，并选择一个【心情词】。\n` +
                 `心情词只能从以下列表中选择一个：开心、兴奋、心动、平静、伤心、生气、烦躁、心累。\n` +
+                (bilingualRule ? `${bilingualRule}\n` : '') +
                 `必须输出 JSON 格式的数组：\n` +
                 `{ "diaries": [ { "date": "YYYY-MM-DD", "mood": "心情词", "content": "日记内容" } ] }\n` +
                 `输出要求：只输出 JSON，不要输出代码块，不要输出解释文字，不要输出任何多余字符。`;
@@ -4350,7 +5335,7 @@
                     if (!item) continue;
                     const date = String(item.date || '').trim();
                     const mood = String(item.mood || '').trim();
-                    const content = String(item.content || '').trim();
+                    const content = normalizeGeneratedRoleText(item.content);
                     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
                     if (!content) continue;
                     const dt = new Date(`${date}T21:00:00`);
@@ -5012,7 +5997,9 @@
         }
 
         async function handleMissClick(e) {
+            protectMissStateAgainstSameDayRegression(getCoupleLinkState().roleId || '');
             state.missCountUser++;
+            writeMissStateMirror(getCoupleLinkState().roleId || '');
             updateStatsUI();
             await syncRoleMissCountAfterUserClick();
             await saveState();
@@ -5026,33 +6013,23 @@
         }
 
         async function loadState() {
-            const todayStr = new Date().toDateString();
             const link = getCoupleLinkState();
-            const rid = link && link.hasCoupleLinked ? String(link.roleId || '').trim() : '';
+            const rid = getActiveCoupleSpaceStateRoleId(link && link.hasCoupleLinked ? link.roleId : '');
             const saved = await coupleSpaceGetRoleItem('couple_space_data', rid);
+            const missSaved = await coupleSpaceGetRoleItem(MISS_STATE_STORAGE_KEY, rid);
 
-            let parsed = null;
-            if (saved && typeof saved === 'object') {
-                parsed = saved;
-            } else if (typeof saved === 'string' && saved) {
-                parsed = safeJsonParse(saved, null);
-            }
-
-            if (parsed && typeof parsed === 'object') {
-                if (String(parsed.date || '') === todayStr) {
-                    const n = Number(parsed.count);
-                    state.missCountUser = Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
-                    const roleN = Number(parsed.roleCount);
-                    state.missCountRole = Number.isFinite(roleN) && roleN >= 0 ? Math.floor(roleN) : 0;
-                    const roleTargetN = Number(parsed.roleCountTarget);
-                    roleMissCountTarget = Number.isFinite(roleTargetN) && roleTargetN >= 0
-                        ? Math.floor(roleTargetN)
-                        : state.missCountRole;
-                } else {
-                    state.missCountUser = 0;
-                    state.missCountRole = 0;
-                    roleMissCountTarget = 0;
-                }
+            const candidates = [
+                normalizeMissStatePayload(saved, rid),
+                normalizeMissStatePayload(missSaved, rid),
+                readMissStateMirror(rid)
+            ].filter(Boolean);
+            if (candidates.length) {
+                candidates.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+                applyMissStatePayload(candidates[0]);
+            } else {
+                state.missCountUser = 0;
+                state.missCountRole = 0;
+                roleMissCountTarget = 0;
             }
 
             updateStatsUI();
@@ -5063,16 +6040,12 @@
         }
 
         async function saveState() {
-            const todayStr = new Date().toDateString();
-            const dataToSave = {
-                date: todayStr,
-                count: state.missCountUser,
-                roleCount: Math.max(0, Math.floor(Number(state.missCountRole || 0))),
-                roleCountTarget: Math.max(0, Math.floor(Number(roleMissCountTarget || state.missCountRole || 0))),
-            };
             const link = getCoupleLinkState();
             const rid = link && link.hasCoupleLinked ? String(link.roleId || '').trim() : '';
-            await coupleSpaceSetRoleItem('couple_space_data', rid, dataToSave);
+            const activeRoleId = getActiveCoupleSpaceStateRoleId(rid);
+            const dataToSave = writeMissStateMirror(activeRoleId);
+            await coupleSpaceSetRoleItem(MISS_STATE_STORAGE_KEY, activeRoleId, dataToSave);
+            await coupleSpaceSetRoleItem('couple_space_data', activeRoleId, dataToSave);
         }
 
         function updateStatsUI() {

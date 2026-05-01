@@ -185,7 +185,7 @@
         <div class="tx-list" id="txList"></div>
     </div>
 
-    <script src="../js/secret-center-core.js"></script>
+    <script src="../js/secret-center-core.js?v=3"></script>
     <script>
         let assetsData = null;
         let selectedCardIndex = 0;
@@ -193,6 +193,13 @@
         function asString(value) { return String(value == null ? '' : value).trim(); }
         function escapeHtml(text) {
             return asString(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function formatMoneyText(value, fallbackCurrency) {
+            const text = asString(value);
+            if (!text) return (fallbackCurrency || '¥') + '0.00';
+            if (/^(?:-)?(?:HK\$|NT\$|US\$|CA\$|AU\$|S\$|RMB|CNY|USD|EUR|GBP|JPY|KRW|HKD|TWD|CAD|AUD|SGD|CHF|₩|₽|₫|฿|¥|￥|\$|€|£)/i.test(text)) return text;
+            if (text.indexOf('-') === 0) return '-' + (fallbackCurrency || '¥') + text.slice(1);
+            return (fallbackCurrency || '¥') + text;
         }
         function showGenerationFailure(message) {
             const reason = asString(message) || '本次没有生成出可展示的资产与流水。';
@@ -227,7 +234,7 @@
             }
             if (selectedCardIndex >= cards.length) selectedCardIndex = 0;
             mount.innerHTML = cards.map(function (c, index) {
-                return '<div class="bank-card theme-' + escapeHtml(c.theme || 'black') + (index === selectedCardIndex ? ' active' : '') + '" data-card-index="' + index + '"><div class="card-bank"><span>' + escapeHtml(c.bank) + '</span><span class="card-type">' + escapeHtml(c.type) + '</span></div><div class="card-number">**** ' + escapeHtml(c.last4) + '</div><div class="card-balance">Balance <span>¥' + escapeHtml(c.balance) + '</span></div></div>';
+                return '<div class="bank-card theme-' + escapeHtml(c.theme || 'black') + (index === selectedCardIndex ? ' active' : '') + '" data-card-index="' + index + '"><div class="card-bank"><span>' + escapeHtml(c.bank) + '</span><span class="card-type">' + escapeHtml(c.type) + '</span></div><div class="card-number">**** ' + escapeHtml(c.last4) + '</div><div class="card-balance">Balance <span>' + escapeHtml(formatMoneyText(c.balance, '¥')) + '</span></div></div>';
             }).join('');
 
             // 自动将选中的卡片滚动到视图中间
@@ -247,12 +254,12 @@
                 const amountText = asString(t.amount);
                 const isIncome = amountText.indexOf('-') !== 0;
                 const amountClass = isIncome ? 'tx-income' : 'tx-expense';
-                const displayAmount = isIncome ? ('+' + amountText) : amountText;
+                const displayAmount = isIncome ? ('+' + formatMoneyText(amountText, '¥')) : formatMoneyText(amountText, '¥');
                 return '<div class="tx-item"><div class="tx-info"><div class="tx-icon">' + escapeHtml(getTxIcon(t.title)) + '</div><div class="tx-text-content"><div class="tx-title">' + escapeHtml(t.title) + '</div><div class="tx-date">' + escapeHtml(t.date) + '</div></div></div><div class="tx-right"><div class="tx-amount ' + amountClass + '">' + escapeHtml(displayAmount) + '</div><div class="tx-status">' + escapeHtml(t.status) + '</div></div></div>';
             }).join('') : '<div class="empty-state">暂无交易记录</div>';
         }
         function renderAssets() {
-            document.getElementById('totalBalance').textContent = '¥' + escapeHtml(assetsData && assetsData.totalBalance || '0.00');
+            document.getElementById('totalBalance').textContent = formatMoneyText(assetsData && assetsData.totalBalance || '0.00', '¥');
             renderCards();
             renderTransactions();
         }

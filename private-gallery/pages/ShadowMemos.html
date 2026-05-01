@@ -76,9 +76,10 @@
         </div>
     </div>
 
-    <script src="../js/secret-center-core.js"></script>
+    <script src="../js/secret-center-core.js?v=3"></script>
     <script>
         const SCENE_KEY = 'shadow_memos';
+        const SHADOW_MEMOS_PROMPT_VERSION = 'shadow_memos_2026_05_01_user_known';
         let currentRoleId = '';
 
         function asString(value) {
@@ -166,6 +167,8 @@
                 return [];
             }
             const cached = window.SecretCenterCore.readSceneCache(SCENE_KEY, roleId);
+            const meta = cached && cached.data && cached.data.meta ? cached.data.meta : {};
+            if (asString(meta.shadowMemosPromptVersion) !== SHADOW_MEMOS_PROMPT_VERSION) return [];
             return cached && cached.data && Array.isArray(cached.data.sections) ? cached.data.sections : [];
         }
 

@@ -68,6 +68,11 @@
     const LOCALFORAGE_DB_NAME = 'FangCunSecretCenter';
     const LOCALFORAGE_STORE_NAME = 'scene_cache_v1';
     const SCENE_CACHE_FORAGE_PREFIX = 'scene_cache::';
+    const SHADOW_WECHAT_PROMPT_VERSION = 'shadow_wechat_2026_05_01_v2';
+    const SHADOW_MEMOS_PROMPT_VERSION = 'shadow_memos_2026_05_01_user_known';
+    const SHADOW_ASSETS_PROMPT_VERSION = 'shadow_assets_2026_05_01_currency';
+    const SHADOW_PHOTOS_PROMPT_VERSION = 'shadow_photos_2026_05_01_user_label';
+    const SHADOW_SHOPPING_PROMPT_VERSION = 'shadow_shopping_2026_05_01_secret_unlock';
 
     const sceneCacheForageState = {
         loaderPromise: null,
@@ -684,6 +689,7 @@
         }
         if (scene === 'shadow_memos') {
             const pack = buildShadowWechatContextPack(context);
+            const userLabel = asString(pack.userName || '你') || '你';
             const extraBlocks = [];
             if (pack.userInfoText) extraBlocks.push('【用户信息】\n' + pack.userInfoText);
             if (pack.memoryText) extraBlocks.push('【近期记忆】\n' + pack.memoryText);
@@ -696,7 +702,7 @@
                 '{',
                 '  "sections": [',
                 '    { "type": "tasks", "title": "待办事项", "items": [{"text": "任务", "isDone": true, "isPriority": false, "thought": "内心OS"}] },',
-                '    { "type": "userdata", "title": "关于她的记录", "items": [{"label": "维度", "value": "具体数据或待了解", "thought": "内心OS"}] },',
+                '    { "type": "userdata", "title": "关于' + userLabel + '的记录", "items": [{"label": "维度", "value": "具体数据或待了解", "thought": "内心OS"}] },',
                 '    { "type": "gifts", "title": "礼物计划", "items": [{"name": "礼物名", "thought": "为什么要送这个/准备进度"}] },',
                 '    { "type": "drafts", "title": "草稿箱", "items": [{"deletedLines": ["删掉的话"], "finalText": "留下的内容", "thought": "当时的纠结"}] },',
                 '    { "type": "reflections", "title": "灵感与感悟", "items": [{"content": "随笔/职业灵感/游戏进度", "thought": "补充想法"}] }',
@@ -704,11 +710,12 @@
                 '}',
                 '分区逻辑说明：',
                 '1) tasks: 优先包含职业相关的已完成工作和与用户相关的待办（isPriority:true）。',
-                '2) userdata: 可以包含鞋码、指围、过敏原、身体情况（如生理期、畏寒、低血压）。优先读取记忆；没提到的可以写“待了解...”或“猜测是...”，体现暗中观察。',
-                '3) gifts: 针对用户的喜好或近期聊天提到的东西制定的赠送计划。',
-                '4) drafts: 那些想发不敢发、反复修改的文字碎片。',
-                '5) reflections: 尽量符合职业。总裁写行业看法，学生写选课/论文压力，歌手写乐句灵感。',
-                '6) thought 要尽量符合角色性格（傲娇、温柔、冷静、偏执等），但不要为了凑字数写得太满。'
+                '2) userdata: 标题必须写成“关于' + userLabel + '的记录”，不要写“关于她/关于用户/关于玩家”。',
+                '3) userdata 只能写角色已经从【用户信息】【近期记忆】【聊天摘要】中明确了解到的事实，例如鞋码、指围、过敏原、身体情况、偏好、忌口。没有明确了解的维度，value 只能写“待了解”，禁止写“猜测/应该/可能/大概”，禁止编造看似具体的数据。',
+                '4) gifts: 针对用户的喜好或近期聊天提到的东西制定的赠送计划；如果没有依据，不要硬编具体礼物。',
+                '5) drafts: 那些想发不敢发、反复修改的文字碎片。',
+                '6) reflections: 尽量符合职业。总裁写行业看法，学生写选课/论文压力，歌手写乐句灵感。',
+                '7) thought 要尽量符合角色性格（傲娇、温柔、冷静、偏执等），但不要为了凑字数写得太满。'
             ].concat(extraBlocks).join('\n');
         }
         if (scene === 'shadow_diary') {
@@ -801,6 +808,8 @@
             ].join('\n');
         }
         if (scene === 'shadow_shopping') {
+            const pack = buildShadowWechatContextPack(context);
+            const userLabel = asString(pack.userName || '你') || '你';
             return [
                 '场景：购物记录App（展示角色真实消费轨迹）。',
                 '请结合角色职业、人设与财力，生成三个分栏数据：购物车、足迹、最近订单。',
@@ -813,8 +822,9 @@
                 '要求：',
                 '1) cart、footprints、orders 各生成 3-5 条，尽量像真实电商记录，不写空泛文案。',
                 '2) 最近订单中至少 1 条和用户有关（礼物、共同生活用品等）。',
-                '3) 最近订单中至少 1 条 isSecret:true；私密订单的 maskedName 要克制，realName 必须给出可解锁查看的真实物品名。',
-                '4) 不要输出额外解释，只输出 JSON 对象。'
+                '3) 最近订单中至少 1 条 isSecret:true；私密订单必须有真正的私密性。maskedName 只能写模糊展示名，不能透露真实品类、用途、对象或细节；realName 才写解锁后真实商品名。',
+                '4) 私密订单未解锁前不能暴露描述性信息：name/maskedName/category/thought/note 都不要泄露真实商品或用途。用户需要输入聊天设置里的用户身份“' + userLabel + '”才能解锁。',
+                '5) 不要输出额外解释，只输出 JSON 对象。'
             ].join('\n');
         }
         if (scene === 'shadow_youtube') {
@@ -912,7 +922,8 @@
                 '2) 每张卡尽量自带 4-6 条对应流水；切换不同卡时，流水风格要明显不同。',
                 '3) 流水必须符合角色人设，可以包含工资、分红、网购、外卖、转账、咨询费、订阅扣费等。',
                 '4) 某些卡可以偏收入或商务用途，某些卡可以偏日常支出，形成层次。',
-                '5) 只输出 JSON，不要解释。'
+                '5) 货币必须符合角色国籍、生活地和资产来源。如果角色是外国人或长期在国外生活，优先使用当地货币符号/代码（如 USD $, EUR €, GBP £, JPY ¥, KRW ₩, HKD HK$）；也可以出现中国账户和外国账户混合，但不要所有金额都默认人民币。',
+                '6) 只输出 JSON，不要解释。'
             ].join('\n');
         }
         if (scene === 'shadow_health') {
@@ -1040,6 +1051,8 @@
             ].join('\n');
         }
         if (scene === 'shadow_photos') {
+            const pack = buildShadowWechatContextPack(context);
+            const userLabel = asString(pack.userName || '你') || '你';
             return [
                 '场景：角色的手机相册。因为无法显示图片，我们将以【相册分区+文字化影像描述】形式呈现。',
                 '要求：',
@@ -1050,6 +1063,7 @@
                 '5. 全部生成内容中，至少 40% 需要和用户相关（aboutUser=true）。',
                 '6. description 必须非常详细，至少写 2 句，优先包含构图、光线、屏幕停留内容、主体动作、边缘残留细节、环境痕迹等，长度建议 35-90 字，不要只给一句概括。',
                 '7. camera 要像真实镜头拍下来的画面说明；videos 要像回看录像时逐段记下的内容；screenshots 要明确截到了哪个界面、哪些字或区域最醒目。',
+                '8. 涉及用户时，description 里统一写“' + userLabel + '”，禁止写“用户/玩家/她/关于用户的信息/里面有用户的信息”这种出戏泛称。',
                 '输出 JSON 格式：',
                 '{',
                 '  "camera":[{"date":"时间","location":"地点/来源","description":"镜头描述","isHidden":false,"aboutUser":false}],',
@@ -1122,13 +1136,14 @@
                 '}',
                 '硬性约束：',
                 '1) 联系人总量 3-5（含置顶用户）；非置顶联系人按给定分类生成，可缺某类。',
-                '2) 非置顶每个联系人 recentMessages 生成 4-8 条即可，保证像真实对话片段，不必硬凑满 10 条。',
+                '2) 非置顶每个联系人 recentMessages 至少 10 条，建议 10-14 条；必须像真实连续对话片段，有来有回，不要只写单句摘要。',
                 '3) drafts 2-4 条；subscriptions 2-4 条；favorites 0-2 条。',
-                '4) 严禁捏造“用户与角色”的聊天收藏原文；与用户相关的聊天收藏会由系统从真实聊天历史里自动提取。',
-                '5) 你只生成角色主动收藏的推文/外部内容，并为每条收藏写一句简短、克制、符合人设的批注。',
-                '6) 批注/saveComment/annotation 必须像角色本人留给自己的小备注，用第一人称或极贴近角色口吻的短句来写，不能像系统总结，不能出现“角色”“该内容”“值得收藏”“被收进收藏夹”这类说明腔。',
-                '7) 如果某条订阅内容会被角色收藏，请在该条上设置 isSaved=true，并填写 saveComment；如果没有真正会打动他的内容，favorites 可以为空，订阅也可以一条都不收藏。',
-                '8) 字段不确定时宁可留空，也不要用“联系人1 / 推文1 / 默认 / 暂无 / 示例”这种占位词凑数。'
+                '4) 外国人/外语角色适配：如果角色人设、国籍、语言习惯或原始聊天风格显示 TA 是外国人或主要使用外语，TA 和联系人之间的 recentMessages 必须主要用该外语交流；每条可见聊天内容用“外语原文（简体中文翻译）”格式写在同一个 text 字段里，不要输出 translated_text/translation 等额外字段，不要拆成 JSON 元数据。',
+                '5) 严禁捏造“用户与角色”的聊天收藏原文；与用户相关的聊天收藏会由系统从真实聊天历史里自动提取。如果真实聊天内容较少或没有值得收藏的内容，就让聊天收藏为空。',
+                '6) 你可以生成角色主动收藏的推文/外部内容，并为每条收藏写一句简短、克制、符合人设的批注；但 favorites.items 不要伪装成用户聊天记录。',
+                '7) 批注/saveComment/annotation 必须像角色本人留给自己的小备注，用第一人称或极贴近角色口吻的短句来写，不能像系统总结，不能出现“角色”“该内容”“值得收藏”“被收进收藏夹”这类说明腔。',
+                '8) 如果某条订阅内容会被角色收藏，请在该条上设置 isSaved=true，并填写 saveComment；如果没有真正会打动他的内容，favorites 可以为空，订阅也可以一条都不收藏。',
+                '9) 字段不确定时宁可留空，也不要用“联系人1 / 推文1 / 默认 / 暂无 / 示例”这种占位词凑数。'
             ].join('\n');
         }
         return '场景未定义。';
@@ -1661,11 +1676,36 @@
     const SHADOW_MEMO_SECTION_TYPES = ['tasks', 'userdata', 'gifts', 'drafts', 'reflections'];
     const SHADOW_MEMO_SECTION_TITLES = {
         tasks: '待办事项',
-        userdata: '关于她的记录',
+        userdata: '关于对方的记录',
         gifts: '礼物计划',
         drafts: '草稿箱',
         reflections: '灵感与感悟'
     };
+
+    function getScopedUserNameForScene(context) {
+        const persona = readScopedUserPersona(context && context.roleId);
+        return asString(persona.name || persona.nickname || persona.groupNickname || '你') || '你';
+    }
+
+    function normalizeSceneUserReferenceText(text, userName) {
+        const label = asString(userName || '你') || '你';
+        let clean = asString(text);
+        if (!clean) return '';
+        clean = clean
+            .replace(/关于用户的信息/g, '关于' + label + '的信息')
+            .replace(/里面有用户的信息/g, '里面有关于' + label + '的信息')
+            .replace(/与用户相关的线索/g, '与' + label + '相关的线索')
+            .replace(/和用户相关/g, '和' + label + '相关')
+            .replace(/与用户相关/g, '与' + label + '相关')
+            .replace(/用户发来/g, label + '发来')
+            .replace(/用户/g, label)
+            .replace(/玩家/g, label);
+        return clean;
+    }
+
+    function getMemoUserDataTitle(context) {
+        return '关于' + getScopedUserNameForScene(context) + '的记录';
+    }
 
     function normalizeShadowMemoBoolean(value, fallback) {
         if (typeof value === 'boolean') return value;
@@ -1695,7 +1735,10 @@
     function normalizeShadowMemoUserDataItem(item) {
         const row = asObject(item);
         const label = asString(row.label || row.key || row.title);
-        const value = asString(row.value || row.text || row.content);
+        let value = asString(row.value || row.text || row.content);
+        if (/猜测|猜|可能|大概|应该|也许|似乎|估计/.test(value) && value.indexOf('待了解') === -1) {
+            value = '待了解';
+        }
         if (!label || !value) return null;
         return {
             label: label,
@@ -1738,7 +1781,7 @@
         };
     }
 
-    function normalizeShadowMemoSection(section, type) {
+    function normalizeShadowMemoSection(section, type, context) {
         const row = asObject(section);
         const items = Array.isArray(row.items) ? row.items : [];
         let normalizedItems = [];
@@ -1747,14 +1790,17 @@
         else if (type === 'gifts') normalizedItems = items.map(normalizeShadowMemoGiftItem).filter(Boolean);
         else if (type === 'drafts') normalizedItems = items.map(normalizeShadowMemoDraftItem).filter(Boolean);
         else if (type === 'reflections') normalizedItems = items.map(normalizeShadowMemoReflectionItem).filter(Boolean);
+        const fallbackTitle = type === 'userdata' ? getMemoUserDataTitle(context) : SHADOW_MEMO_SECTION_TITLES[type];
+        let title = asString(row.title || fallbackTitle);
+        if (type === 'userdata' && /关于(她|用户|玩家)的记录/.test(title)) title = fallbackTitle;
         return {
             type: type,
-            title: asString(row.title || SHADOW_MEMO_SECTION_TITLES[type]),
+            title: title,
             items: normalizedItems.slice(0, 5)
         };
     }
 
-    function normalizeShadowMemosData(payload) {
+    function normalizeShadowMemosData(payload, context) {
         const data = asObject(payload);
         const sections = Array.isArray(data.sections) ? data.sections : [];
         const sectionMap = {};
@@ -1767,8 +1813,11 @@
 
         return {
             sections: SHADOW_MEMO_SECTION_TYPES.map(function (type) {
-                return normalizeShadowMemoSection(sectionMap[type], type);
-            })
+                return normalizeShadowMemoSection(sectionMap[type], type, context);
+            }),
+            meta: {
+                shadowMemosPromptVersion: SHADOW_MEMOS_PROMPT_VERSION
+            }
         };
     }
 
@@ -1787,6 +1836,8 @@
 
     function isValidShadowMemosData(payload) {
         const data = asObject(payload);
+        const meta = asObject(data.meta || {});
+        if (asString(meta.shadowMemosPromptVersion || '') !== SHADOW_MEMOS_PROMPT_VERSION) return false;
         const sections = Array.isArray(data.sections) ? data.sections : [];
         const nonEmptySections = sections.filter(function (section) {
             const row = asObject(section);
@@ -1881,6 +1932,9 @@
             if (!name) name = maskedName;
             if (!name) name = '评价极高的私人订制';
             if (!maskedName) maskedName = name;
+            if (/戒|项链|香水|内衣|药|礼物|情侣|情趣|定制|花|裙|护肤|口红|唇|真实|送|给/.test(maskedName)) {
+                maskedName = '加密订单';
+            }
             if (!realName) {
                 realName = (baseName && baseName !== maskedName)
                     ? baseName
@@ -1903,7 +1957,7 @@
             name: name,
             price: normalizeShadowShoppingPrice(row.price || row.amount || row.cost || row.budget),
             status: normalizeShadowShoppingStatus(row.status || row.state, kind),
-            category: asString(row.category || row.tag || row.kind || '日常'),
+            category: isSecret ? '私密' : asString(row.category || row.tag || row.kind || '日常'),
             note: asString(row.note || row.reason || row.memo || ''),
             thought: (kind === 'orders'
                 ? asString(thoughtText || row.note || row.reason || '下单那一刻犹豫过，但还是想把它带回生活里。')
@@ -1961,11 +2015,20 @@
         const cart = normalizeShadowShoppingList(cartBase, 'cart', fallback.cart);
         const footprints = normalizeShadowShoppingList(footprintsBase, 'footprints', fallback.footprints);
 
-        return { cart: cart, footprints: footprints, orders: orders };
+        return {
+            cart: cart,
+            footprints: footprints,
+            orders: orders,
+            meta: {
+                shadowShoppingPromptVersion: SHADOW_SHOPPING_PROMPT_VERSION
+            }
+        };
     }
 
     function isValidShadowShoppingData(payload) {
         const data = asObject(payload);
+        const meta = asObject(data.meta || {});
+        if (asString(meta.shadowShoppingPromptVersion || '') !== SHADOW_SHOPPING_PROMPT_VERSION) return false;
         const cart = Array.isArray(data.cart) ? data.cart : [];
         const footprints = Array.isArray(data.footprints) ? data.footprints : [];
         const orders = Array.isArray(data.orders) ? data.orders : [];
@@ -2459,9 +2522,12 @@
     function normalizeShadowAssetsAmount(value, fallbackSign) {
         const raw = asString(value);
         if (!raw) return fallbackSign === '-' ? '-0.00' : '0.00';
-        const sign = raw.indexOf('-') === 0 || fallbackSign === '-' ? '-' : '';
-        const cleaned = raw.replace(/[^\d.]/g, '');
-        return sign + (cleaned || '0.00');
+        const sign = raw.indexOf('-') !== -1 || fallbackSign === '-' ? '-' : '';
+        const currencyMatch = raw.match(/(HK\$|NT\$|US\$|CA\$|AU\$|S\$|RMB|CNY|USD|EUR|GBP|JPY|KRW|HKD|TWD|CAD|AUD|SGD|CHF|₩|₽|₫|฿|¥|￥|\$|€|£)/i);
+        const currency = currencyMatch ? currencyMatch[1] : '';
+        const cleaned = raw.replace(/[^\d.,]/g, '').replace(/^[,.]+|[,.]+$/g, '');
+        const amount = cleaned || '0.00';
+        return sign + (currency ? (currency + amount) : amount);
     }
 
     function buildShadowAssetsFallbackData(context) {
@@ -2666,12 +2732,17 @@
         return {
             totalBalance: normalizeShadowAssetsAmount(data.totalBalance || data.balance || data.total || fallback.totalBalance, ''),
             cards: cards.slice(0, 4),
-            transactions: transactions.slice(0, 10)
+            transactions: transactions.slice(0, 10),
+            meta: {
+                shadowAssetsPromptVersion: SHADOW_ASSETS_PROMPT_VERSION
+            }
         };
     }
 
     function isValidShadowAssetsData(payload) {
         const data = asObject(payload);
+        const meta = asObject(data.meta || {});
+        if (asString(meta.shadowAssetsPromptVersion || '') !== SHADOW_ASSETS_PROMPT_VERSION) return false;
         const cards = Array.isArray(data.cards) ? data.cards : [];
         const transactions = Array.isArray(data.transactions) ? data.transactions : [];
         return !!asString(data.totalBalance) && (cards.length > 0 || transactions.length > 0);
@@ -3308,13 +3379,14 @@
         });
     }
 
-    function buildShadowPhotosFallbackData() {
+    function buildShadowPhotosFallbackData(context) {
+        const userName = getScopedUserNameForScene(context);
         return {
             camera: [
-                { date: '今天 08:14', location: '窗边餐桌', description: '瓷杯边缘残留一圈浅色咖啡痕，旁边摊开的便签写着用户名字缩写。', isHidden: false, aboutUser: true },
+                { date: '今天 08:14', location: '窗边餐桌', description: '瓷杯边缘残留一圈浅色咖啡痕，旁边摊开的便签写着' + userName + '名字缩写。', isHidden: false, aboutUser: true },
                 { date: '昨天 21:36', location: '地库出口', description: '车灯在潮湿地面上拉出长反光，镜头边缘有指尖遮挡造成的暗角。', isHidden: false, aboutUser: false },
-                { date: '昨天 00:42', location: '玄关镜面', description: '镜面里只拍到半边肩线和手机壳背面，通知栏停着与用户有关的未读提醒。', isHidden: true, aboutUser: true },
-                { date: '周三 18:09', location: '办公桌面', description: '会议资料压着一张取件单，右上角手写了“记得给她带过去”。', isHidden: false, aboutUser: true }
+                { date: '昨天 00:42', location: '玄关镜面', description: '镜面里只拍到半边肩线和手机壳背面，通知栏停着与' + userName + '有关的未读提醒。', isHidden: true, aboutUser: true },
+                { date: '周三 18:09', location: '办公桌面', description: '会议资料压着一张取件单，右上角手写了“记得给' + userName + '带过去”。', isHidden: false, aboutUser: true }
             ],
             videos: [
                 { title: '夜雨路口', duration: '00:21', date: '今天 00:58', location: '高架匝道', description: '镜头先对准雨刷节奏，随后慢慢移向空荡路口，环境音里能听见导航重复播报。', isHidden: false, aboutUser: false },
@@ -3323,7 +3395,7 @@
                 { title: '办公室空景', duration: '00:13', date: '周一 22:03', location: '工位区域', description: '全程无人物，只有空调和键盘余音，时间戳跳到深夜后画面结束。', isHidden: false, aboutUser: false }
             ],
             screenshots: [
-                { date: '今天 10:12', location: '微信保存', description: '截图是用户发来的行程消息，重点位置被标了浅色荧光线。', isHidden: false, aboutUser: true },
+                { date: '今天 10:12', location: '微信保存', description: '截图是' + userName + '发来的行程消息，重点位置被标了浅色荧光线。', isHidden: false, aboutUser: true },
                 { date: '昨天 15:40', location: '地图App', description: '路线页保存了两处地点之间的最短步行方案，备注栏写着“别迟到”。', isHidden: false, aboutUser: false },
                 { date: '昨天 01:09', location: '备忘录', description: '备忘录里只留下一句“先别说重话”，上下文被裁掉。', isHidden: true, aboutUser: true },
                 { date: '周三 11:31', location: '浏览器页面', description: '截图停在“如何把道歉说清楚”问题页，收藏图标处于已点亮状态。', isHidden: false, aboutUser: false }
@@ -3352,10 +3424,11 @@
         return /用户|玩家|与你|你发来|对方|她\(玩家\)/.test(text);
     }
 
-    function normalizeShadowPhotoItem(item, index, defaultType) {
+    function normalizeShadowPhotoItem(item, index, defaultType, context) {
         const row = asObject(item);
         const type = normalizeShadowPhotoType(row.type || row.kind || row.category, defaultType || 'camera');
-        let description = asString(row.description || row.desc || row.caption || row.content || '');
+        const userName = getScopedUserNameForScene(context);
+        let description = normalizeSceneUserReferenceText(row.description || row.desc || row.caption || row.content || '', userName);
         if (!description) {
             description = '画面主体被完整保留下来，边缘还留着环境光影和停顿过的痕迹，不像随手拍，更像反复回看后舍不得删掉的一段记录。';
         }
@@ -3380,7 +3453,8 @@
         };
     }
 
-    function ensureShadowPhotosAboutUserRatio(camera, videos, screenshots) {
+    function ensureShadowPhotosAboutUserRatio(camera, videos, screenshots, context) {
+        const userName = getScopedUserNameForScene(context);
         const list = camera.concat(videos).concat(screenshots);
         const target = Math.ceil(list.length * 0.4);
         let current = list.filter(function (item) { return !!item.aboutUser; }).length;
@@ -3388,8 +3462,8 @@
         for (let i = 0; i < list.length && current < target; i++) {
             if (list[i].aboutUser) continue;
             list[i].aboutUser = true;
-            if (!/用户|玩家|与你/.test(asString(list[i].description))) {
-                list[i].description = asString(list[i].description) + ' 画面里有与用户相关的线索。';
+            if (asString(list[i].description).indexOf(userName) === -1) {
+                list[i].description = asString(list[i].description) + ' 画面里有与' + userName + '相关的线索。';
             }
             current += 1;
         }
@@ -3407,29 +3481,29 @@
         }
     }
 
-    function normalizeShadowPhotoSection(source, fallback, sectionType) {
+    function normalizeShadowPhotoSection(source, fallback, sectionType, context) {
         const input = Array.isArray(source) ? source : [];
         const backup = Array.isArray(fallback) ? fallback : [];
         let list = input.slice(0, 12).map(function (item, index) {
-            return normalizeShadowPhotoItem(item, index, sectionType);
+            return normalizeShadowPhotoItem(item, index, sectionType, context);
         }).filter(function (item) {
             return !!asString(item.date) && !!asString(item.location) && !!asString(item.description);
         });
         if (!list.length) {
             list = backup.map(function (item, index) {
-                return normalizeShadowPhotoItem(item, index, sectionType);
+                return normalizeShadowPhotoItem(item, index, sectionType, context);
             });
         } else if (list.length < 4) {
             for (let i = list.length; i < 4 && i < backup.length; i++) {
-                list.push(normalizeShadowPhotoItem(backup[i], i, sectionType));
+                list.push(normalizeShadowPhotoItem(backup[i], i, sectionType, context));
             }
         }
         return list.slice(0, 6);
     }
 
-    function normalizeShadowPhotosData(payload) {
+    function normalizeShadowPhotosData(payload, context) {
         const data = asObject(payload);
-        const fallback = buildShadowPhotosFallbackData();
+        const fallback = buildShadowPhotosFallbackData(context);
         const photosField = data.photos;
         const photosObject = asObject(photosField);
         const cameraRaw = Array.isArray(data.camera)
@@ -3462,10 +3536,10 @@
             }
         }
 
-        const camera = normalizeShadowPhotoSection(cameraMix, fallback.camera, 'camera');
-        const videos = normalizeShadowPhotoSection(videosMix, fallback.videos, 'video');
-        const screenshots = normalizeShadowPhotoSection(screenshotsMix, fallback.screenshots, 'screenshot');
-        ensureShadowPhotosAboutUserRatio(camera, videos, screenshots);
+        const camera = normalizeShadowPhotoSection(cameraMix, fallback.camera, 'camera', context);
+        const videos = normalizeShadowPhotoSection(videosMix, fallback.videos, 'video', context);
+        const screenshots = normalizeShadowPhotoSection(screenshotsMix, fallback.screenshots, 'screenshot', context);
+        ensureShadowPhotosAboutUserRatio(camera, videos, screenshots, context);
         ensureShadowPhotosHiddenMix(camera);
         ensureShadowPhotosHiddenMix(videos);
         ensureShadowPhotosHiddenMix(screenshots);
@@ -3474,7 +3548,7 @@
         const hiddenList = [];
         const hiddenSeen = {};
         function pushHidden(item, defaultType) {
-            const row = normalizeShadowPhotoItem(item, hiddenList.length, defaultType);
+            const row = normalizeShadowPhotoItem(item, hiddenList.length, defaultType, context);
             row.isHidden = true;
             const key = [row.type, row.date, row.location, row.description].join('|');
             if (hiddenSeen[key]) return;
@@ -3501,12 +3575,17 @@
             camera: camera,
             videos: videos,
             screenshots: screenshots,
-            photos: photos.slice(0, 18)
+            photos: photos.slice(0, 18),
+            meta: {
+                shadowPhotosPromptVersion: SHADOW_PHOTOS_PROMPT_VERSION
+            }
         };
     }
 
     function isValidShadowPhotosData(payload) {
         const data = asObject(payload);
+        const meta = asObject(data.meta || {});
+        if (asString(meta.shadowPhotosPromptVersion || '') !== SHADOW_PHOTOS_PROMPT_VERSION) return false;
         const camera = Array.isArray(data.camera) ? data.camera : [];
         const videos = Array.isArray(data.videos) ? data.videos : [];
         const screenshots = Array.isArray(data.screenshots) ? data.screenshots : [];
@@ -4564,16 +4643,42 @@
         return null;
     }
 
+    function readScopedUserPersona(roleId) {
+        const rid = asString(roleId);
+        if (!rid) return {};
+        const parentWindow = getParentWindow();
+        const candidates = [];
+        try {
+            if (parentWindow.userPersonas && typeof parentWindow.userPersonas === 'object') {
+                candidates.push(parentWindow.userPersonas[rid]);
+            }
+        } catch (e) { }
+        try {
+            if (global.userPersonas && typeof global.userPersonas === 'object') {
+                candidates.push(global.userPersonas[rid]);
+            }
+        } catch (e2) { }
+        try {
+            const stored = safeParse(readLocalStorage('wechat_userPersonas', '{}'), {});
+            if (stored && typeof stored === 'object') candidates.push(stored[rid]);
+        } catch (e3) { }
+        for (let i = 0; i < candidates.length; i++) {
+            const row = asObject(candidates[i]);
+            if (Object.keys(row).length) return row;
+        }
+        return {};
+    }
+
     function buildShadowWechatContextPack(context) {
         const bundle = readBundleContext(context.roleId);
-        const parentWindow = getParentWindow();
-        const userPersona = bundle && bundle.userPersona && typeof bundle.userPersona === 'object'
+        const scopedPersona = readScopedUserPersona(context.roleId);
+        const userPersona = bundle && bundle.userPersona && typeof bundle.userPersona === 'object' && Object.keys(bundle.userPersona).length
             ? bundle.userPersona
-            : {};
+            : scopedPersona;
         const userName = asString(
             userPersona.name ||
-            readLocalStorage('user_name', '') ||
-            (parentWindow.momentsData && parentWindow.momentsData.userName) ||
+            userPersona.nickname ||
+            userPersona.groupNickname ||
             '你'
         ) || '你';
         const userInfoLines = [];
@@ -5389,7 +5494,7 @@
     function ensureMessagesForGeneratedContact(messages, contactName) {
         const src = Array.isArray(messages) ? messages : [];
         const out = [];
-        for (let i = 0; i < src.length && out.length < 8; i++) {
+        for (let i = 0; i < src.length && out.length < 16; i++) {
             const row = src[i];
             if (typeof row === 'string') {
                 const text = asString(row);
@@ -5403,7 +5508,7 @@
             if (!text) continue;
             out.push({ speaker: speaker, text: text, timestamp: Number(obj.timestamp) || 0 });
         }
-        return out.slice(0, 8);
+        return out.slice(0, 16);
     }
 
     function normalizeShadowWechatData(payload, context, options) {
@@ -5442,7 +5547,7 @@
                 recentMessages: recentMessages
             };
         }).filter(function (item) {
-            return !!asString(item.name) && !!asString(item.category) && item.recentMessages.length >= 4;
+            return !!asString(item.name) && !!asString(item.category) && item.recentMessages.length >= 10;
         });
 
         const draftsSource = Array.isArray(contactsData.drafts)
@@ -5509,6 +5614,7 @@
             meta: {
                 roleId: asString(context.roleId || ''),
                 roleName: roleName,
+                shadowWechatPromptVersion: SHADOW_WECHAT_PROMPT_VERSION,
                 generatedAt: Date.now()
             }
         };
@@ -5516,6 +5622,8 @@
 
     function isValidShadowWechatData(payload) {
         const data = asObject(payload);
+        const meta = asObject(data.meta || {});
+        if (asString(meta.shadowWechatPromptVersion || '') !== SHADOW_WECHAT_PROMPT_VERSION) return false;
         const contacts = asObject(data.contacts || {});
         const generatedContacts = Array.isArray(contacts.generatedContacts) ? contacts.generatedContacts : [];
         const drafts = Array.isArray(contacts.drafts) ? contacts.drafts : [];
@@ -5530,8 +5638,8 @@
             const recentMessages = Array.isArray(row.recentMessages) ? row.recentMessages : [];
             return !!asString(row.name)
                 && !!asString(row.category)
-                && recentMessages.length >= 4
-                && recentMessages.length <= 8
+                && recentMessages.length >= 10
+                && recentMessages.length <= 16
                 && recentMessages.every(function (message) {
                     const msg = asObject(message);
                     return !!asString(msg.speaker) && !!asString(msg.text);
@@ -6179,8 +6287,8 @@
         if (pack.userInfoText) extraBlocks.push('【用户信息】\n' + pack.userInfoText);
         if (pack.memoryText) extraBlocks.push('【近期记忆】\n' + pack.memoryText);
         const finalSystemPrompt = [basePrompt, scenePrompt].concat(extraBlocks).join('\n\n');
-        const userMessage = '请生成该角色的微信子App数据，重点给出较真实的联系人片段、订阅号和外部收藏；不要补模板占位词，不完整宁可少一点。若没有真正想收藏的内容就留空，不要硬挑几条凑收藏。只输出 JSON 对象。';
-        const realUserMessages = getRecentRealUserMessages(context.roleId, context.roleName, pack.userName, 8);
+        const userMessage = '请生成该角色的微信子App数据，重点给出较真实的联系人片段、订阅号和外部收藏。每个非置顶联系人 recentMessages 至少 10 条；如果角色是外国人或习惯外语，联系人聊天用外语原文（中文翻译）格式。聊天收藏只从系统提供的真实聊天记录中筛选，不要编造；推文/外部收藏可以按角色人设生成。不要补模板占位词，不完整宁可少一点。只输出 JSON 对象。';
+        const realUserMessages = getRecentRealUserMessages(context.roleId, context.roleName, pack.userName, 10);
         const realFavoriteItems = buildRealFavoriteItems(context, pack.userName, 5);
 
         writePromptDebugRecord(sceneKey, roleId, {
@@ -6197,7 +6305,7 @@
         try {
             const rawResponse = await callParentAI(context, finalSystemPrompt, userMessage, Object.assign({
                 temperature: 0.85,
-                maxTokens: 3200
+                maxTokens: 5200
             }, asObject(opts.requestOptions)));
             const parsed = parseJsonFromText(rawResponse);
             const normalized = normalizeShadowWechatData(parsed || {}, context, {

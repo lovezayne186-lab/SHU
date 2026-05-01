@@ -968,7 +968,7 @@
                 : '1) 当前轮无新的秘密空间用户发言时，不要捏造新发言；\n2) 先基于双方历史自然续接，再对“用户刚刚操作记录”回复。\n') +
             '输出必须是纯 JSON 数组，长度 3~10 条，禁止 Markdown、禁止解释。\n' +
             '数组元素只允许两种：\n' +
-            '1) {"type":"text","content":"..."}\n' +
+            '1) {"type":"text","content":"..."}；如果自动翻译层要求 translated_text，content 可以是 {"type":"translated_text","foreign":"角色原话","translation":"简体中文翻译"}\n' +
             '2) {"type":"transfer_card","amount":520,"color":"pink","content":"拿去花"}\n' +
             '当决定转账时，要先输出几条 text，再输出 transfer_card；amount 必须符合你的人设财力。\n' +
             '当操作记录数组里出现“钱包/查看钱包/打开钱包”相关行为时，你可以评估是否触发 transfer_card。\n' +
@@ -1076,6 +1076,11 @@
                 var parsed = JSON.parse(candidate);
                 if (Array.isArray(parsed)) return parsed;
                 if (parsed && typeof parsed === 'object' && Array.isArray(parsed.reply)) return parsed.reply;
+                if (parsed && typeof parsed === 'object' && Array.isArray(parsed.reply_bubbles)) return parsed.reply_bubbles;
+                if (parsed && typeof parsed === 'object' && Array.isArray(parsed.replyBubbles)) return parsed.replyBubbles;
+                if (parsed && typeof parsed === 'object' && Array.isArray(parsed.messages)) return parsed.messages;
+                if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) return parsed.items;
+                if (parsed && typeof parsed === 'object' && Array.isArray(parsed.lines)) return parsed.lines;
                 return null;
             } catch (e) {
                 return null;
@@ -1097,6 +1102,106 @@
         return null;
     }
 
+    function extractJsonObject(text) {
+        var raw = String(text || '').trim();
+        if (!raw) return null;
+        function parseMaybeJson(candidate) {
+            try {
+                var parsed = JSON.parse(candidate);
+                return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+            } catch (e) {
+                return null;
+            }
+        }
+        var direct = parseMaybeJson(raw);
+        if (direct) return direct;
+        var fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fenced && fenced[1]) {
+            var inFence = parseMaybeJson(String(fenced[1]).trim());
+            if (inFence) return inFence;
+        }
+        var first = raw.indexOf('{');
+        var last = raw.lastIndexOf('}');
+        if (first !== -1 && last !== -1 && last > first) {
+            return parseMaybeJson(raw.slice(first, last + 1));
+        }
+        return null;
+    }
+
+    function translatedFieldText(value) {
+        if (value == null) return '';
+        if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+        if (Array.isArray(value)) {
+            return value.map(translatedFieldText).filter(Boolean).join('\n').trim();
+        }
+        if (typeof value === 'object') {
+            return String(value.text || value.content || value.value || value.message || '').trim();
+        }
+        return '';
+    }
+
+    function firstTranslatedField(payload, keys) {
+        var source = payload && typeof payload === 'object' ? payload : {};
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            if (source[key] != null) return source[key];
+        }
+        return null;
+    }
+
+    function formatInlineTranslatedText(value) {
+        var payload = value;
+        if (typeof payload === 'string') {
+            payload = safeJsonParse(payload, null) || extractJsonObject(payload);
+        }
+        if (!payload || typeof payload !== 'object') return '';
+        var rawType = String(payload.type || payload.messageType || payload.kind || '').trim().toLowerCase();
+        var hasTranslatedType = rawType === 'translated_text' || rawType === 'translated';
+        var foreign = firstTranslatedField(payload, [
+            'foreign',
+            'original',
+            'originalText',
+            'original_text',
+            'source',
+            'sourceText',
+            'foreignText',
+            'foreign_text',
+            'bodyText'
+        ]);
+        var translation = firstTranslatedField(payload, [
+            'translation',
+            'chinese',
+            'chineseText',
+            'translation_text',
+            'translationText',
+            'zh',
+            'cn'
+        ]);
+        var foreignText = translatedFieldText(foreign);
+        var translationText = translatedFieldText(translation);
+        if (!hasTranslatedType && !(foreignText && translationText)) return '';
+        var bodyText = foreignText || String(payload.text || payload.content || '').trim();
+        var finalTranslation = translationText || bodyText;
+        if (!bodyText && !finalTranslation) return '';
+        return bodyText && finalTranslation && bodyText !== finalTranslation
+            ? bodyText + '（' + finalTranslation + '）'
+            : (bodyText || finalTranslation);
+    }
+
+    function normalizeSecretVisibleText(value) {
+        if (value == null) return '';
+        var inline = formatInlineTranslatedText(value);
+        if (inline) return inline;
+        if (typeof value === 'object') {
+            return normalizeSecretVisibleText(value.content || value.text || value.reply || value.message || value.value || '');
+        }
+        var raw = String(value || '').trim();
+        if (!raw || raw === '[object Object]') return '';
+        inline = formatInlineTranslatedText(raw);
+        if (inline) return inline;
+        return raw;
+    }
+
     function splitShortLines(text, maxItems) {
         var n = Math.max(1, Math.min(10, Number(maxItems || 6) || 6));
         var raw = String(text || '').replace(/\r\n/g, '\n').trim();
@@ -1116,19 +1221,23 @@
 
     function normalizeReactionMessageItem(it) {
         if (typeof it === 'string') {
-            var txt = String(it || '').trim();
+            var txt = normalizeSecretVisibleText(it);
             return txt ? { type: 'text', content: txt } : null;
         }
         if (!it || typeof it !== 'object') return null;
         var rawType = String(it.type || '').trim().toLowerCase();
+        if (rawType === 'translated_text' || rawType === 'translated') {
+            var translatedText = normalizeSecretVisibleText(it);
+            return translatedText ? { type: 'text', content: translatedText } : null;
+        }
         if (!rawType || rawType === 'text' || rawType === 'message') {
-            var content = String(it.content || it.text || it.msg || '').trim();
+            var content = normalizeSecretVisibleText(it.content || it.text || it.msg || '');
             return content ? { type: 'text', content: content } : null;
         }
         if (rawType === 'transfer_card') {
             var amount = Number(it.amount || 0) || 0;
             if (!(amount > 0)) return null;
-            var content2 = String(it.content || it.text || '拿去花').trim() || '拿去花';
+            var content2 = normalizeSecretVisibleText(it.content || it.text || '拿去花') || '拿去花';
             var color = String(it.color || 'pink').trim().toLowerCase();
             if (!color) color = 'pink';
             return {
@@ -1138,7 +1247,7 @@
                 content: content2
             };
         }
-        var fallback = String(it.content || it.text || it.msg || '').trim();
+        var fallback = normalizeSecretVisibleText(it.content || it.text || it.msg || '');
         return fallback ? { type: 'text', content: fallback } : null;
     }
 
@@ -1150,6 +1259,11 @@
                 var n = normalizeReactionMessageItem(array[i]);
                 if (n) items.push(n);
             }
+        }
+        if (!items.length) {
+            var obj = extractJsonObject(rawText);
+            var normalizedObj = normalizeReactionMessageItem(obj);
+            if (normalizedObj) items.push(normalizedObj);
         }
         if (!items.length) {
             var lines = splitShortLines(normalizeAiReplyText(rawText), 6);
@@ -1194,7 +1308,7 @@
         var clean = items.map(function (it, idx) {
             var ts = (Number(baseTs) || Date.now()) + idx;
             if (typeof it === 'string') {
-                var text = String(it || '').trim();
+                var text = normalizeSecretVisibleText(it);
                 if (!text) return null;
                 return { type: 'ai_message', ts: ts, text: text };
             }
@@ -1202,7 +1316,7 @@
             if (String(it.type || '').trim() === 'transfer_card') {
                 var amount = Number(it.amount || 0) || 0;
                 if (!(amount > 0)) return null;
-                var content = String(it.content || '').trim() || '拿去花';
+                var content = normalizeSecretVisibleText(it.content || it.text || '') || '拿去花';
                 return {
                     type: 'ai_message',
                     messageType: 'transfer_card',
@@ -1214,7 +1328,7 @@
                     status: 'pending'
                 };
             }
-            var txt = String(it.content || it.text || '').trim();
+            var txt = normalizeSecretVisibleText(it.content || it.text || it);
             if (!txt) return null;
             return { type: 'ai_message', messageType: 'text', ts: ts, text: txt };
         }).filter(function (it) { return !!it; });
@@ -1385,7 +1499,7 @@
                 maxSummaryLines: 12,
                 sceneIntro: '当前场景是情侣空间中的即时吃醋/关心反应。',
                 taskGuidance: String(extraSystemPrompt || '').trim(),
-                outputInstructions: String(opts.outputInstructions || '只输出一条简短日常的微信式中文消息，不要解释，不要输出 JSON、代码块或前缀。')
+                outputInstructions: String(opts.outputInstructions || '只输出一条简短日常的微信式消息，不要解释；若自动翻译层要求 translated_text，请完整输出该结构，不要拆开。')
             });
         }
         return new Promise(function (resolve, reject) {
@@ -1394,7 +1508,17 @@
                     merged,
                     Array.isArray(historyForApi) ? historyForApi : [],
                     String(userPrompt || ''),
-                    function (t) { resolve(String(t || '')); },
+                    function (t) {
+                        if (typeof t === 'string') {
+                            resolve(t);
+                            return;
+                        }
+                        try {
+                            resolve(JSON.stringify(t || ''));
+                        } catch (eJson) {
+                            resolve(String(t || ''));
+                        }
+                    },
                     function (err) { reject(new Error(String(err || '请求失败'))); }
                 );
             } catch (e) {
@@ -1472,7 +1596,7 @@
             (hasCurrentSecretSpeech
                 ? '先写对“秘密空间当前轮用户发言”的回应，再写对操作记录的回应；'
                 : '当前轮没有新的秘密空间用户发言时，不要假装她刚刚在秘密空间说了话；先自然续接双方历史，再写对操作记录的回应；') +
-            '必须符合当前角色人设；不要 Markdown，不要解释。';
+            '必须符合当前角色人设；不要 Markdown，不要解释；不要把同一个 JSON 对象拆成多条。';
         callRoleLLM(rid, prompt, extra, {
             outputInstructions: outputInstructions,
             disableWechatHistory: true

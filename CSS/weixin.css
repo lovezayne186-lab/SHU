@@ -470,6 +470,7 @@
     line-height: 1.5;
     margin-bottom: 10px;
     word-break: break-all;
+    white-space: pre-wrap;
 }
 
 /* --- 4. 九宫格图片布局 (核心) --- */
@@ -657,11 +658,15 @@
     color: #333;
     line-height: 1.4;
     font-size: 13px;
+    white-space: pre-wrap;
 }
 .comment-user {
     color: #576b95;
     font-weight: 500;
     cursor: pointer;
+}
+.comment-content {
+    white-space: pre-wrap;
 }
 
 /* 底部输入框 (模拟) */
