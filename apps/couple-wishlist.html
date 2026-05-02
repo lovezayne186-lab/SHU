@@ -359,6 +359,30 @@
             try { return window.parent && window.parent !== window ? window.parent : null; } catch (e) { return null; }
         }
 
+        function findAncestorWindow(predicate) {
+            if (typeof predicate !== 'function') return null;
+            let current = window;
+            let hops = 0;
+            while (current && hops < 8) {
+                try {
+                    if (predicate(current)) return current;
+                    if (!current.parent || current.parent === current) break;
+                    current = current.parent;
+                    hops++;
+                } catch (e) {
+                    break;
+                }
+            }
+            return null;
+        }
+
+        function resolveCallAI() {
+            const host = findAncestorWindow(function (candidate) {
+                return candidate && typeof candidate.callAI === 'function';
+            });
+            return host ? host.callAI.bind(host) : null;
+        }
+
         function resolveRoleId() {
             try {
                 const has = localStorage.getItem('couple_has_linked_v1') === 'true';
@@ -650,8 +674,7 @@
         }
 
         async function callWishlistAI() {
-            const pw = getParentWindow();
-            const callAI = (pw && pw.callAI) || window.callAI;
+            const callAI = resolveCallAI();
             if (!callAI) {
                 alert('AI 接口未初始化');
                 return;

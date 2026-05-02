@@ -31,6 +31,14 @@ function getRoleNotificationMeta(roleId) {
     };
 }
 
+function isDocumentBackgrounded() {
+    try {
+        return String(document.visibilityState || '').toLowerCase() === 'hidden';
+    } catch (e) {
+        return false;
+    }
+}
+
 function getAiMessageNotificationPreview(msg) {
     if (!msg || String(msg.role || '') !== 'ai') return '';
     const type = String(msg.type || 'text').trim();
@@ -989,27 +997,52 @@ window.buildTranslatedBubbleInnerHtml = buildTranslatedBubbleInnerHtml;
 window.bindTranslatedBubbleToggle = bindTranslatedBubbleToggle;
 window.shouldRenderTranslatedBubble = shouldRenderTranslatedBubble;
 
-function showBackgroundAiReplyNotification(roleId, msg) {
-    if (isChatRoleViewActive(roleId)) return;
+function collectBackgroundAiReplyNotification(queue, msg) {
+    if (!Array.isArray(queue) || !msg) return;
+    if (String(msg.role || '') !== 'ai') return;
     const preview = getAiMessageNotificationPreview(msg);
     if (!preview) return;
+    queue.push(msg);
+}
+
+function showBackgroundAiReplyNotifications(roleId, messages) {
+    if (isChatRoleViewActive(roleId)) return;
+    const list = Array.isArray(messages) ? messages.filter(Boolean) : [];
+    if (!list.length) return;
     const meta = getRoleNotificationMeta(roleId);
-    try {
-        if (typeof window.showIosNotification === 'function') {
-            window.showIosNotification(meta.avatar, meta.name, preview, { durationMs: 4200 });
-        }
-    } catch (e) { }
-    try {
-        if (window.BrowserNotificationBridge && typeof window.BrowserNotificationBridge.show === 'function') {
-            window.BrowserNotificationBridge.show(meta.name, preview, {
-                icon: meta.avatar,
-                roleId: roleId,
-                tag: 'chat-role-' + String(roleId || '').trim(),
-                renotify: true,
-                durationMs: 8000
-            });
-        }
-    } catch (e2) { }
+    const useBrowserNotification = isDocumentBackgrounded();
+    const delayStep = useBrowserNotification ? 260 : 1150;
+
+    list.forEach(function (msg, index) {
+        const preview = getAiMessageNotificationPreview(msg);
+        if (!preview) return;
+        window.setTimeout(function () {
+            if (isChatRoleViewActive(roleId)) return;
+            if (useBrowserNotification) {
+                try {
+                    if (window.BrowserNotificationBridge && typeof window.BrowserNotificationBridge.show === 'function') {
+                        window.BrowserNotificationBridge.show(meta.name, preview, {
+                            icon: meta.avatar,
+                            roleId: roleId,
+                            tag: 'chat-role-' + String(roleId || '').trim() + '-' + String(msg.timestamp || Date.now()) + '-' + index,
+                            renotify: true,
+                            durationMs: 8000
+                        });
+                    }
+                } catch (e0) { }
+                return;
+            }
+            try {
+                if (typeof window.showIosNotification === 'function') {
+                    window.showIosNotification(meta.avatar, meta.name, preview, { durationMs: 3600 });
+                }
+            } catch (e1) { }
+        }, index * delayStep);
+    });
+}
+
+function showBackgroundAiReplyNotification(roleId, msg) {
+    showBackgroundAiReplyNotifications(roleId, [msg]);
 }
 
 function pushRoleMessageToDataAndActiveView(roleId, msg) {
@@ -2415,7 +2448,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                     };
                 } catch (e) { }
                 const wasOfflineMeeting = isRoleCurrentlyOfflineMeeting(roleId);
-                let backgroundReplyNoticeMsg = null;
+                let backgroundReplyNoticeQueue = [];
 
                 let jsonPayload = null;
                 let thoughtText = '';
@@ -2521,7 +2554,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                     if (jsonPayload.actions && typeof jsonPayload.actions === 'object') {
                         actions = handleActions(roleId, jsonPayload.actions, {
                             onBackgroundMessage: function (msg) {
-                                backgroundReplyNoticeMsg = msg;
+                                collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, msg);
                             }
                         });
                     }
@@ -2540,13 +2573,14 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         // 检查是否有系统事件提示
                         if (jsonPayload.system_event) {
                             systemEventText = String(jsonPayload.system_event);
-                            backgroundReplyNoticeMsg = {
+                            const systemEventNoticeMsg = {
                                 role: 'ai',
                                 content: systemEventText,
                                 type: 'system_event',
                                 timestamp: Date.now()
                             };
-                            if (busyGuardMeta) backgroundReplyNoticeMsg.busyGuard = busyGuardMeta;
+                            if (busyGuardMeta) systemEventNoticeMsg.busyGuard = busyGuardMeta;
+                            collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, systemEventNoticeMsg);
                             appendSystemStatusToDOM(roleId, systemEventText, { busyGuard: busyGuardMeta }); // 显示灰色小字
                         }
                     } else {
@@ -2761,7 +2795,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         };
                         tryAttachQuote(diceMsg);
                         const rendered = pushRoleMessageToDataAndActiveView(roleId, diceMsg);
-                        if (!rendered) backgroundReplyNoticeMsg = diceMsg;
+                            if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, diceMsg);
                         hasVisibleReplyBeforeTool = true;
                         if (i < parts.length - 1) {
                             await new Promise(r => setTimeout(r, baseDelay + Math.random() * (baseDelay / 2)));
@@ -2781,7 +2815,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                             };
                             tryAttachQuote(actionMsg);
                             const rendered = pushRoleMessageToDataAndActiveView(roleId, actionMsg);
-                            if (!rendered) backgroundReplyNoticeMsg = actionMsg;
+                            if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, actionMsg);
                             hasVisibleReplyBeforeTool = true;
                         }
                         if (i < parts.length - 1) {
@@ -2857,7 +2891,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                             }
                             tryAttachQuote(directMsg);
                             const rendered = pushRoleMessageToDataAndActiveView(roleId, directMsg);
-                            if (!rendered) backgroundReplyNoticeMsg = directMsg;
+                            if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, directMsg);
                             hasVisibleReplyBeforeTool = true;
                         }
                         if (i < parts.length - 1) {
@@ -2878,7 +2912,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         };
                         tryAttachQuote(diceMsg);
                         const rendered = pushRoleMessageToDataAndActiveView(roleId, diceMsg);
-                        if (!rendered) backgroundReplyNoticeMsg = diceMsg;
+                        if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, diceMsg);
                         hasVisibleReplyBeforeTool = true;
                         hasDice = true;
                         part = part.replace(/\s*\[\[DICE\]\]\s*/g, ' ').trim();
@@ -2913,7 +2947,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                             };
                             tryAttachQuote(redMsg);
                             const renderedRed = pushRoleMessageToDataAndActiveView(roleId, redMsg);
-                            if (!renderedRed) backgroundReplyNoticeMsg = redMsg;
+                            if (!renderedRed) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, redMsg);
                             hasVisibleReplyBeforeTool = true;
 
                             const remainTextForRed = part.replace(redpacketPattern, '').trim();
@@ -2936,7 +2970,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                                 }
                                 tryAttachQuote(textMsg);
                                 const renderedText = pushRoleMessageToDataAndActiveView(roleId, textMsg);
-                                if (!renderedText) backgroundReplyNoticeMsg = textMsg;
+                                if (!renderedText) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, textMsg);
                                 hasVisibleReplyBeforeTool = true;
                             }
 
@@ -2975,7 +3009,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                                 } else {
                                 tryAttachQuote(textMsg);
                                 const rendered = pushRoleMessageToDataAndActiveView(roleId, textMsg);
-                                if (!rendered) backgroundReplyNoticeMsg = textMsg;
+                                if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, textMsg);
                                 hasVisibleReplyBeforeTool = true;
                                 }
 
@@ -3026,7 +3060,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                     }
                     tryAttachQuote(aiMsg);
                     const rendered = pushRoleMessageToDataAndActiveView(roleId, aiMsg);
-                    if (!rendered) backgroundReplyNoticeMsg = aiMsg;
+                    if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, aiMsg);
                     hasVisibleReplyBeforeTool = true;
 
                     // === 模拟打字延迟（调整为更自然的间隔）===
@@ -3113,7 +3147,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                             status: postMsg.type === 'redpacket' ? 'unopened' : 'sent'
                         };
                         const rendered = pushRoleMessageToDataAndActiveView(roleId, transferMsg);
-                        if (!rendered) backgroundReplyNoticeMsg = transferMsg;
+                        if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, transferMsg);
                     }
                 }
 
@@ -3130,7 +3164,7 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                         status: msgTypeForTransfer === 'redpacket' ? 'unopened' : 'sent'
                     };
                     const rendered = pushRoleMessageToDataAndActiveView(roleId, transferMsg);
-                    if (!rendered) backgroundReplyNoticeMsg = transferMsg;
+                    if (!rendered) collectBackgroundAiReplyNotification(backgroundReplyNoticeQueue, transferMsg);
                 }
 
                 if (pendingCallKind && hasVisibleReplyBeforeTool) {
@@ -3161,8 +3195,8 @@ function invokeAIWithCommonHandlers(systemPrompt, cleanHistory, userMessage, rol
                     window.maybeAutoUpdateMemoryArchive(roleId);
                 }
 
-                if (backgroundReplyNoticeMsg && !isChatRoleViewActive(roleId)) {
-                    showBackgroundAiReplyNotification(roleId, backgroundReplyNoticeMsg);
+                if (backgroundReplyNoticeQueue.length && !isChatRoleViewActive(roleId)) {
+                    showBackgroundAiReplyNotifications(roleId, backgroundReplyNoticeQueue);
                     if (typeof window.loadWechatChatList === 'function') {
                         try { window.loadWechatChatList(true); } catch (e) { }
                     }
@@ -4698,6 +4732,13 @@ function buildEditableDraftForMessage(roleId, msg) {
             note: String(m.note || '').trim()
         }, null, 2);
     }
+    if (type === 'redpacket') {
+        return JSON.stringify({
+            type: 'redpacket',
+            amount: String(m.amount || '').trim(),
+            note: String(m.note || '').trim()
+        }, null, 2);
+    }
     return typeof m.content === 'string' ? m.content : '';
 }
 
@@ -4808,6 +4849,16 @@ function applyManualStructuredObjectToMessage(roleId, msg, parsedValue, rawInput
         msg.content = '';
         return true;
     }
+    if (rawType === 'redpacket') {
+        const amount = String(obj.amount || '').trim();
+        if (!amount) return false;
+        msg.type = 'redpacket';
+        msg.amount = amount;
+        msg.note = String(obj.note != null ? obj.note : (obj.remark != null ? obj.remark : '')).trim();
+        msg.status = String(msg.status || (msg.role === 'ai' ? 'unopened' : 'sent')).trim() || (msg.role === 'ai' ? 'unopened' : 'sent');
+        msg.content = '';
+        return true;
+    }
     return false;
 }
 
@@ -4895,6 +4946,8 @@ function parseEditableMessageDraft(rawInput) {
         trimmed: trimmed,
         type: '',
         content: '',
+        foreign: '',
+        translation: '',
         quoteText: '',
         quoteId: '',
         name: '',
@@ -4910,6 +4963,8 @@ function parseEditableMessageDraft(rawInput) {
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 result.type = String(parsed.type || parsed.kind || '').trim().toLowerCase();
                 result.content = String(parsed.content != null ? parsed.content : parsed.text || '').trim();
+                result.foreign = String(parsed.foreign != null ? parsed.foreign : (parsed.foreignText != null ? parsed.foreignText : '')).trim();
+                result.translation = String(parsed.translation != null ? parsed.translation : (parsed.translationText != null ? parsed.translationText : '')).trim();
                 result.quoteText = String(parsed.quoteText != null ? parsed.quoteText : (parsed.quote_text != null ? parsed.quote_text : '')).trim();
                 result.quoteId = String(parsed.quoteId != null ? parsed.quoteId : (parsed.quote_id != null ? parsed.quote_id : (parsed.reply_to != null ? parsed.reply_to : ''))).trim();
                 result.name = String(parsed.name || parsed.title || '').trim();
@@ -4961,6 +5016,20 @@ function buildEditorTemplateDraft(mode, rawInput) {
             note: parsed.note || '恭喜发财'
         }, null, 2);
     }
+    if (mode === 'redpacket') {
+        return JSON.stringify({
+            type: 'redpacket',
+            amount: parsed.amount || '8.88',
+            note: parsed.note || '恭喜发财'
+        }, null, 2);
+    }
+    if (mode === 'translated') {
+        return JSON.stringify({
+            type: 'translated_text',
+            foreign: parsed.foreign || parsed.content || '',
+            translation: parsed.translation || ''
+        }, null, 2);
+    }
     if (mode === 'sticker') {
         return JSON.stringify({
             type: 'sticker',
@@ -4983,13 +5052,15 @@ function getChatMessageEditorElements() {
             <div class="chat-message-editor-sheet" role="dialog" aria-modal="true">
                 <div class="chat-message-editor-handle" aria-hidden="true"></div>
                 <div class="chat-message-editor-title">编辑消息</div>
-                <div class="chat-message-editor-subtitle">支持直接写文本，也支持一键切成语音、位置、转账、引用或表情包模板。</div>
+                <div class="chat-message-editor-subtitle">支持直接写文本，也支持一键切成语音、位置、转账、红包、翻译、引用或表情包模板。</div>
                 <div class="chat-message-editor-quick">
                     <button type="button" class="chat-message-editor-chip" data-editor-template="text">文本</button>
                     <button type="button" class="chat-message-editor-chip" data-editor-template="quote">引用</button>
                     <button type="button" class="chat-message-editor-chip" data-editor-template="voice">语音</button>
                     <button type="button" class="chat-message-editor-chip" data-editor-template="location">位置</button>
                     <button type="button" class="chat-message-editor-chip" data-editor-template="transfer">转账</button>
+                    <button type="button" class="chat-message-editor-chip" data-editor-template="redpacket">红包</button>
+                    <button type="button" class="chat-message-editor-chip" data-editor-template="translated">翻译</button>
                     <button type="button" class="chat-message-editor-chip" data-editor-template="sticker">表情包</button>
                 </div>
                 <textarea id="chat-message-editor-input" class="chat-message-editor-input" spellcheck="false"></textarea>

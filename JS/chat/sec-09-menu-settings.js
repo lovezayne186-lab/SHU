@@ -941,8 +941,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const stickerImportCancelBtn = document.getElementById('sticker-import-cancel-btn');
     const stickerImportConfirmBtn = document.getElementById('sticker-import-confirm-btn');
     const panelHeight = 250;
-    const baseHeight = 'calc(100% - 140px)';
-    const openHeight = `calc(100% - 140px - ${panelHeight}px)`;
     const features = [
         { action: 'transfer', label: '转账', iconClass: 'bx bx-transfer' },
         { action: 'redpacket', label: '红包', iconClass: 'bx bx-envelope' },
@@ -1672,29 +1670,47 @@ document.addEventListener('DOMContentLoaded', function () {
             try { msgInput.focus(); } catch (e) { }
         }, Number(delayMs) || 0);
     }
-    function updateHistoryHeight(isOpen, options) {
-        if (!historyBox) return;
-        const opts = options && typeof options === 'object' ? options : {};
-        const prevBottomGap = Math.max(0, historyBox.scrollHeight - historyBox.clientHeight - historyBox.scrollTop);
-        historyBox.style.height = isOpen ? openHeight : baseHeight;
-        if (opts.preserveScroll) {
-            const targetTop = historyBox.scrollHeight - historyBox.clientHeight - prevBottomGap;
-            historyBox.scrollTop = Math.max(0, targetTop);
+    function setChatPanelHeightVar(isOpen) {
+        const value = isOpen ? `${panelHeight}px` : '0px';
+        try {
+            document.documentElement.style.setProperty('--chat-panel-height', value);
+        } catch (e) { }
+        try {
+            const chatRoom = document.getElementById('chat-room-layer');
+            if (chatRoom) chatRoom.style.setProperty('--chat-panel-height', value);
+        } catch (e2) { }
+    }
+    function syncChatViewportSoon() {
+        const sync = function () {
             try {
                 if (typeof window.syncChatViewportLayout === 'function') {
                     window.syncChatViewportLayout();
                 }
             } catch (e) { }
+        };
+        sync();
+        requestAnimationFrame(sync);
+        setTimeout(sync, 80);
+        setTimeout(sync, 240);
+        setTimeout(sync, 360);
+        setTimeout(sync, 520);
+    }
+    function updateHistoryHeight(isOpen, options) {
+        if (!historyBox) return;
+        const opts = options && typeof options === 'object' ? options : {};
+        const prevBottomGap = Math.max(0, historyBox.scrollHeight - historyBox.clientHeight - historyBox.scrollTop);
+        historyBox.style.height = '';
+        setChatPanelHeightVar(isOpen);
+        if (opts.preserveScroll) {
+            const targetTop = historyBox.scrollHeight - historyBox.clientHeight - prevBottomGap;
+            historyBox.scrollTop = Math.max(0, targetTop);
+            syncChatViewportSoon();
             return;
         }
         if (opts.keepBottom === true || prevBottomGap <= 64) {
             historyBox.scrollTop = historyBox.scrollHeight;
         }
-        try {
-            if (typeof window.syncChatViewportLayout === 'function') {
-                window.syncChatViewportLayout();
-            }
-        } catch (e) { }
+        syncChatViewportSoon();
     }
     function renderMorePanel() {
         if (!pagesContainer || !dotsContainer) return;
@@ -3209,7 +3225,17 @@ function saveEditResult() {
     const titleEl = document.getElementById('current-chat-name');
     if (titleEl) titleEl.innerText = (newRemark || newName);
 
-    if (oldRemark !== newRemark) {
+    let allowRemarkChangeHint = true;
+    try {
+        if (typeof window.getCurrentChatSettings === 'function') {
+            const chatSettings = window.getCurrentChatSettings(roleId) || {};
+            if (chatSettings && chatSettings.allowRoleRecognizeRemark === false) {
+                allowRemarkChangeHint = false;
+            }
+        }
+    } catch (e) { }
+
+    if (oldRemark !== newRemark && allowRemarkChangeHint) {
         const myPersona = window.userPersonas[roleId] || {};
         const userName = (myPersona && typeof myPersona.name === 'string' && myPersona.name.trim()) ? myPersona.name.trim() : '用户';
         const showRemark = newRemark || newName;
@@ -3635,16 +3661,26 @@ function getEffectiveChatBackground(roleId) {
 
 function applyChatBackground(roleId) {
     const chatBody = document.getElementById('chat-history');
+    const chatRoom = document.getElementById('chat-room-layer');
     const bgData = getEffectiveChatBackground(roleId);
-    if (!chatBody) return;
-    if (bgData) {
-        chatBody.style.backgroundImage = `url('${bgData}')`;
-        chatBody.style.backgroundSize = 'cover';
-        chatBody.style.backgroundPosition = 'center';
-    } else {
+    if (chatRoom) {
+        if (bgData) {
+            chatRoom.style.backgroundImage = `url('${bgData}')`;
+            chatRoom.style.backgroundSize = 'cover';
+            chatRoom.style.backgroundPosition = 'center';
+            chatRoom.style.backgroundRepeat = 'no-repeat';
+        } else {
+            chatRoom.style.backgroundImage = '';
+            chatRoom.style.backgroundSize = '';
+            chatRoom.style.backgroundPosition = '';
+            chatRoom.style.backgroundRepeat = '';
+        }
+    }
+    if (chatBody) {
         chatBody.style.backgroundImage = '';
         chatBody.style.backgroundSize = '';
         chatBody.style.backgroundPosition = '';
+        chatBody.style.backgroundRepeat = '';
     }
 }
 

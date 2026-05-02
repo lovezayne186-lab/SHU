@@ -22,6 +22,7 @@
         const exactCount = clampCount(context.exactCount);
         const currentTime = asString(context.currentTime);
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const communityContext = asString(context.communityContext);
 
@@ -39,7 +40,7 @@
             '2. 【首轮评论规则（极度重要）】：每篇帖子必须同步生成 6 到 8 条评论。',
             '   - 对于“类B（网友发帖）”，首轮评论【全部只能是其他路人网友】，绝对不能有设定角色参与！角色不关心陌生人的帖子！',
             '   - 对于“类A（角色发帖）”，首轮评论可以是路人网友的围观、惊叹，以及该角色本人在评论区的回应。',
-            '3. 【禁止认错人】：对于网友发帖的楼主，角色和网友绝对不能把楼主当成真实用户“' + userName + '”。用户“' + userName + '”只存在于角色发帖的暗戳戳指向中。',
+            '3. 【禁止认错人/禁止扮演用户】：对于网友发帖的楼主，角色和网友绝对不能把楼主当成真实用户“' + userName + '”。另外，用户的真名/论坛称呼是“' + userName + '”，显示昵称是“' + displayName + '”。绝对不能生成作者名或评论者名等于这俩名字的发言。用户只存在于角色发帖的暗戳戳指向中。',
             '4. 【氛围与安全边界】：绝对禁止使用临床解剖学的露骨词汇。多描写：急促的呼吸、滚烫的体温、压抑的喘息、领带/衬衫的拉扯。所有角色默认成年人。不要描写未成年人、强迫、直接性行为过程。重点放在暧昧、拉扯、占有欲和心理张力。',
             '5. 【封面与标题】：必须极具深夜荷尔蒙气息。',
             '6. 当前时间：' + (currentTime || '未知') + '。只作为深夜氛围参考。',
@@ -47,7 +48,7 @@
             '# 输出 JSON 结构（严格按照此数组格式）',
             '[',
             '  {',
-            '    "coverText": "15字以内封面文案，制造脸红心跳的悬念",',
+            '    "coverText": "封面文案（NPC发帖可带Emoji，制造脸红心跳的悬念。角色发帖要极度贴合其自身人设语气，不需要强制加Emoji）",',
             '    "postTitle": "【深夜树洞/XP探讨】标题",',
             '    "authorName": "角色显示名 或 随机深夜网名",',
             '    "authorOriginalName": "如果是角色发帖，这里必须填原角色名，否则省略",',
@@ -101,6 +102,7 @@
     function buildNsfwMoreCommentsPrompt(context) {
         context = context || {};
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const postSummary = asString(context.postSummary);
         const existingCommentsText = asString(context.existingCommentsText);
@@ -124,7 +126,7 @@
             '# 互动规则',
             '- 尺度要把控在“极度暧昧、高燃拉扯、危险的占有欲”，让人看得脸红心跳。',
             '- 如果用户没说话且帖子是路人发的，评论区就全是网友在狂欢。',
-            '- 不要生成 authorName 为“' + userName + '”的评论。',
+            '- 【禁止扮演用户】：绝对不能生成 authorName 为用户“' + userName + '”或昵称“' + displayName + '”的评论。',
             '',
             '# 角色列表参考（请严格维持他们的性格底色去评价这个深夜帖子）',
             '<data_reference>',

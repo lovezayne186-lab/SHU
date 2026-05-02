@@ -326,34 +326,47 @@ body.music-app-fullscreen .notch {
 }
 
 .app-header {
-    height: calc(56px + var(--top-safe-inset));
-    background: #f7f7f7;
-    border-bottom: 1px solid #e5e5e5;
+    height: calc(50px + var(--top-safe-inset));
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
     display: flex;
     align-items: flex-end;
     justify-content: center; /* 标题居中 */
-    padding: var(--top-safe-inset) 15px 10px 15px;
+    padding: var(--top-safe-inset) 15px 12px 15px;
     box-sizing: border-box;
     font-weight: 600;
-    color: #000;
+    color: #111;
     position: relative;
     z-index: 10;
 }
 
 .app-header .back-btn {
     position: absolute;
-    left: 15px;
-    bottom: 10px;
-    font-size: 24px;
-    color: #111;
+    left: 10px;
+    bottom: 6px;
+    height: 36px;
+    padding: 0 8px;
+    font-size: 26px;
+    color: #007aff;
     cursor: pointer;
     display: flex;
     align-items: center;
+    border-radius: 8px;
+    transition: background-color 0.2s, opacity 0.2s;
+}
+
+.app-header .back-btn:active {
+    background-color: rgba(0, 122, 255, 0.1);
+    opacity: 0.7;
 }
 
 .app-header .app-title,
 .app-header #app-title-text {
     font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
 }
 
 .app-header #top-plus-btn {

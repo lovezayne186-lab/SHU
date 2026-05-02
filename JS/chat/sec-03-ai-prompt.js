@@ -600,12 +600,15 @@ function buildPromptContextBundle(roleId, options) {
             settings = window.getCurrentChatSettings(rid) || {};
         }
     } catch (e) { }
+    const allowRemarkRecognition = settings && typeof settings.allowRoleRecognizeRemark === 'boolean'
+        ? settings.allowRoleRecognizeRemark
+        : true;
     return {
         roleId: rid,
         profile: profile,
         userPersona: userPersona,
         roleName: String(profile.nickName || profile.name || rid || 'TA').trim() || 'TA',
-        roleRemark: String(profile.remark || '').trim(),
+        roleRemark: allowRemarkRecognition ? String(profile.remark || '').trim() : '',
         worldBookPromptText: typeof buildWorldBookPrompt === 'function'
             ? String(buildWorldBookPrompt(effectiveWorldbookId) || '').trim()
             : '',
@@ -687,6 +690,14 @@ function isLikelyForeignLanguageText(text) {
     if (kanaCount || hangulCount || cyrillicCount || arabicCount) return true;
     if (latinCount >= 18 && latinCount > cjkCount * 2) return true;
     return false;
+}
+
+function isRoleRemarkRecognitionEnabledForPrompt(roleId) {
+    const settings = getChatSettingsForTranslateMode(roleId);
+    if (settings && typeof settings.allowRoleRecognizeRemark === 'boolean') {
+        return settings.allowRoleRecognizeRemark;
+    }
+    return true;
 }
 
 function isLikelyForeignLocaleOrNationalityText(text) {
@@ -1481,7 +1492,9 @@ async function triggerAI() {
 
     const roleNameForAI = profile.nickName || roleId || "TA";
     let systemPrompt = `【角色名称】${roleNameForAI}\n` + (profile.desc || "你是一个友好的AI助手");
-    const roleRemarkForUser = typeof profile.remark === 'string' ? profile.remark.trim() : '';
+    const roleRemarkForUser = isRoleRemarkRecognitionEnabledForPrompt(roleId) && typeof profile.remark === 'string'
+        ? profile.remark.trim()
+        : '';
     if (roleRemarkForUser) {
         systemPrompt += `\n\n【用户给你的备注】${roleRemarkForUser}\n注意：这是用户侧的显示名，不等同于你的角色名称。你可以对这个备注做出自然反应。`;
     }

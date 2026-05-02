@@ -1768,10 +1768,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 检查状态栏显示设置
     const showStatusInfoSetting = localStorage.getItem('show_status_info');
-    if (showStatusInfoSetting === 'false') {
-        document.body.classList.add('hide-status-info');
-    } else {
+    if (showStatusInfoSetting === 'true') {
         document.body.classList.remove('hide-status-info');
+    } else {
+        document.body.classList.add('hide-status-info');
     }
 
     try {

@@ -4101,7 +4101,8 @@ function syncCalendarToggleUI() {
                 systemPrompt: buildOfflineSummaryPrompt(session, startFloor, endFloor),
                 history: [],
                 userText: capText(transcript, 7000),
-                maxTokens: 900
+                maxTokens: 900,
+                useSummaryApi: true
             });
             const entry = parseOfflineSummaryPayload(raw, startFloor, endFloor);
             if (!entry) {
@@ -6090,7 +6091,8 @@ function syncCalendarToggleUI() {
             systemPrompt: buildOfflineMemoryInjectPrompt(session),
             history: [],
             userText: '请总结下面这段长叙事，并只输出可写入“我们记忆”的内容：\n\n' + capText(transcript, 6500),
-            maxTokens: 900
+            maxTokens: 900,
+            useSummaryApi: true
         });
         const lines = normalizeOfflineMemoryLines(text);
         if (!lines.length) throw new Error('API 没有返回可写入的记忆条目');
@@ -6495,8 +6497,12 @@ function syncCalendarToggleUI() {
 
     async function callNovelApiDirect(params) {
         const roleId = params && typeof params === 'object' && params.roleId ? String(params.roleId || '') : (window.currentChatRole || '');
-        const apiSettings = typeof window.getEffectiveApiSettings === 'function'
-            ? window.getEffectiveApiSettings(roleId)
+        const preferSummaryApi = !!(params && typeof params === 'object' && params.useSummaryApi);
+        const settingsResolver = preferSummaryApi && typeof window.getEffectiveSummaryApiSettings === 'function'
+            ? window.getEffectiveSummaryApiSettings
+            : (typeof window.getEffectiveApiSettings === 'function' ? window.getEffectiveApiSettings : null);
+        const apiSettings = settingsResolver
+            ? settingsResolver(roleId)
             : {
                 baseUrl: localStorage.getItem('api_base_url') || '',
                 apiKey: localStorage.getItem('user_api_key') || '',

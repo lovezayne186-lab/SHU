@@ -1472,6 +1472,13 @@ function openStorageApp() {
                         </div>
                         <button type="button" onclick="exportAppData('secondary')" style="padding:10px 18px; border:none; border-radius:20px; background:#7c3aed; color:#fff; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 4px 12px rgba(124,58,237,0.2);">导出</button>
                     </div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:16px; border-bottom:1px solid #f3f4f6;">
+                        <div style="flex:1;">
+                            <div style="font-size:16px; font-weight:800; color:#111827;">🗂️ 全部导出</div>
+                            <div style="font-size:12px; color:#6b7280; margin-top:4px; line-height:1.5;">将主备份与副备份数据合并为一个完整备份文件，适合整机迁移或总归档</div>
+                        </div>
+                        <button type="button" onclick="exportAppData('full')" style="padding:10px 18px; border:none; border-radius:20px; background:#ea580c; color:#fff; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 4px 12px rgba(234,88,12,0.2);">全部导出</button>
+                    </div>
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
                         <div style="flex:1;">
                             <div style="font-size:16px; font-weight:800; color:#111827;">📥 导入备份</div>
@@ -1608,11 +1615,8 @@ function openChatApp() {
                                     <div class="text-[13px] font-medium text-gray-500">选择导入类型</div>
                                 </div>
                                 <div class="flex flex-col">
-                                    <div class="px-5 py-4 cursor-pointer active:bg-gray-100 transition-colors border-b border-gray-200/50 text-center" onclick="startWechatImport('backup')">
+                                    <div class="px-5 py-4 cursor-pointer active:bg-gray-100 transition-colors text-center" onclick="startWechatImport('backup')">
                                         <div class="text-[18px] text-[#007aff]">导入角色备份</div>
-                                    </div>
-                                    <div class="px-5 py-4 cursor-pointer active:bg-gray-100 transition-colors text-center" onclick="startWechatImport('role')">
-                                        <div class="text-[18px] text-[#007aff]">导入角色</div>
                                     </div>
                                 </div>
                             </div>
@@ -1860,6 +1864,118 @@ function loadWechatChatList(forceRender) {
         return prefix + source.slice(start, end) + suffix;
     }
 
+    function parseChatListStructuredPayload(rawText) {
+        const raw = String(rawText || '').trim();
+        if (!raw) return null;
+        if (!((raw.startsWith('{') && raw.endsWith('}')) || (raw.startsWith('[') && raw.endsWith(']')))) return null;
+        try {
+            const parsed = JSON.parse(raw);
+            return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getStickerNameForChatList(roleId, msgLike, fallbackName) {
+        const fallback = String(fallbackName || '').trim();
+        try {
+            if (typeof window.resolveStickerMetaByUrl === 'function') {
+                const meta = window.resolveStickerMetaByUrl(
+                    roleId,
+                    (msgLike && (msgLike.stickerUrl || msgLike.url || msgLike.content)) || '',
+                    (msgLike && (msgLike.stickerName || msgLike.name)) || fallback
+                );
+                const name = meta && typeof meta.name === 'string' ? meta.name.trim() : '';
+                if (name) return name;
+            }
+        } catch (e) { }
+        return fallback || '表情包';
+    }
+
+    function getTranslatedForeignForChatList(content) {
+        try {
+            if (typeof window.parseTranslatedTextPayload === 'function') {
+                const parsed = window.parseTranslatedTextPayload(content);
+                if (parsed) {
+                    const foreignText = String(parsed.foreignText || parsed.bodyText || '').trim();
+                    if (foreignText) return foreignText;
+                }
+            }
+        } catch (e) { }
+        try {
+            const obj = typeof content === 'string' ? JSON.parse(content) : content;
+            if (obj && typeof obj === 'object') {
+                const foreign = String(obj.foreign || obj.foreignText || obj.bodyText || obj.content || '').trim();
+                if (foreign) return foreign;
+            }
+        } catch (e2) { }
+        return '';
+    }
+
+    function summarizeLastMessagePreview(roleId, msg) {
+        if (!msg || typeof msg !== 'object') return '';
+        const type = String(msg.type || '').trim().toLowerCase();
+        if (type === 'image') return '[图片]';
+        if (type === 'voice') return '[语音]';
+        if (type === 'location') return '[位置]';
+        if (type === 'offline_action') return '[动作]';
+        if (type === 'transfer') return '[转账]';
+        if (type === 'redpacket') return '[红包]';
+        if (type === 'family_card') return '[亲属卡]';
+        if (type === 'takeout_card') return '[外卖卡片]';
+        if (type === 'gift_card') return '[礼物卡片]';
+        if (type === 'html') return '[卡片消息]';
+        if (type === 'sticker') return getStickerNameForChatList(roleId, msg, msg.stickerName);
+        if (type === 'translated_text') {
+            const foreign = getTranslatedForeignForChatList(msg.content);
+            return foreign || '[翻译消息]';
+        }
+
+        const rawContent = String(msg.content || '').trim();
+        if (!rawContent) return '';
+        if (rawContent.indexOf('data:image') >= 0 || rawContent.indexOf('<img') >= 0) {
+            return '[图片]';
+        }
+
+        const structured = parseChatListStructuredPayload(rawContent);
+        if (structured) {
+            const structuredType = String(structured.type || structured.kind || '').trim().toLowerCase();
+            if (structuredType === 'translated_text' || structuredType === 'translated') {
+                const foreign = getTranslatedForeignForChatList(structured);
+                return foreign || '[翻译消息]';
+            }
+            if (structuredType === 'sticker') {
+                return getStickerNameForChatList(roleId, structured, structured.name || structured.title || '');
+            }
+            if (structuredType === 'takeout_card') return '[外卖卡片]';
+            if (structuredType === 'gift_card') return '[礼物卡片]';
+            if (structuredType === 'transfer') return '[转账]';
+            if (structuredType === 'redpacket') return '[红包]';
+            if (structuredType === 'voice') return '[语音]';
+            if (structuredType === 'location') return '[位置]';
+            if (structuredType === 'image' || structuredType === 'photo') return '[图片]';
+            if (structuredType === 'text') {
+                const text = String(structured.content || structured.text || '').trim();
+                if (text) return text;
+            }
+            return '[消息]';
+        }
+
+        let plainText = '';
+        try {
+            plainText = typeof window.getMessagePlainText === 'function'
+                ? String(window.getMessagePlainText(msg) || '').trim()
+                : rawContent;
+        } catch (e) {
+            plainText = rawContent;
+        }
+        const stickerMatch = plainText.match(/^\[表情包[:：]\s*([^\]]+)\]$/);
+        if (stickerMatch && stickerMatch[1]) return String(stickerMatch[1]).trim() || '表情包';
+        if (/^\[表情包\]$/.test(plainText)) return '表情包';
+        if (/^\s*[\[{][\s\S]*[\]}]\s*$/.test(plainText)) return '[消息]';
+        return plainText || '[消息]';
+    }
+
     // 3. 排序 (按最后一条消息时间倒序)
     const sortedIds = ids.slice().sort((a, b) => {
         const ha = Array.isArray(chatData[a]) ? chatData[a] : [];
@@ -1983,12 +2099,8 @@ function loadWechatChatList(forceRender) {
         let msgPreview = "暂无消息";
         if (isRoleTyping(id)) {
             msgPreview = "对方正在输入...";
-        } else if (lastMsgObj.content) {
-            if (lastMsgObj.content.includes('data:image') || lastMsgObj.content.includes('<img')) {
-                msgPreview = "[图片]";
-            } else {
-                msgPreview = lastMsgObj.content;
-            }
+        } else if (lastMsgObj && (lastMsgObj.content || lastMsgObj.type)) {
+            msgPreview = summarizeLastMessagePreview(id, lastMsgObj) || "暂无消息";
         } else if (p.desc) {
             msgPreview = p.desc;
         }
@@ -2883,13 +2995,22 @@ window.closeWechatImportChooser = function () {
     if (modal) modal.classList.add('hidden');
 };
 
+const WECHAT_ROLE_JSON_IMPORT_UNLOCK_KEY = 'wechat_role_json_import_unlock_v1';
+
 window.startWechatImport = function (mode) {
     const input = document.getElementById('wechat-contact-import-input');
     if (!input) {
         alert('找不到导入控件，请重新打开微信页面');
         return;
     }
-    window.__wechatImportMode = mode === 'role' ? 'role' : 'backup';
+    const importMode = mode === 'role' ? 'role_doc' : 'backup';
+    window.__wechatImportMode = importMode;
+    input.setAttribute(
+        'accept',
+        importMode === 'backup'
+            ? 'application/json,.json'
+            : '.doc,.docx,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
     window.closeWechatImportChooser && window.closeWechatImportChooser();
     input.value = '';
     input.click();
@@ -2992,6 +3113,140 @@ window.importWechatContactFromInput = async function (fileInput) {
 
     const toTrimmedString = function (value) {
         return String(value == null ? '' : value).trim();
+    };
+
+    const isJsonImportFile = function (file) {
+        const name = toTrimmedString(file && file.name).toLowerCase();
+        const type = toTrimmedString(file && file.type).toLowerCase();
+        return /\.json$/i.test(name) || type === 'application/json';
+    };
+
+    const readRoleImportFileAsArrayBuffer = function (file) {
+        if (!file) return Promise.resolve(new ArrayBuffer(0));
+        if (typeof file.arrayBuffer === 'function') {
+            return file.arrayBuffer();
+        }
+        return new Promise(function (resolve, reject) {
+            const reader = new FileReader();
+            reader.onload = function () { resolve(reader.result || new ArrayBuffer(0)); };
+            reader.onerror = function () { reject(reader.error || new Error('读取文件失败')); };
+            reader.readAsArrayBuffer(file);
+        });
+    };
+
+    const extractRoleTextFromDocBinary = function (buffer) {
+        try {
+            const bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+            let out = '';
+            for (let i = 0; i < bytes.length; i++) {
+                const code = bytes[i];
+                out += code >= 32 || code === 10 || code === 13 || code === 9 ? String.fromCharCode(code) : ' ';
+            }
+            return out;
+        } catch (e) {
+            return '';
+        }
+    };
+
+    const extractRoleTextFromDocxFile = async function (file) {
+        if (!window.JSZip || typeof window.JSZip.loadAsync !== 'function') {
+            throw new Error('导入失败：当前环境不支持 DOCX 解析');
+        }
+        const zip = await window.JSZip.loadAsync(file);
+        const names = [];
+        zip.forEach(function (relativePath) {
+            if (/^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$/i.test(relativePath)) {
+                names.push(relativePath);
+            }
+        });
+        if (names.indexOf('word/document.xml') === -1) names.unshift('word/document.xml');
+
+        const walkDocxNode = function (node, out) {
+            if (!node) return;
+            const nodeName = String(node.nodeName || '').toLowerCase();
+            if (nodeName === 'w:t' || nodeName === 't') {
+                out.push(node.textContent || '');
+                return;
+            }
+            if (nodeName === 'w:tab') {
+                out.push('\t');
+                return;
+            }
+            if (nodeName === 'w:br' || nodeName === 'w:cr') {
+                out.push('\n');
+                return;
+            }
+
+            const children = node.childNodes ? Array.from(node.childNodes) : [];
+            for (let i = 0; i < children.length; i++) {
+                walkDocxNode(children[i], out);
+            }
+
+            if (nodeName === 'w:p' || nodeName === 'w:tr') {
+                out.push('\n');
+            }
+        };
+
+        const parts = [];
+        for (let i = 0; i < names.length; i++) {
+            const entry = zip.file(names[i]);
+            if (!entry) continue;
+            const xml = await entry.async('text');
+            const doc = new DOMParser().parseFromString(xml, 'application/xml');
+            const parseError = doc.getElementsByTagName('parsererror');
+            if (parseError && parseError.length) {
+                parts.push(String(xml || '').replace(/<[^>]+>/g, ' '));
+                parts.push('\n');
+                continue;
+            }
+            walkDocxNode(doc.documentElement, parts);
+            parts.push('\n');
+        }
+        return parts.join('').replace(/\n{3,}/g, '\n\n').trim();
+    };
+
+    const readRoleTextFromImportFile = async function (file) {
+        if (!file) return '';
+        const name = toTrimmedString(file.name).toLowerCase();
+        if (/\.docx$/i.test(name)) return extractRoleTextFromDocxFile(file);
+        if (/\.doc$/i.test(name)) {
+            const buffer = await readRoleImportFileAsArrayBuffer(file);
+            return extractRoleTextFromDocBinary(buffer);
+        }
+        return file.text();
+    };
+
+    const buildRoleJsonFromDocText = function (text, fallbackName) {
+        const normalizedText = String(text || '').replace(/\r\n?/g, '\n');
+        const rows = normalizedText.split('\n').map(function (line) {
+            return toTrimmedString(line).replace(/^[\-*•\d\.\)\s]+/, '');
+        }).filter(Boolean);
+
+        const pickByKey = function (keys) {
+            for (let i = 0; i < rows.length; i++) {
+                const line = rows[i];
+                for (let k = 0; k < keys.length; k++) {
+                    const key = keys[k];
+                    const reg = new RegExp('^' + key + '\\s*[:：]\\s*(.+)$', 'i');
+                    const m = line.match(reg);
+                    if (m && toTrimmedString(m[1])) return toTrimmedString(m[1]);
+                }
+            }
+            return '';
+        };
+
+        const roleName = pickByKey(['角色名', '昵称', '姓名', '名字', 'name', 'character']) || rows[0] || toTrimmedString(fallbackName) || '导入角色';
+        let desc = pickByKey(['简介', '描述', '设定', '人设', 'description', 'persona', 'prompt', 'system']);
+        if (!desc) {
+            desc = rows.slice(1).join('\n').trim();
+        }
+        return {
+            name: roleName,
+            nickName: roleName,
+            character_name: roleName,
+            description: desc,
+            desc: desc
+        };
     };
 
     const normalizeWorldBookIdList = function (value) {
@@ -3449,17 +3704,39 @@ window.importWechatContactFromInput = async function (fileInput) {
     try {
         const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
         if (!file) return;
-        const text = await file.text();
-        const json = safeParse(text);
-        if (!json || typeof json !== 'object') {
-            alert('❌ 导入失败：文件不是有效 JSON');
-            return;
-        }
         const importMode = String(window.__wechatImportMode || 'backup');
         window.__wechatImportMode = '';
 
-        if (importMode === 'role') {
-            await importRoleCardFromJson(json);
+        if (importMode === 'role_doc') {
+            let roleJson = null;
+            if (isJsonImportFile(file)) {
+                const allowJsonImport = localStorage.getItem(WECHAT_ROLE_JSON_IMPORT_UNLOCK_KEY) === 'true';
+                if (!allowJsonImport) {
+                    alert('❌ 导入失败：当前模式不支持该文件格式');
+                    return;
+                }
+                const jsonText = await file.text();
+                roleJson = safeParse(jsonText);
+                if (!roleJson || typeof roleJson !== 'object') {
+                    alert('❌ 导入失败：文件内容无效');
+                    return;
+                }
+            } else {
+                const roleText = await readRoleTextFromImportFile(file);
+                if (!toTrimmedString(roleText)) {
+                    alert('❌ 导入失败：文档为空或无法识别文本内容');
+                    return;
+                }
+                roleJson = buildRoleJsonFromDocText(roleText, file.name || '导入角色');
+            }
+            await importRoleCardFromJson(roleJson);
+            return;
+        }
+
+        const text = await file.text();
+        const json = safeParse(text);
+        if (!json || typeof json !== 'object') {
+            alert('❌ 导入失败：文件格式无效');
             return;
         }
 
@@ -3531,6 +3808,9 @@ window.importWechatContactFromInput = async function (fileInput) {
         window.__wechatImportMode = '';
         try {
             if (fileInput) fileInput.value = '';
+            if (fileInput && fileInput.setAttribute) {
+                fileInput.setAttribute('accept', 'application/json,.json');
+            }
         } catch (e) { }
     }
 };

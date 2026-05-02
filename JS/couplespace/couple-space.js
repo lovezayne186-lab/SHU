@@ -3361,7 +3361,9 @@
                 if (!msg || typeof msg !== 'object') continue;
                 const role = String(msg.role || '').trim();
                 if (role !== 'me' && role !== 'ai') continue;
-                const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+                const content = typeof pw.buildShortTermMemoryPreviewText === 'function'
+                    ? pw.buildShortTermMemoryPreviewText(msg)
+                    : String(msg.content || '').replace(/\s+/g, ' ').trim();
                 if (!content) continue;
                 const who = role === 'me' ? '我' : 'TA';
                 const stamp = formatChatMemoryTimestamp(msg.timestamp);
@@ -3382,7 +3384,9 @@
                 if (!msg || typeof msg !== 'object') continue;
                 const role = String(msg.role || '').trim();
                 if (role !== 'me' && role !== 'ai') continue;
-                const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+                const content = typeof pw.buildShortTermMemoryPreviewText === 'function'
+                    ? pw.buildShortTermMemoryPreviewText(msg)
+                    : String(msg.content || '').replace(/\s+/g, ' ').trim();
                 if (!content) continue;
                 const ts = Number(msg.timestamp);
                 if (!Number.isFinite(ts) || ts <= 0) continue;

@@ -34,6 +34,7 @@
         context = context || {};
         const exactCount = clampCount(context.exactCount);
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const communityContext = asString(context.communityContext);
 
@@ -62,7 +63,7 @@
             '6. 【评论区生态】：',
             '   - 每篇帖子必须同步生成 6 到 8 条评论，不能留空。',
             '   - CP粉 NPC：疯狂尖叫（“太太菜菜捞捞”、“kswl”、“这是真的，我就是那张床”）。',
-            '   - 禁止生成 authorName 为“' + userName + '”的评论。用户是刷贴者。',
+            '   - 【禁止扮演用户】：用户的真名/论坛称呼是“' + userName + '”，显示昵称是“' + displayName + '”。绝对不能生成 authorName 为这俩名字的帖子或评论。用户只作为被磕CP的对象或围观刷帖者，绝对不自己发产粮帖或发评论。',
             '',
             '# 社区设定参考',
             communityContext || '(没有额外社区世界书)',
@@ -121,6 +122,7 @@
     function buildFanficMoreCommentsPrompt(context) {
         context = context || {};
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const postSummary = asString(context.postSummary);
         const existingCommentsText = asString(context.existingCommentsText);
@@ -152,7 +154,7 @@
             '   - 楼主必须表现出“受宠若惊”或者“当场昏厥”的状态（例如：“本人已逝，有事烧纸，正主居然亲自来看我的粮了！”）。',
             '',
             '# 互动交互规则',
-            '1. 【严禁扮演用户】：绝对不能生成 authorName 为“' + userName + '”的新评论。',
+            '1. 【严禁扮演用户】：用户的真名/论坛称呼是“' + userName + '”，显示昵称是“' + displayName + '”。绝对不能生成 authorName 为这俩名字的新评论！',
             '2. 【盖楼逻辑】：大量使用 reply 结构。让 NPC 网友去回复角色的评论，或者回复用户的评论。',
             '3. 【同人区术语】：多用“蒸煮（正主）”、“发糖”、“舞到正主面前”、“原地结婚”等词汇。',
             '',

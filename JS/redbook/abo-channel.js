@@ -15,6 +15,7 @@
     function buildAboPostPrompt(context) {
         context = context || {};
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const communityContext = asString(context.communityContext);
 
@@ -27,8 +28,8 @@
             '',
             '# ABO 核心设定（必须执行）',
             '1. 【身份与气味分配】：请根据角色列表中的性格，为参与的角色分配 ABO 属性（默认为顶级 Alpha）及专属信息素味道（如：冷杉、乌木、烈酒、烟草、海盐）。',
-            '2. 【严禁扮演用户】：用户“' + userName + '”仅作为刷帖者存在。帖子中提到的“那个 Omega”或“那个神秘人”必须暗示是用户，但不能直接代入用户视角发帖。',
-            '3. 绝对不能生成作者名或评论者名等于用户昵称“' + userName + '”的发言。',
+            '2. 【严禁扮演用户】：用户的真名/论坛称呼是“' + userName + '”，显示昵称是“' + displayName + '”。用户仅作为刷帖者存在。帖子中提到的“那个 Omega”或“那个神秘人”必须暗示是用户，但不能直接代入用户视角发帖。',
+            '3. 绝对不能生成作者名或评论者名等于用户“' + userName + '”或“' + displayName + '”的帖子和评论。所有的发言只能是角色和NPC。',
             '',
             '# 发帖者类型逻辑',
             '1. 【角色本人发帖（私密/诱导）】：',
@@ -58,7 +59,7 @@
             '# 输出 JSON 结构',
             '[',
             '  {',
-            '    "coverText": "带Emoji的ABO噱头文案",',
+            '    "coverText": "封面文案（NPC发帖可带Emoji，角色发帖要极度贴合其自身人设的语气，如清冷、隐忍，不需要强制加Emoji）",',
             '    "postTitle": "标题",',
             '    "authorName": "角色名或NPC名",',
             '    "authorOriginalName": "如果是角色本人发帖，这里填写原角色名，否则可省略",',
@@ -105,6 +106,7 @@
     function buildAboMoreCommentsPrompt(context) {
         context = context || {};
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const postSummary = asString(context.postSummary);
         const existingCommentsText = asString(context.existingCommentsText);
@@ -131,7 +133,7 @@
             '生成 8 到 12 条全新的后续评论。',
             '',
             '# 禁止扮演用户',
-            '绝对不能生成 authorName 为“' + userName + '”的评论。用户只存在于被回复对象或被提及对象中。',
+            '绝对不能生成 authorName 为用户“' + userName + '”或昵称“' + displayName + '”的评论。用户只存在于被回复对象或被提及对象中。',
             '',
             '# 角色列表参考（维持其 Alpha 的尊严与对用户的唯一性）',
             '<data_reference>',

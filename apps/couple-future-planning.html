@@ -352,6 +352,23 @@
             }
         }
 
+        function findAncestorWindow(predicate) {
+            if (typeof predicate !== 'function') return null;
+            let current = window;
+            let hops = 0;
+            while (current && hops < 8) {
+                try {
+                    if (predicate(current)) return current;
+                    if (!current.parent || current.parent === current) break;
+                    current = current.parent;
+                    hops++;
+                } catch (e) {
+                    break;
+                }
+            }
+            return null;
+        }
+
         function escapeHtml(text) {
             return String(text || '')
                 .replace(/&/g, '&amp;')
@@ -512,12 +529,10 @@
         }
 
         function resolveCallAI() {
-            if (typeof window.callAI === 'function') return window.callAI;
-            try {
-                const pw = getParentWindow();
-                if (pw && typeof pw.callAI === 'function') return pw.callAI;
-            } catch (e) {}
-            return null;
+            const host = findAncestorWindow(function (candidate) {
+                return candidate && typeof candidate.callAI === 'function';
+            });
+            return host ? host.callAI.bind(host) : null;
         }
 
         function readChatHistory(roleId) {

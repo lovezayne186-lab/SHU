@@ -722,7 +722,7 @@ function downloadDesktopAppearanceFile(filename, text) {
 }
 
 function syncDesktopStatusBarVisibility() {
-    const showStatus = localStorage.getItem('show_status_info') !== 'false';
+    const showStatus = localStorage.getItem('show_status_info') === 'true';
     if (showStatus) document.body.classList.remove('hide-status-info');
     else document.body.classList.add('hide-status-info');
 }
@@ -1050,7 +1050,7 @@ function rerenderAppearanceAfterIconChange() {
 function renderAppearanceUI(container) {
     setAppearanceTitle('外观设置');
 
-    const showStatus = localStorage.getItem('show_status_info') !== 'false';
+    const showStatus = localStorage.getItem('show_status_info') === 'true';
     const iconFollowSetting = localStorage.getItem('icon_follow_wallpaper');
     const iconFollow = iconFollowSetting === null ? true : iconFollowSetting === 'true';
     const iconCustomColor = localStorage.getItem('icon_custom_color') || '#555555';

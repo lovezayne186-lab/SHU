@@ -655,6 +655,7 @@ function saveChatSettings() {
     const memoryLimitInput = document.getElementById('setting-memory-limit');
     const momentsPostingSwitch = document.getElementById('setting-moments-posting-enabled');
     const allowOfflineInviteSwitch = document.getElementById('setting-allow-offline-invite');
+    const allowRoleRecognizeRemarkSwitch = document.getElementById('setting-allow-role-recognize-remark');
     const autoTranslateSwitch = document.getElementById('setting-auto-translate-switch');
     const autoSummarySwitch = document.getElementById('setting-auto-summary-switch');
     const memoryArchiveLinesInput = document.getElementById('setting-memory-archive-lines');
@@ -675,6 +676,9 @@ function saveChatSettings() {
     }
     if (allowOfflineInviteSwitch) {
         settings.allowOfflineInvite = !!allowOfflineInviteSwitch.checked;
+    }
+    if (allowRoleRecognizeRemarkSwitch) {
+        settings.allowRoleRecognizeRemark = !!allowRoleRecognizeRemarkSwitch.checked;
     }
     if (autoTranslateSwitch) {
         settings.autoTranslate = !!autoTranslateSwitch.checked;
@@ -2230,6 +2234,16 @@ function isAutoTranslateEnabled(roleId) {
     return localStorage.getItem('chat_auto_translate') === 'true';
 }
 
+function isRoleRemarkRecognitionEnabled(roleId) {
+    const id = resolveChatSettingsRoleId(roleId);
+    if (!id) return true;
+    const settings = getCurrentChatSettings(id);
+    if (settings && typeof settings.allowRoleRecognizeRemark === 'boolean') {
+        return settings.allowRoleRecognizeRemark;
+    }
+    return true;
+}
+
 function readApiPresetListForRoleBinding() {
     try {
         const raw = localStorage.getItem('api_settings_presets_v1') || '[]';
@@ -2367,6 +2381,7 @@ function initChatSettingsUI(roleId) {
     const memoryLimitInput = document.getElementById('setting-memory-limit');
     const momentsPostingSwitch = document.getElementById('setting-moments-posting-enabled');
     const allowOfflineInviteSwitch = document.getElementById('setting-allow-offline-invite');
+    const allowRoleRecognizeRemarkSwitch = document.getElementById('setting-allow-role-recognize-remark');
     const autoTranslateSwitch = document.getElementById('setting-auto-translate-switch');
     const autoSummarySwitch = document.getElementById('setting-auto-summary-switch');
     const memoryArchiveLinesInput = document.getElementById('setting-memory-archive-lines');
@@ -2386,6 +2401,9 @@ function initChatSettingsUI(roleId) {
     }
     if (allowOfflineInviteSwitch) {
         allowOfflineInviteSwitch.checked = settings.allowOfflineInvite !== false;
+    }
+    if (allowRoleRecognizeRemarkSwitch) {
+        allowRoleRecognizeRemarkSwitch.checked = settings.allowRoleRecognizeRemark !== false;
     }
     if (autoTranslateSwitch) {
         autoTranslateSwitch.checked = typeof settings.autoTranslate === 'boolean'
@@ -2535,6 +2553,7 @@ window.updateBubblePreview = updateBubblePreview;
 window.saveChatSettings = saveChatSettings;
 window.toggleSummaryInput = toggleSummaryInput;
 window.isAutoTranslateEnabled = isAutoTranslateEnabled;
+window.isRoleRemarkRecognitionEnabled = isRoleRemarkRecognitionEnabled;
 window.initChatSettingsUI = initChatSettingsUI;
 window.applyChatFontSizeFromSettings = applyChatFontSizeFromSettings;
 window.updateChatFontSizePreview = updateChatFontSizePreview;
@@ -3710,6 +3729,10 @@ window.renderChatSettingsPanel = function (roleId) {
             + row(
                 '<div class="text-[15px] text-gray-900">允许角色发起线下邀请</div>',
                 '<div>' + buildIosSwitchHtml('setting-allow-offline-invite', 'saveChatSettings()') + '</div>'
+            )
+            + row(
+                '<div class="text-[15px] text-gray-900">允许角色识别备注</div>',
+                '<div>' + buildIosSwitchHtml('setting-allow-role-recognize-remark', 'saveChatSettings()') + '</div>'
             )
             + row(
                 '<div class="text-[15px] text-gray-900">自动翻译</div>',

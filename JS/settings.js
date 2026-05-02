@@ -13,6 +13,23 @@ function openSettingsApp() {
 
     title.innerText = "系统设置";
 
+    // 绑定返回键自动保存
+    const backBtn = document.querySelector('.app-header .back-btn');
+    if (backBtn && !backBtn._settingsSaveBound) {
+        backBtn._settingsSaveBound = true;
+        const oldOnClick = backBtn.onclick;
+        backBtn.onclick = function(e) {
+            if (title.innerText === "系统设置") {
+                if (typeof saveAllSettings === 'function') {
+                    saveAllSettings(true); // 传入 true 以静默保存
+                }
+            }
+            if (typeof oldOnClick === 'function') {
+                oldOnClick.call(this, e);
+            }
+        };
+    }
+
     try {
         if (title && !title._devUnlockBound) {
             title._devUnlockBound = true;
@@ -85,11 +102,17 @@ function buildCurrentApiSettingsSnapshot() {
     const keyEl = document.getElementById('setting-api-key');
     const modelEl = document.getElementById('setting-model-select');
     const tempEl = document.getElementById('setting-temp-slider');
+    const summaryUrlEl = document.getElementById('setting-summary-api-url');
+    const summaryKeyEl = document.getElementById('setting-summary-api-key');
+    const summaryModelEl = document.getElementById('setting-summary-model');
     return {
         baseUrl: urlEl ? String(urlEl.value || '').trim() : '',
         apiKey: keyEl ? String(keyEl.value || '').trim() : '',
         model: modelEl ? String(modelEl.value || '').trim() : '',
-        temperature: tempEl ? String(tempEl.value || '').trim() : '0.7'
+        temperature: tempEl ? String(tempEl.value || '').trim() : '0.7',
+        summaryBaseUrl: summaryUrlEl ? String(summaryUrlEl.value || '').trim() : '',
+        summaryApiKey: summaryKeyEl ? String(summaryKeyEl.value || '').trim() : '',
+        summaryModel: summaryModelEl ? String(summaryModelEl.value || '').trim() : ''
     };
 }
 
@@ -324,6 +347,9 @@ function fillSettingsFormFromPreset(preset) {
     const modelEl = document.getElementById('setting-model-select');
     const tempEl = document.getElementById('setting-temp-slider');
     const tempDisplay = document.getElementById('temp-display');
+    const summaryUrlEl = document.getElementById('setting-summary-api-url');
+    const summaryKeyEl = document.getElementById('setting-summary-api-key');
+    const summaryModelEl = document.getElementById('setting-summary-model');
     if (urlEl) urlEl.value = String(data.baseUrl || '');
     if (keyEl) keyEl.value = String(data.apiKey || '');
     if (modelEl) {
@@ -343,6 +369,9 @@ function fillSettingsFormFromPreset(preset) {
     }
     if (tempEl) tempEl.value = String(data.temperature != null ? data.temperature : '0.7');
     if (tempDisplay) tempDisplay.innerText = String(data.temperature != null ? data.temperature : '0.7');
+    if (summaryUrlEl) summaryUrlEl.value = String(data.summaryBaseUrl || '');
+    if (summaryKeyEl) summaryKeyEl.value = String(data.summaryApiKey || '');
+    if (summaryModelEl) summaryModelEl.value = String(data.summaryModel || '');
 }
 
 function getSelectedApiPreset() {
@@ -395,6 +424,9 @@ function saveCurrentApiPreset() {
         apiKey: snapshot.apiKey,
         model: snapshot.model,
         temperature: snapshot.temperature,
+        summaryBaseUrl: snapshot.summaryBaseUrl,
+        summaryApiKey: snapshot.summaryApiKey,
+        summaryModel: snapshot.summaryModel,
         updatedAt: Date.now()
     };
     if (existingIndex >= 0) {
@@ -444,6 +476,9 @@ function renderSettingsUI(container) {
     const savedUrl = localStorage.getItem('api_base_url') || "";
     const savedKey = localStorage.getItem('user_api_key') || "";
     const savedModel = localStorage.getItem('selected_model') || "gpt-3.5-turbo";
+    const savedSummaryUrl = localStorage.getItem('summary_api_base_url') || "";
+    const savedSummaryKey = localStorage.getItem('summary_user_api_key') || "";
+    const savedSummaryModel = localStorage.getItem('summary_selected_model') || "";
     // 新增：读取温度，默认为 0.7
     const savedTemp = localStorage.getItem('model_temperature') || "0.7";
     const presets = readApiPresetList();
@@ -471,236 +506,282 @@ function renderSettingsUI(container) {
     } catch (e) { devAiFailCount = 0; }
 
     container.innerHTML = `
-        <div style="padding: 20px;padding-bottom: 100px;">
-
-            <!-- API 地址设置 -->
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <h4 style="margin: 0 0 10px 0; color:#333;">API 地址 (Base URL)</h4>
-                <input type="text" id="setting-api-url" value="${savedUrl}" placeholder="例如 https://api.deepseek.com" 
-                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size:14px;">
-                <p style="font-size: 12px; color: #999; margin: 5px 0 0;">会自动检测是否需要加 /v1</p>
+        <div class="min-h-full bg-gray-50 pb-28 pt-4 px-4 font-sans">
+            <!-- 大标题 -->
+            <div class="mb-5 px-1">
+                <h2 class="text-2xl font-bold text-gray-800 tracking-tight">系统设置</h2>
+                <p class="text-xs text-gray-500 mt-1">配置您的模型与应用偏好</p>
             </div>
 
-            <!-- API Key 设置 -->
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <h4 style="margin: 0 0 10px 0; color:#333;">API Key (密钥)</h4>
-                <input type="password" id="setting-api-key" value="${savedKey}" placeholder="sk-..." 
-                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size:14px;">
-            </div>
+            <!-- 核心模型配置 -->
+            <div class="mb-6">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">大模型服务</h3>
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <!-- API 地址 -->
+                    <div class="p-4 border-b border-gray-50">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">API 地址 (Base URL)</label>
+                        <input type="text" id="setting-api-url" value="${savedUrl}" placeholder="例如 https://api.deepseek.com" 
+                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        <p class="text-[11px] text-gray-400 mt-1.5 flex items-center"><i class='bx bx-info-circle mr-1'></i>会自动检测是否需要加 /v1</p>
+                    </div>
 
-            <!-- 模型选择区域 -->
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h4 style="margin: 0; color:#333;">选择模型</h4>
-                    <button onclick="fetchModelList()" style="padding: 6px 12px; background: #007aff; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">
-                        🔄 拉取列表
-                    </button>
-                </div>
-                
-                <select id="setting-model-select" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: white; font-size:14px;">
-                    <option value="${savedModel}">${savedModel} (当前)</option>
-                </select>
-                <p id="fetch-status" style="font-size: 12px; color: #666; margin-top: 8px; min-height: 16px;"></p>
-            </div>
+                    <!-- API Key -->
+                    <div class="p-4 border-b border-gray-50">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">API Key (密钥)</label>
+                        <input type="password" id="setting-api-key" value="${savedKey}" placeholder="sk-..." 
+                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        <div class="mt-2 flex justify-end">
+                            <button onclick="testApiConnection('main')" class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center">
+                                <i class='bx bx-check-shield mr-1'></i>测试连接
+                            </button>
+                        </div>
+                    </div>
 
-            <!-- 新增：温度控制区域 -->
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h4 style="margin: 0; color:#333;">模型温度 (Temperature)</h4>
-                    <!-- 显示当前数值 -->
-                    <span id="temp-display" style="font-weight:bold; color:#007aff; font-size:16px;">${savedTemp}</span>
-                </div>
-                
-                <!-- 滑动条：0 到 2，步长 0.1 -->
-                <input type="range" id="setting-temp-slider" min="0" max="2" step="0.1" value="${savedTemp}" 
-                    style="width: 100%; cursor: pointer;"
-                    oninput="document.getElementById('temp-display').innerText = this.value">
-                
-                <div style="display:flex; justify-content:space-between; font-size: 12px; color: #999; margin-top: 5px;">
-                    <span>0.0 (严谨)</span>
-                    <span>1.0 (平衡)</span>
-                    <span>2.0 (发散)</span>
-                </div>
-            </div>
+                    <!-- 选择模型 -->
+                    <div class="p-4 border-b border-gray-50">
+                        <div class="flex justify-between items-center mb-1.5">
+                            <label class="block text-sm font-medium text-gray-700">选择模型</label>
+                            <button onclick="fetchModelList('main')" class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center">
+                                <i class='bx bx-refresh mr-1'></i>拉取列表
+                            </button>
+                        </div>
+                        <select id="setting-model-select" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all appearance-none">
+                            <option value="${savedModel}">${savedModel} (当前)</option>
+                        </select>
+                        <p id="fetch-status" class="text-[11px] text-gray-500 mt-1.5 min-h-[16px]"></p>
+                    </div>
 
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom: 10px;">
-                    <h4 style="margin: 0; color:#333;">API 预设</h4>
-                    <span style="font-size:12px; color:#888;">保存站点 / Key / 模型 / 温度</span>
-                </div>
-                <select id="setting-preset-select" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: white; font-size:14px; margin-bottom:10px;">
-                    ${presetOptionsHtml}
-                </select>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <button onclick="applySelectedApiPreset()" style="flex:1; min-width:120px; padding:10px 12px; background:#007aff; color:white; border:none; border-radius:10px; font-size:13px; font-weight:bold; cursor:pointer;">套用预设</button>
-                    <button onclick="saveCurrentApiPreset()" style="flex:1; min-width:120px; padding:10px 12px; background:#34c759; color:white; border:none; border-radius:10px; font-size:13px; font-weight:bold; cursor:pointer;">保存当前为预设</button>
-                    <button onclick="deleteSelectedApiPreset()" style="flex:1; min-width:120px; padding:10px 12px; background:#ff9500; color:white; border:none; border-radius:10px; font-size:13px; font-weight:bold; cursor:pointer;">删除选中预设</button>
-                </div>
-                <p style="font-size: 12px; color: #999; margin: 10px 0 0; line-height: 1.6;">切换了 API 站点后，可以从这里一键切回之前保存过的地址、Key、模型和温度。</p>
-            </div>
-
-            ${isDevUnlocked ? `
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <h4 style="margin: 0; color:#333;">AI 调用调试中心</h4>
-                    <span id="dev-ai-prompt-count" style="font-size:12px; color:#666;">最近记录：${promptHistory.length}/10</span>
-                </div>
-                <p style="font-size: 12px; color: #999; margin: 8px 0 0; line-height: 1.6;">最近 10 条经过 <code>callAI</code> 的提示词都会保存在本地，这里可以查看聊天、通话、音乐、情侣空间等不同场景的实际 system prompt，并支持直接复制。</p>
-                <div style="display:flex; gap:10px; margin-top: 12px;">
-                    <button type="button"
-                        style="flex:1; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45);"
-                        onclick="copyLatestDevAiPromptRecord()">
-                        复制最新记录
-                    </button>
-                    <button type="button"
-                        style="flex:1; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #fca5a5 0%, #ef4444 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);"
-                        onclick="clearDevAiPromptHistory()">
-                        清空提示词记录
-                    </button>
-                </div>
-                <button type="button"
-                    style="margin-top: 10px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.38);"
-                    onclick="extractCurrentRoleThoughtChain()">
-                    提取当前角色思考链（最近 50 轮）
-                </button>
-                <div id="dev-thought-chain-panel" style="margin-top: 10px; border:1px solid rgba(0,0,0,0.06); border-radius:12px; background:#f8fafc; overflow:hidden;">
-                    <div style="padding:8px 10px; border-bottom:1px solid rgba(0,0,0,0.06); font-size:12px; color:#334155; font-weight:600;">思考链提取结果</div>
-                    <pre id="dev-thought-chain-output" style="margin:0; white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; font-size:11px; line-height:1.55; color:#0f172a; padding:10px;">点击“提取当前角色思考链”后，这里会显示最近 50 轮的思考链与心声。</pre>
-                </div>
-                <div id="dev-ai-prompt-history-panel" style="margin-top: 12px;">
-                    ${renderDevAiPromptHistoryHtml(promptHistory)}
-                </div>
-            </div>
-
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <h4 style="margin: 0; color:#333;">提示词总览</h4>
-                    <span style="font-size:12px; color:#666;">按角色查看各场景完整 prompt</span>
-                </div>
-                <p style="font-size: 12px; color: #999; margin: 8px 0 0; line-height: 1.6;">这里不依赖历史记录。会直接按当前代码为你生成当前角色在不同场景下的提示词全貌；也会展示侧影（方寸/呢喃/尘封）最近一次手动生成时记录的提示词快照。</p>
-                <div id="dev-prompt-catalog-panel" style="margin-top:12px;"></div>
-            </div>
-
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <h4 style="margin: 0; color:#333;">开发者快捷调试</h4>
-                    <span style="font-size:12px; color:#666;">仅开发者模式可见</span>
-                </div>
-                <p style="font-size: 12px; color: #999; margin: 8px 0 0; line-height: 1.6;">保留现有的通知模拟、情侣空间修罗场测试，以及离线日记生成调试入口。</p>
-                <button type="button"
-                    style="margin-top: 12px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #ff9a9e 0%, #f97373 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(249, 115, 115, 0.55);"
-                    onclick="window.showIosNotification && window.showIosNotification('assets/chushitouxiang.jpg', '神秘角色', '你在干嘛？怎么不理我！')">
-                    测试收到新消息
-                </button>
-                <button type="button"
-                    style="margin-top: 10px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45);"
-                    onclick="window.simulateCoupleSpaceCaughtChat && window.simulateCoupleSpaceCaughtChat(prompt('输入对方名字（不是情侣绑定对象）', '陌生人') || '陌生人')">
-                    模拟发现我和别人聊天
-                </button>
-                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top: 10px;">
-                    <button id="offline-diary-debug-3h" type="button" style="flex:1; min-width:140px; border:none; background:rgba(37, 99, 235, 0.1); color:#1d4ed8; font-size:12px; padding:10px 12px; border-radius:10px; cursor:pointer;">模拟离线 3h 回来</button>
-                    <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
-                        <input id="offline-diary-debug-days" type="number" min="2" max="365" value="3" style="width:72px; border:1px solid rgba(0,0,0,0.1); border-radius:10px; padding:8px 8px; font-size:12px; outline:none;">
-                        <button id="offline-diary-debug-days-btn" type="button" style="flex:1; border:none; background:rgba(37, 99, 235, 0.1); color:#1d4ed8; font-size:12px; padding:10px 12px; border-radius:10px; cursor:pointer;">模拟 N 天未打开</button>
+                    <!-- 温度控制 -->
+                    <div class="p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="block text-sm font-medium text-gray-700">模型温度 (Temperature)</label>
+                            <span id="temp-display" class="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md text-sm">${savedTemp}</span>
+                        </div>
+                        <input type="range" id="setting-temp-slider" min="0" max="2" step="0.1" value="${savedTemp}" 
+                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500 mt-2"
+                            oninput="document.getElementById('temp-display').innerText = this.value">
+                        <div class="flex justify-between text-[10px] font-medium text-gray-400 mt-2">
+                            <span>0.0 (严谨)</span>
+                            <span>1.0 (平衡)</span>
+                            <span>2.0 (发散)</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <h4 style="margin: 0; color:#333;">AI 降级追溯</h4>
-                    <span style="font-size:12px; color:#666;">记录数：${devAiFailCount}</span>
+            <!-- 预设管理 -->
+            <div class="mb-6">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">预设管理</h3>
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                    <select id="setting-preset-select" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mb-3 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none truncate">
+                        ${presetOptionsHtml}
+                    </select>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="applySelectedApiPreset()" class="col-span-2 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium transition-colors shadow-sm shadow-blue-200 flex justify-center items-center">
+                            <i class='bx bx-check-circle mr-1.5'></i>套用选中预设
+                        </button>
+                        <button onclick="saveCurrentApiPreset()" class="py-2 bg-green-50 hover:bg-green-100 text-green-600 border border-green-200/50 rounded-xl text-sm font-medium transition-colors">
+                            保存当前
+                        </button>
+                        <button onclick="deleteSelectedApiPreset()" class="py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200/50 rounded-xl text-sm font-medium transition-colors">
+                            删除预设
+                        </button>
+                    </div>
                 </div>
-                <p style="font-size: 12px; color: #999; margin: 8px 0 0; line-height: 1.6;">仅在解析失败触发降级时记录 AI 原始返回，便于排查输出格式问题。</p>
-                <div style="display:flex; gap:10px; margin-top: 12px;">
-                    <button type="button"
-                        style="flex:1; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);"
-                        onclick="openDevAiParseFailureLogs()">
-                        查看记录
+            </div>
+
+            <!-- 副 API -->
+            <div class="mb-6">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">副 API (总结专用·可选)</h3>
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+                    <div>
+                        <input type="text" id="setting-summary-api-url" value="${savedSummaryUrl}" placeholder="副 API 地址 (留空则用主API)"
+                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-gray-300 outline-none transition-all">
+                    </div>
+                    <div>
+                        <input type="password" id="setting-summary-api-key" value="${savedSummaryKey}" placeholder="副 API Key (留空则用主API)"
+                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-gray-300 outline-none transition-all">
+                        <div class="mt-2 flex justify-end">
+                            <button onclick="testApiConnection('summary')" class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center">
+                                <i class='bx bx-check-shield mr-1'></i>测试连接
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1.5">
+                            <label class="block text-sm font-medium text-gray-700">副 API 模型 (可选)</label>
+                            <button onclick="fetchModelList('summary')" class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center">
+                                <i class='bx bx-refresh mr-1'></i>拉取列表
+                            </button>
+                        </div>
+                        <select id="setting-summary-model" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mb-2 appearance-none">
+                            <option value="${savedSummaryModel}">${savedSummaryModel} (当前)</option>
+                        </select>
+                        <p id="summary-fetch-status" class="text-[11px] text-gray-500 mt-1.5 min-h-[16px]"></p>
+                    </div>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        手动总结和自动总结优先走副 API；若未完整配置将自动回退主 API。
+                    </p>
+                </div>
+            </div>
+
+            <!-- 开发者调试区域 -->
+            ${isDevUnlocked ? `
+            <div class="mb-6">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">开发者选项</h3>
+                
+                <!-- AI 调用调试中心 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-medium text-gray-800 text-sm">AI 调用调试中心</h4>
+                        <span id="dev-ai-prompt-count" class="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">最近：${promptHistory.length}/10</span>
+                    </div>
+                    <p class="text-[11px] text-gray-400 leading-relaxed mb-3">最近 10 条经过 callAI 的提示词都会保存在本地，支持直接复制。</p>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <button type="button" onclick="copyLatestDevAiPromptRecord()" class="py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-medium transition-colors shadow-sm shadow-blue-200">
+                            复制最新记录
+                        </button>
+                        <button type="button" onclick="clearDevAiPromptHistory()" class="py-2 bg-red-50 hover:bg-red-100 text-red-500 border border-red-100 rounded-xl text-xs font-medium transition-colors">
+                            清空记录
+                        </button>
+                    </div>
+                    <button type="button" onclick="extractCurrentRoleThoughtChain()" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-medium transition-colors shadow-sm shadow-emerald-200">
+                        提取当前角色思考链（最近50轮）
                     </button>
-                    <button type="button"
-                        style="flex:1; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #fca5a5 0%, #ef4444 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);"
-                        onclick="clearDevAiParseFailureLogs()">
-                        清空记录
-                    </button>
+                    <div id="dev-thought-chain-panel" class="mt-3 border border-gray-100 rounded-xl bg-gray-50 overflow-hidden">
+                        <div class="px-3 py-2 border-b border-gray-100 text-[11px] font-semibold text-gray-600">思考链提取结果</div>
+                        <pre id="dev-thought-chain-output" class="m-0 whitespace-pre-wrap break-words max-h-48 overflow-y-auto text-[10px] leading-relaxed text-gray-700 p-3">点击上方按钮后，这里会显示最近 50 轮的思考链与心声。</pre>
+                    </div>
+                    <div id="dev-ai-prompt-history-panel" class="mt-3">
+                        ${renderDevAiPromptHistoryHtml(promptHistory)}
+                    </div>
+                </div>
+
+                <!-- 提示词总览 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-medium text-gray-800 text-sm">提示词总览</h4>
+                    </div>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">按角色查看各场景完整 prompt，包含侧影快照。</p>
+                    <div id="dev-prompt-catalog-panel" class="mt-3"></div>
+                </div>
+
+                <!-- 开发者快捷调试 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-medium text-gray-800 text-sm">快捷调试</h4>
+                    </div>
+                    <div class="space-y-2 mt-3">
+                        <button type="button" onclick="window.showIosNotification && window.showIosNotification('assets/chushitouxiang.jpg', '神秘角色', '你在干嘛？怎么不理我！')" class="w-full py-2.5 bg-rose-400 hover:bg-rose-500 text-white rounded-xl text-xs font-medium transition-colors shadow-sm shadow-rose-200">
+                            测试收到新消息
+                        </button>
+                        <button type="button" onclick="window.simulateCoupleSpaceCaughtChat && window.simulateCoupleSpaceCaughtChat(prompt('输入对方名字', '陌生人') || '陌生人')" class="w-full py-2.5 bg-indigo-400 hover:bg-indigo-500 text-white rounded-xl text-xs font-medium transition-colors shadow-sm shadow-indigo-200">
+                            模拟修罗场 (发现和别人聊天)
+                        </button>
+                        <div class="flex flex-wrap gap-2 pt-1">
+                            <button id="offline-diary-debug-3h" type="button" class="flex-1 min-w-[120px] py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-medium">离线 3h 回来</button>
+                            <div class="flex items-center gap-2 flex-1 min-w-[150px]">
+                                <input id="offline-diary-debug-days" type="number" min="2" max="365" value="3" class="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none text-center">
+                                <button id="offline-diary-debug-days-btn" type="button" class="flex-1 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-medium">模拟 N 天未打开</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI 降级追溯 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-medium text-gray-800 text-sm">AI 降级追溯</h4>
+                        <span class="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">记录：${devAiFailCount}</span>
+                    </div>
+                    <p class="text-[11px] text-gray-400 leading-relaxed mb-3">仅在解析失败触发降级时记录 AI 原始返回。</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" onclick="openDevAiParseFailureLogs()" class="py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-xl text-xs font-medium transition-colors shadow-sm shadow-purple-200">
+                            查看记录
+                        </button>
+                        <button type="button" onclick="clearDevAiParseFailureLogs()" class="py-2 bg-red-50 hover:bg-red-100 text-red-500 border border-red-100 rounded-xl text-xs font-medium transition-colors">
+                            清空记录
+                        </button>
+                    </div>
                 </div>
             </div>
             ` : ''}
 
-            <!-- 保存按钮 -->
-            <button onclick="saveAllSettings()" style="width: 100%; padding: 14px; background: #34c759; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3); cursor: pointer; transition: transform 0.1s;">
-                保存所有配置
-            </button>
-            <div style="text-align:center; margin-top:10px; font-size:12px; color:#aaa;">配置将保存在本地</div>
-
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-top: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <h4 style="margin: 0; color:#333;">实验性静音保活</h4>
-                    <span style="font-size:12px; color:#666;">与浏览器和设备有关，不保证所有机型有效</span>
-                </div>
-                <p style="font-size: 12px; color: #999; margin: 8px 0 0; line-height: 1.6;">
-                    ${(() => { const s = getSilentKeepAliveHackState(); return `当前状态：${s.enabled ? '已开启' : '已关闭'}｜播放态：${s.playing ? '正在循环' : '未在播放'}`; })()}
-                </p>
-                <button type="button"
-                    style="margin-top: 12px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%); color: #fff; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);"
-                    onclick="toggleExperimentalSilentKeepAlive()">
-                    ${(() => { const s = getSilentKeepAliveHackState(); return s.enabled ? '关闭静音保活' : '开启静音保活'; })()}
-                </button>
-                <p style="font-size: 12px; color: #999; margin: 10px 0 0; line-height: 1.6;">实现方式：创建隐藏音频元素，循环播放内嵌静音 WAV，并在切后台/回前台时尝试续播。首次开启需要一次点击来满足浏览器的播放手势要求。</p>
-                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(0,0,0,0.08);">
-                    <p style="font-size: 12px; color: #999; margin: 0 0 8px; line-height: 1.6;">
-                        ${(() => { const s = getBrowserNotificationState(); return `浏览器通知：${s.supported ? '支持' : '不支持'}｜权限：${s.permission}｜开关：${s.enabled ? '已开启' : '已关闭'}`; })()}
+            <!-- 实验性功能 -->
+            <div class="mb-6">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">实验性功能</h3>
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-medium text-gray-800 text-sm">静音保活</h4>
+                    </div>
+                    <p class="text-[11px] text-gray-500 mb-3">
+                        ${(() => { const s = getSilentKeepAliveHackState(); return `状态：<span class="${s.enabled ? 'text-green-500' : 'text-gray-400'}">${s.enabled ? '已开启' : '已关闭'}</span> ｜ 播放态：${s.playing ? '正在循环' : '未在播放'}`; })()}
                     </p>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button type="button"
-                            style="flex:1; min-width:120px; padding: 10px 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #4ade80 0%, #16a34a 100%); color: #fff; font-size: 13px; font-weight: bold; cursor: pointer;"
-                            onclick="enableBrowserNotificationsForExperiment()">
-                            开启浏览器通知
-                        </button>
-                        <button type="button"
-                            style="flex:1; min-width:120px; padding: 10px 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); color: #fff; font-size: 13px; font-weight: bold; cursor: pointer;"
-                            onclick="testBrowserNotificationForExperiment()">
-                            测试浏览器弹窗
-                        </button>
-                        <button type="button"
-                            style="flex:1; min-width:120px; padding: 10px 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #fda4af 0%, #e11d48 100%); color: #fff; font-size: 13px; font-weight: bold; cursor: pointer;"
-                            onclick="disableBrowserNotificationsForExperiment()">
-                            关闭浏览器通知
-                        </button>
+                    <button type="button" onclick="toggleExperimentalSilentKeepAlive()" class="w-full py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-medium transition-colors shadow-sm shadow-sky-200 mb-3">
+                        ${(() => { const s = getSilentKeepAliveHackState(); return s.enabled ? '关闭静音保活' : '开启静音保活'; })()}
+                    </button>
+                    <p class="text-[10px] text-gray-400 leading-relaxed pb-3 border-b border-gray-50">通过循环播放内嵌静音音频尝试后台保活。不保证所有机型有效。</p>
+                    
+                    <div class="pt-3">
+                        <p class="text-[11px] text-gray-500 mb-3">
+                            ${(() => { const s = getBrowserNotificationState(); return `浏览器通知：${s.supported ? '支持' : '不支持'} ｜ 权限：${s.permission}`; })()}
+                        </p>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button type="button" onclick="enableBrowserNotificationsForExperiment()" class="py-2 bg-green-50 text-green-600 rounded-xl text-xs font-medium">
+                                开启通知
+                            </button>
+                            <button type="button" onclick="testBrowserNotificationForExperiment()" class="py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-medium">
+                                测试弹窗
+                            </button>
+                            <button type="button" onclick="disableBrowserNotificationsForExperiment()" class="py-2 bg-rose-50 text-rose-600 rounded-xl text-xs font-medium">
+                                关闭通知
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 应用版本与更新 -->
-            <div class="setting-card" style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; margin-top: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <h4 style="margin: 0; color:#333;">应用版本与更新</h4>
-                    <button type="button" onclick="refreshSettingsVersionInfo({ forceNetwork: true })" style="padding:6px 12px; border:none; border-radius:8px; background:rgba(0,0,0,0.05); color:#333; font-size:12px; font-weight:600; cursor:pointer;">
-                        重新检查
+            <!-- 应用信息 -->
+            <div class="mb-6">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">关于应用</h3>
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-medium text-gray-800 text-sm">版本与更新</h4>
+                        <button type="button" onclick="refreshSettingsVersionInfo({ forceNetwork: true })" class="text-[11px] text-gray-500 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg transition-colors">
+                            重新检查
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div class="bg-gray-50 rounded-xl p-3 border border-gray-100/50">
+                            <div class="text-[10px] text-gray-400 mb-1">当前版本</div>
+                            <div id="settings-current-version" class="text-xs font-bold text-gray-700">检测中...</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-xl p-3 border border-gray-100/50">
+                            <div class="text-[10px] text-gray-400 mb-1">最新版本</div>
+                            <div id="settings-latest-version" class="text-xs font-bold text-gray-700">检测中...</div>
+                        </div>
+                    </div>
+                    <div id="settings-app-version-status" class="text-[11px] text-gray-500 mb-3 text-center">正在读取版本信息...</div>
+                    <button id="settings-update-app-btn" type="button" onclick="updateAppToLatestVersion()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-900 text-white rounded-xl text-sm font-medium transition-colors shadow-sm">
+                        立即更新
                     </button>
                 </div>
-                <p style="font-size: 12px; color: #999; margin: 8px 0 0; line-height: 1.6;">当前版本读取本机已安装缓存，最新版本直接读取服务器上的更新脚本。</p>
-                <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-top:12px;">
-                    <div style="background:rgba(0,0,0,0.02); border:1px solid rgba(0,0,0,0.05); border-radius:10px; padding:10px;">
-                        <div style="font-size:12px; color:#666;">当前版本</div>
-                        <div id="settings-current-version" style="margin-top:4px; font-size:14px; font-weight:700; color:#333;">检测中...</div>
-                    </div>
-                    <div style="background:rgba(0,0,0,0.02); border:1px solid rgba(0,0,0,0.05); border-radius:10px; padding:10px;">
-                        <div style="font-size:12px; color:#666;">最新版本</div>
-                        <div id="settings-latest-version" style="margin-top:4px; font-size:14px; font-weight:700; color:#333;">检测中...</div>
-                    </div>
-                </div>
-                <div id="settings-app-version-status" style="margin-top:10px; font-size:12px; color:#6b7280; line-height:1.6; font-weight:500;">正在读取版本信息...</div>
-                <button id="settings-update-app-btn" type="button" onclick="updateAppToLatestVersion()" style="margin-top:12px; width:100%; padding:12px; border:none; border-radius:10px; background:linear-gradient(135deg, #38bdf8 0%, #0284c7 100%); color:#fff; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 4px 12px rgba(2,132,199,0.35);">
-                    立即更新
-                </button>
             </div>
 
-            <!-- 清除数据按钮 -->
-            <button onclick="clearAllData()" style="width: 100%; padding: 14px; background: #ff3b30; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3); cursor: pointer; transition: transform 0.1s; margin-top: 15px;">
-                清除数据
-            </button>
-            <div style="text-align:center; margin-top:10px; font-size:12px; color:#ff3b30;">⚠️ 此操作将清除所有保存的数据</div>
+            <!-- 底部操作区 -->
+            <div class="mt-8 space-y-3">
+                <button onclick="saveAllSettings()" class="w-full py-3.5 bg-green-500 hover:bg-green-600 text-white rounded-2xl text-base font-bold transition-all shadow-md shadow-green-200 flex justify-center items-center">
+                    <i class='bx bx-save mr-2 text-lg'></i>保存所有配置
+                </button>
+                <div class="text-center text-[11px] text-gray-400">配置将保存在本地</div>
+                
+                <div class="pt-6">
+                    <button onclick="clearAllData()" class="w-full py-3 bg-red-50 hover:bg-red-100 text-red-500 rounded-2xl text-sm font-bold transition-all border border-red-100 flex justify-center items-center">
+                        <i class='bx bx-trash mr-1.5 text-base'></i>清除所有数据
+                    </button>
+                    <div class="text-center mt-2 text-[10px] text-red-400/80">⚠️ 此操作不可逆</div>
+                </div>
+            </div>
 
         </div>
     `;
@@ -720,11 +801,11 @@ function renderSettingsUI(container) {
 }
 
 // 3. 拉取模型列表逻辑
-async function fetchModelList() {
-    let urlInput = document.getElementById('setting-api-url').value.trim();
-    const keyInput = document.getElementById('setting-api-key').value.trim();
-    const statusText = document.getElementById('fetch-status');
-    const selectBox = document.getElementById('setting-model-select');
+async function fetchModelList(type = 'main') {
+    let urlInput = document.getElementById(type === 'main' ? 'setting-api-url' : 'setting-summary-api-url').value.trim();
+    const keyInput = document.getElementById(type === 'main' ? 'setting-api-key' : 'setting-summary-api-key').value.trim();
+    const statusText = document.getElementById(type === 'main' ? 'fetch-status' : 'summary-fetch-status');
+    const selectBox = document.getElementById(type === 'main' ? 'setting-model-select' : 'setting-summary-model');
 
     if (!urlInput || !keyInput) {
         statusText.innerText = "❌ 请先填写 API 地址和 Key";
@@ -793,6 +874,58 @@ async function fetchModelList() {
         statusText.style.color = "red";
     }
 }
+
+// 测试连接功能
+async function testApiConnection(type = 'main') {
+    let urlInput = document.getElementById(type === 'main' ? 'setting-api-url' : 'setting-summary-api-url').value.trim();
+    const keyInput = document.getElementById(type === 'main' ? 'setting-api-key' : 'setting-summary-api-key').value.trim();
+    const statusText = document.getElementById(type === 'main' ? 'fetch-status' : 'summary-fetch-status');
+
+    if (!urlInput || !keyInput) {
+        statusText.innerText = "❌ 请先填写 API 地址和 Key";
+        statusText.style.color = "red";
+        return;
+    }
+
+    let targetUrl = urlInput;
+    if (targetUrl.endsWith('/')) targetUrl = targetUrl.slice(0, -1);
+    
+    // 智能尝试补全路径
+    if (!targetUrl.endsWith('/v1')) {
+        targetUrl += '/v1';
+    }
+    targetUrl += '/models';
+
+    statusText.innerText = "⏳ 正在测试连接...";
+    statusText.style.color = "#007aff";
+
+    try {
+        const response = await fetch(targetUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${keyInput}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`连接失败: HTTP ${response.status}`);
+        }
+
+        statusText.innerText = "✅ 连接成功，API 可用！";
+        statusText.style.color = "green";
+    } catch (error) {
+        console.error(error);
+        if (error.message.includes('Failed to fetch')) {
+            statusText.innerText = "❌ 网络错误或跨域拦截 (CORS)";
+        } else {
+            statusText.innerText = `❌ ${error.message}`;
+        }
+        statusText.style.color = "red";
+    }
+}
+window.testApiConnection = testApiConnection;
+window.fetchModelList = fetchModelList;
 
 function readDevAiParseFailureLogs() {
     try {
@@ -1916,11 +2049,14 @@ async function extractCurrentRoleThoughtChain() {
 window.extractCurrentRoleThoughtChain = extractCurrentRoleThoughtChain;
 
 // 4. 保存所有设置
-function saveAllSettings() {
+function saveAllSettings(silent = false) {
     let url = document.getElementById('setting-api-url').value.trim();
     const key = document.getElementById('setting-api-key').value.trim();
     const model = document.getElementById('setting-model-select').value;
     const temp = document.getElementById('setting-temp-slider').value;
+    let summaryUrl = document.getElementById('setting-summary-api-url').value.trim();
+    const summaryKey = document.getElementById('setting-summary-api-key').value.trim();
+    const summaryModel = document.getElementById('setting-summary-model').value.trim();
 
     try {
         if (window.updateSystemPromptDebugUI) window.updateSystemPromptDebugUI();
@@ -1934,11 +2070,19 @@ function saveAllSettings() {
         localStorage.setItem('selected_model', model);
         // 新增：保存温度
         localStorage.setItem('model_temperature', temp);
+
+        if (summaryUrl && summaryUrl.endsWith('/')) summaryUrl = summaryUrl.slice(0, -1);
+        if (summaryUrl) localStorage.setItem('summary_api_base_url', summaryUrl);
+        else localStorage.removeItem('summary_api_base_url');
+        if (summaryKey) localStorage.setItem('summary_user_api_key', summaryKey);
+        else localStorage.removeItem('summary_user_api_key');
+        if (summaryModel) localStorage.setItem('summary_selected_model', summaryModel);
+        else localStorage.removeItem('summary_selected_model');
         
-        alert(`✅ 设置已保存！\n\n模型：${model}\n温度：${temp}`);
-        if(window.closeApp) window.closeApp();
+        if (!silent) alert(`✅ 设置已保存！\n\n模型：${model}\n温度：${temp}`);
+        if (!silent && window.closeApp) window.closeApp();
     } else {
-        alert("地址和 Key 不能为空！");
+        if (!silent) alert("地址和 Key 不能为空！");
     }
 }
 
@@ -1953,6 +2097,28 @@ async function clearAllData() {
         
         if (doubleConfirm) {
             try {
+                async function withClearTimeout(promise, ms, label) {
+                    return new Promise(function (resolve, reject) {
+                        let done = false;
+                        const timer = setTimeout(function () {
+                            if (done) return;
+                            done = true;
+                            reject(new Error(String(label || 'clear') + ' timeout'));
+                        }, ms || 1800);
+                        Promise.resolve(promise).then(function (value) {
+                            if (done) return;
+                            done = true;
+                            clearTimeout(timer);
+                            resolve(value);
+                        }).catch(function (err) {
+                            if (done) return;
+                            done = true;
+                            clearTimeout(timer);
+                            reject(err);
+                        });
+                    });
+                }
+
                 async function clearKnownLocalForageStores() {
                     if (!window.localforage) return;
                     const stores = [
@@ -1970,13 +2136,65 @@ async function clearAllData() {
                                 ? localforage.createInstance(cfg)
                                 : localforage;
                             if (instance && typeof instance.clear === 'function') {
-                                await Promise.race([
-                                    instance.clear(),
-                                    new Promise(function (resolve) { setTimeout(resolve, 1200); })
-                                ]);
+                                await withClearTimeout(instance.clear(), 1800, cfg.name + '/' + cfg.storeName);
                             }
                         } catch (e0) { }
                     }
+                }
+
+                async function deleteIndexedDbDatabase(name) {
+                    const dbName = String(name || '').trim();
+                    if (!dbName || !window.indexedDB || typeof window.indexedDB.deleteDatabase !== 'function') return;
+                    await new Promise(function (resolve) {
+                        try {
+                            const request = window.indexedDB.deleteDatabase(dbName);
+                            request.onsuccess = function () { resolve(); };
+                            request.onerror = function () { resolve(); };
+                            request.onblocked = function () { resolve(); };
+                        } catch (e) {
+                            resolve();
+                        }
+                    });
+                }
+
+                async function clearKnownIndexedDbDatabases() {
+                    const names = new Set([
+                        'shubao-phone',
+                        'shubao_redbook_store_v1',
+                        'shubao_large_store_v1',
+                        'localforage'
+                    ]);
+                    try {
+                        if (window.indexedDB && typeof window.indexedDB.databases === 'function') {
+                            const dbs = await window.indexedDB.databases();
+                            (Array.isArray(dbs) ? dbs : []).forEach(function (item) {
+                                const name = String(item && item.name || '').trim();
+                                if (name) names.add(name);
+                            });
+                        }
+                    } catch (e) { }
+                    const list = Array.from(names);
+                    for (let i = 0; i < list.length; i++) {
+                        await deleteIndexedDbDatabase(list[i]);
+                    }
+                }
+
+                function resetInMemoryData() {
+                    window.currentChatRole = '';
+                    window.chatData = {};
+                    window.chatMapData = {};
+                    window.charProfiles = {};
+                    window.userPersonas = {};
+                    window.chatBackgrounds = {};
+                    window.callLogs = {};
+                    window.chatUnread = {};
+                    window.familyCardState = { receivedCards: [], sentCards: [] };
+                    window.memoryArchiveStore = {};
+                    window.voiceCallHistory = [];
+                    window.editVideoAlbumData = [];
+                    window.stickerData = null;
+                    window.momentsData = { posts: [], hiddenPosts: [], likes: [], comments: [] };
+                    window.globalChatWallpaper = '';
                 }
 
                 // 1. 清除 localStorage
@@ -1985,6 +2203,14 @@ async function clearAllData() {
                 } else if (window.WechatStore && typeof window.WechatStore.resetRuntime === 'function') {
                     window.WechatStore.resetRuntime();
                 }
+                if (window.WechatStore && typeof window.WechatStore.clearAll === 'function') {
+                    try {
+                        await window.WechatStore.clearAll();
+                    } catch (e0) {
+                        console.warn('清空 WechatStore 快照失败', e0);
+                    }
+                }
+                resetInMemoryData();
                 localStorage.clear();
                 console.log("✅ localStorage 已清除");
                 
@@ -1997,6 +2223,8 @@ async function clearAllData() {
                     await clearKnownLocalForageStores();
                     console.log("✅ localForage 已清除");
                 }
+                await clearKnownIndexedDbDatabases();
+                console.log("✅ IndexedDB 已删除");
                 
                 // 4. 注销 Service Worker（清除缓存控制）
                 if ('serviceWorker' in navigator) {
@@ -2116,6 +2344,9 @@ const STORAGE_MAIN_EXACT_KEYS = new Set([
     'model_temperature',
     'user_api_key',
     'api_base_url',
+    'summary_user_api_key',
+    'summary_api_base_url',
+    'summary_selected_model',
     'user_name',
     'user_avatar',
     'user_nickname',

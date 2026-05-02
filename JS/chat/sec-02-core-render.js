@@ -137,6 +137,36 @@ function readWechatChatHistoryFromAny(roleId) {
     }
 }
 
+function buildShortTermMemoryPreviewText(msg) {
+    const row = msg && typeof msg === 'object' ? msg : {};
+    const rawType = String(row.type || '').trim();
+    const type = rawType.toLowerCase();
+    const content = String(row.content || '').replace(/\s+/g, ' ').trim();
+    if (type === 'takeout_card') {
+        let payload = {};
+        try {
+            payload = typeof row.content === 'string' ? JSON.parse(row.content || '{}') : (row.content || {});
+        } catch (e) { }
+        const shopName = String(payload.shopName || payload.foodName || '').trim() || '外卖';
+        const items = Array.isArray(payload.items) ? payload.items.filter(function (item) {
+            return typeof item === 'string' && item.trim();
+        }).join('、') : '';
+        const price = String(payload.price || '').trim();
+        return ['[外卖卡片]', shopName, items, price ? ('¥' + price) : ''].filter(Boolean).join(' ');
+    }
+    if (type === 'gift_card') {
+        let payload = {};
+        try {
+            payload = typeof row.content === 'string' ? JSON.parse(row.content || '{}') : (row.content || {});
+        } catch (e) { }
+        const anonymous = payload.anonymous === true;
+        const giftName = anonymous ? '匿名包裹' : (String(payload.itemName || '').trim() || '礼物');
+        const price = String(payload.price || '').trim();
+        return ['[礼物卡片]', giftName, price ? ('¥' + price) : ''].filter(Boolean).join(' ');
+    }
+    return content;
+}
+
 function buildShortTermMemoryTextFromHistory(historyForApi, maxLines) {
     const list = Array.isArray(historyForApi) ? historyForApi : [];
     const lines = [];
@@ -145,7 +175,7 @@ function buildShortTermMemoryTextFromHistory(historyForApi, maxLines) {
         if (!msg || typeof msg !== 'object') continue;
         const role = String(msg.role || '').trim();
         if (role !== 'me' && role !== 'ai') continue;
-        const content = String(msg.content || '').replace(/\s+/g, ' ').trim();
+        const content = buildShortTermMemoryPreviewText(msg);
         if (!content) continue;
         lines.push((role === 'me' ? '我：' : 'TA：') + content);
     }
@@ -153,6 +183,8 @@ function buildShortTermMemoryTextFromHistory(historyForApi, maxLines) {
     if (lines.length <= n) return lines.join('\n');
     return lines.slice(lines.length - n).join('\n');
 }
+
+window.buildShortTermMemoryPreviewText = buildShortTermMemoryPreviewText;
 
 function countChatsForDate(roleId, dateKey) {
     const dk = String(dateKey || '').trim();
@@ -847,8 +879,18 @@ function getChatViewportKeyboardOffset() {
         if (!vv) return 0;
         const baseHeight = refreshChatViewportBaseHeight(false);
         const visibleHeight = Math.round(vv.height + (vv.offsetTop || 0));
+        const layoutHeight = Math.max(
+            Math.round(window.innerHeight || 0),
+            Math.round(document.documentElement ? document.documentElement.clientHeight || 0 : 0)
+        );
+        const overlayOffset = Math.max(0, Math.round(layoutHeight - visibleHeight));
+        if (overlayOffset > 72) {
+            return Math.min(overlayOffset, Math.round(layoutHeight * 0.65));
+        }
         const raw = Math.max(0, Math.round(baseHeight - visibleHeight));
-        return raw > 72 ? raw : 0;
+        const layoutAlreadyShrunk = raw > 72 && Math.abs(layoutHeight - visibleHeight) <= 24;
+        if (layoutAlreadyShrunk) return 0;
+        return raw > 72 ? Math.min(raw, Math.round(baseHeight * 0.65)) : 0;
     } catch (e) {
         return 0;
     }
@@ -924,29 +966,80 @@ function bindChatViewportLayoutSyncOnce() {
         setTimeout(run, 80);
     };
 
+    const isHistoryNearBottom = function (historyBox, tolerance) {
+        if (!historyBox) return false;
+        const threshold = Number.isFinite(tolerance) ? tolerance : 120;
+        const distance = historyBox.scrollHeight - historyBox.clientHeight - historyBox.scrollTop;
+        return distance <= threshold;
+    };
+
+    const setChatLayoutVar = function (name, value) {
+        try {
+            document.documentElement.style.setProperty(name, value);
+        } catch (e) { }
+        try {
+            const chatRoom = document.getElementById('chat-room-layer');
+            if (chatRoom) {
+                chatRoom.style.setProperty(name, value);
+            }
+        } catch (e2) { }
+    };
+
+    const syncFooterHeight = function () {
+        try {
+            const footerShell = document.querySelector('.chat-footer-shell');
+            if (!footerShell) return 0;
+            const rect = footerShell.getBoundingClientRect();
+            const height = Math.max(
+                Math.round(rect && rect.height ? rect.height : 0),
+                Math.round(footerShell.offsetHeight || 0)
+            );
+            if (height > 0) {
+                setChatLayoutVar('--chat-footer-height', height + 'px');
+            }
+            return height;
+        } catch (e) {
+            return 0;
+        }
+    };
+
     const syncLayout = function () {
         const historyBox = document.getElementById('chat-history');
         const chatView = document.getElementById('chat-view');
         const input = document.getElementById('msg-input');
+        const previousKeyboardOffset = Number(window.__chatLastKeyboardOffset || 0);
+        const nearBottomBeforeSync = isHistoryNearBottom(historyBox, previousKeyboardOffset > 0 ? previousKeyboardOffset + 140 : 140);
 
         const editableActive = isEditableElementActive();
         if (!editableActive) {
             refreshChatViewportBaseHeight(true);
         }
         const keyboardOffset = editableActive ? getChatViewportKeyboardOffset() : 0;
+        const keyboardOpened = previousKeyboardOffset <= 0 && keyboardOffset > 0;
+        const keyboardClosed = previousKeyboardOffset > 0 && keyboardOffset <= 0;
 
         if (chatView) {
             chatView.style.height = '';
         }
 
-        document.documentElement.style.setProperty('--chat-keyboard-offset', keyboardOffset + 'px');
-        document.documentElement.style.setProperty('--chat-keyboard-padding', keyboardOffset > 0 ? (keyboardOffset + 18) + 'px' : '0px');
+        setChatLayoutVar('--chat-keyboard-offset', keyboardOffset + 'px');
+        setChatLayoutVar('--chat-keyboard-padding', '0px');
+        syncFooterHeight();
+        requestAnimationFrame(syncFooterHeight);
         if (historyBox) {
             historyBox.style.scrollPaddingBottom = '';
             if (keyboardOffset > 0 && input && document.activeElement === input) {
                 scrollHistoryToBottom();
+            } else if ((keyboardOpened || keyboardClosed) && nearBottomBeforeSync) {
+                scrollHistoryToBottom();
+                if (keyboardClosed) {
+                    requestAnimationFrame(scrollHistoryToBottom);
+                    setTimeout(scrollHistoryToBottom, 120);
+                    setTimeout(scrollHistoryToBottom, 240);
+                }
             }
         }
+        window.__chatLastKeyboardOffset = keyboardOffset;
     };
 
     window.syncChatViewportLayout = syncLayout;
@@ -963,9 +1056,15 @@ function bindChatViewportLayoutSyncOnce() {
             scrollHistoryToBottom();
             setTimeout(syncLayout, 60);
         };
+        const settleLayout = function () {
+            setTimeout(syncLayout, 40);
+            setTimeout(scrollHistoryToBottom, 80);
+            setTimeout(syncLayout, 160);
+        };
         input.addEventListener('focus', nudgeLayout);
         input.addEventListener('click', nudgeLayout);
         input.addEventListener('input', scrollHistoryToBottom);
+        input.addEventListener('blur', settleLayout);
         window.__chatViewportInputSyncBound = true;
     }
     window.__chatViewportLayoutSyncBound = true;

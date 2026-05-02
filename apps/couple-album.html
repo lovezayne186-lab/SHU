@@ -1091,10 +1091,18 @@
         });
 
         function resolveCallAI() {
-            if (typeof window.callAI === 'function') return window.callAI;
-            try {
-                if (window.parent && window.parent !== window && typeof window.parent.callAI === 'function') return window.parent.callAI;
-            } catch (e) {}
+            let current = window;
+            let hops = 0;
+            while (current && hops < 8) {
+                try {
+                    if (typeof current.callAI === 'function') return current.callAI.bind(current);
+                    if (!current.parent || current.parent === current) break;
+                    current = current.parent;
+                    hops++;
+                } catch (e) {
+                    break;
+                }
+            }
             return null;
         }
 

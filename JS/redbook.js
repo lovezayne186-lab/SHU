@@ -165,6 +165,15 @@
         return channels.some(function (item) { return item.id === id; }) ? id : 'recommend';
     }
 
+    function normalizeBoolean(value, fallback) {
+        if (typeof value === 'boolean') return value;
+        const text = asString(value).toLowerCase();
+        if (!text) return fallback !== false;
+        if (['true', '1', 'yes', 'on'].indexOf(text) !== -1) return true;
+        if (['false', '0', 'no', 'off'].indexOf(text) !== -1) return false;
+        return fallback !== false;
+    }
+
     function getChannelLabel(channelId) {
         const id = normalizeChannelId(channelId);
         const matched = getChannelDefinitions().find(function (item) { return item.id === id; });
@@ -177,7 +186,8 @@
         return {
             label: asString(row.label || defaults.label || '新专区'),
             description: asString(row.description || defaults.description || ''),
-            worldBookIds: normalizeWorldBookSelection(row.worldBookIds || row.worldbookIds || row.worldBookId || row.worldbookId || [])
+            worldBookIds: normalizeWorldBookSelection(row.worldBookIds || row.worldbookIds || row.worldBookId || row.worldbookId || []),
+            allowOtherRoleComments: normalizeBoolean(row.allowOtherRoleComments, true)
         };
     }
 
@@ -329,6 +339,18 @@
         const target = asString(name);
         if (!target) return false;
         return getUserIdentityNames(extraName).indexOf(target) !== -1;
+    }
+
+    function isGeneratedUserIdentityName(name, extraName) {
+        const target = asString(name);
+        if (!target) return false;
+        if (isUserDisplayName(target, extraName)) return true;
+        const targetToken = normalizeIdentityToken(target);
+        if (!targetToken) return false;
+        return getUserIdentityNames(extraName).some(function (userName) {
+            const userToken = normalizeIdentityToken(userName);
+            return userToken && userToken === targetToken;
+        });
     }
 
     function getRedbookForage() {
@@ -620,6 +642,25 @@
             .toLowerCase();
     }
 
+    function findMatchedRoleByName(name, roles) {
+        const authorToken = normalizeIdentityToken(name);
+        if (!authorToken) return null;
+        const roleList = Array.isArray(roles) ? roles : getSelectedRoles();
+        return roleList.find(function (role) {
+            return getRoleNameAliases(role).some(function (alias) {
+                const aliasToken = normalizeIdentityToken(alias);
+                return aliasToken && (aliasToken === authorToken || authorToken.indexOf(aliasToken) !== -1 || aliasToken.indexOf(authorToken) !== -1);
+            });
+        }) || null;
+    }
+
+    function getPostAuthorRole(post, selectedRoles) {
+        const row = asObject(post);
+        return findMatchedRoleByName(row.authorOriginalName, selectedRoles)
+            || findMatchedRoleByName(row.authorName, selectedRoles)
+            || null;
+    }
+
     function getRoleNameAliases(role) {
         const item = asObject(role);
         const profile = asObject(item.profile);
@@ -777,12 +818,13 @@
         return getBookEntries(target).map(formatWorldBookEntry).filter(Boolean).join('\n');
     }
 
-    function getRecentHistoryText(roleId) {
+    function getRecentHistoryText(roleId, roleName) {
         const chatData = asObject(readChatData());
         const source = asArray(chatData[roleId]).slice(-MAX_RECENT_MESSAGES);
+        const userName = getForumUserName();
         return source.map(function (item) {
             const row = asObject(item);
-            const sender = row.isUser ? '用户' : '角色';
+            const sender = row.isUser ? ('真实用户“' + userName + '”') : ('角色“' + asString(roleName || '角色') + '”');
             const content = asString(row.text || row.content || row.message || row.summary);
             return content ? (sender + '：' + content) : '';
         }).filter(Boolean).join('\n');
@@ -1215,6 +1257,70 @@
         return pack;
     }
 
+    function appendInitialCommentThreadingRules(promptPack) {
+        const pack = asObject(promptPack);
+        if (!pack.systemPrompt) return pack;
+        pack.systemPrompt = [
+            '# 首轮评论楼层规范（最高优先级）',
+            '- `comments` 数组中的每个元素都是一级评论。',
+            '- 如果帖子作者是在回应某条一级评论，必须把作者回复写进该评论的 `reply` 对象，而不是再新增一个一级评论。',
+            '- `reply` 的格式固定为：`"reply": { "authorName": "帖子作者名", "content": "作者对这条评论的回复" }`。',
+            '- 当帖子作者是设定角色、一级评论来自 NPC/路人/其他角色时，作者回应也必须走 `reply` 对象，禁止另起一楼伪装成回复。',
+            '',
+            pack.systemPrompt
+        ].join('\n');
+        return pack;
+    }
+
+    function appendCommentThreadingRules(promptPack) {
+        const pack = asObject(promptPack);
+        if (!pack.systemPrompt) return pack;
+        pack.systemPrompt = [
+            '# 评论线程规范（最高优先级）',
+            '- 新生成的元素只有在直接评论原帖时，才能作为一级评论输出。',
+            '- 如果是在回应【目前评论区】里已经存在的某条评论，必须填写 `replyToName`，值必须等于被回复评论的 `authorName`。',
+            '- 回复已有评论时，内容本身不要再手写“回复某某：”前缀，交给 UI 按回复样式渲染。',
+            '- 任何角色、楼主或 NPC 在接某一楼发言时，都禁止另起一条一级评论冒充回复。',
+            '',
+            pack.systemPrompt
+        ].join('\n');
+        return pack;
+    }
+
+    function hasUserCommentInPost(post) {
+        return asArray(asObject(post).comments).some(function (comment) {
+            if (comment.isUserComment || isUserDisplayName(comment.authorName)) return true;
+            return asArray(comment.replies).some(function (reply) {
+                return reply.isUserComment || isUserDisplayName(reply.authorName);
+            });
+        });
+    }
+
+    function appendRoleCommentPolicy(promptPack, post, channelConfig, selectedRoles) {
+        const pack = asObject(promptPack);
+        if (!pack.systemPrompt) return pack;
+        const authorRole = getPostAuthorRole(post, selectedRoles);
+        if (!authorRole) return pack;
+        const allowOtherRoleComments = normalizeBoolean(asObject(channelConfig).allowOtherRoleComments, true);
+        const policyLines = [
+            '# 当前专区角色评论开关（最高优先级）',
+            '- 这篇帖子由设定角色“' + authorRole.name + '”发布。'
+        ];
+        if (allowOtherRoleComments) {
+            policyLines.push('- 当前专区设置：允许其余角色评论。其他设定角色可以参与，但凡是在接某一楼发言，都必须填写 `replyToName`，不要另起一级评论。');
+        } else {
+            policyLines.push('- 当前专区设置：不允许其余角色评论。');
+            if (hasUserCommentInPost(post)) {
+                policyLines.push('- 由于评论区已经出现真实用户的留言，只有“' + authorRole.name + '”可以继续作为设定角色发言或回复用户；其他设定角色禁止出现在新评论里。');
+            } else {
+                policyLines.push('- 如果评论区后续出现真实用户的留言，也只有“' + authorRole.name + '”可以继续作为设定角色发言；其他设定角色禁止出现在新评论里。');
+            }
+            policyLines.push('- 普通 NPC/路人仍然可以围观、起哄或追问，但不能冒充设定角色。');
+        }
+        pack.systemPrompt = policyLines.concat(['', pack.systemPrompt]).join('\n');
+        return pack;
+    }
+
     function normalizePost(item, index) {
         const row = asObject(item);
         const coverText = normalizeTextContent(row.coverText || row.coverCopy || row.cover || row.coverContent || row.slogan);
@@ -1224,29 +1330,32 @@
         const sectionName = asString(row.sectionName || row.topicName || row.groupName || row.topic || '生活讨论');
         const isUserPost = row.isUserPost === true || asString(row.authorType || row.authorRole) === 'user';
         if (!authorName || !content) return null;
+        if (!isUserPost && isGeneratedUserIdentityName(authorName)) return null;
         
         const rawComments = Array.isArray(row.comments) ? row.comments : [];
         const normalizedComments = rawComments.map(function(c) {
             const cObj = asObject(c);
             const cAuthor = asString(cObj.authorName || '热心网友');
             const cContent = normalizeTextContent(cObj.content || '');
-            if (!cContent) return null;
+            const isUserComment = cObj.isUserComment === true || asString(cObj.authorType || cObj.authorRole) === 'user';
+            if (!cContent || (!isUserComment && isGeneratedUserIdentityName(cAuthor))) return null;
             const cReply = cObj.reply ? asObject(cObj.reply) : null;
             const replyItems = asArray(cObj.replies).map(function (replyItem) {
                 const replyRow = asObject(replyItem);
                 const replyAuthor = asString(replyRow.authorName || replyRow.commenter || '热心网友');
                 const replyContent = normalizeTextContent(replyRow.content || replyRow.text);
-                if (!replyAuthor || !replyContent) return null;
+                const isReplyUserComment = replyRow.isUserComment === true || asString(replyRow.authorType || replyRow.authorRole) === 'user';
+                if (!replyAuthor || !replyContent || (!isReplyUserComment && isGeneratedUserIdentityName(replyAuthor))) return null;
                 return {
                     authorName: replyAuthor,
                     content: replyContent,
                     targetName: asString(replyRow.targetName || replyRow.replyToName || cAuthor),
                     targetContent: normalizeTextContent(replyRow.targetContent || replyRow.replyToContent || cContent),
                     likes: Math.max(0, parseInt(replyRow.likes || replyRow.likesCount, 10) || 0),
-                    isUserComment: replyRow.isUserComment === true || asString(replyRow.authorType || replyRow.authorRole) === 'user'
+                    isUserComment: isReplyUserComment
                 };
             }).filter(Boolean);
-            if (cReply && cReply.content) {
+            if (cReply && cReply.content && (isUserPost || !isGeneratedUserIdentityName(cReply.authorName || authorName))) {
                 replyItems.push({
                     authorName: asString(cReply.authorName || authorName),
                     content: normalizeTextContent(cReply.content),
@@ -1260,7 +1369,7 @@
                 authorName: cAuthor,
                 content: cContent,
                 likes: Math.max(0, parseInt(cObj.likes || cObj.likesCount, 10) || Math.floor(Math.random() * 50)),
-                isUserComment: cObj.isUserComment === true || asString(cObj.authorType || cObj.authorRole) === 'user',
+                isUserComment: isUserComment,
                 replies: replyItems,
                 reply: null
             };
@@ -1380,20 +1489,22 @@
     function buildPromptPayload(selectedRoles, exactCount) {
         const currentTime = new Date().toLocaleString('zh-CN', { hour12: false });
         const userName = getForumUserName();
+        const displayName = getUserDisplayName();
         const communityContext = readCommunityWorldbookContext();
         const roleBlocks = buildRoleBlocks(selectedRoles);
         const channelModule = getChannelModule(state.activeChannel);
         const channelConfig = getChannelConfig(state.activeChannel);
 
         if (channelModule && typeof channelModule.buildPostPrompt === 'function') {
-            return applyChannelWorldBookInjection(applyUserIdentityInjection(channelModule.buildPostPrompt({
+            return appendInitialCommentThreadingRules(applyChannelWorldBookInjection(applyForeignRoleLanguageInjection(applyUserIdentityInjection(channelModule.buildPostPrompt({
                 exactCount: exactCount,
                 currentTime: currentTime,
                 userName: userName,
+                displayName: displayName,
                 communityContext: communityContext,
                 roleBlocks: roleBlocks,
                 channelConfig: Object.assign({}, channelConfig, { prompt: '' })
-            })), state.activeChannel);
+            })), selectedRoles), state.activeChannel));
         }
 
         const systemPrompt = [
@@ -1406,20 +1517,20 @@
             '',
             '# 核心规则',
             '1. 你可以参考当前真实时间（' + currentTime + '）作为发帖背景，但【绝对禁止】在正文或封面刻意播报时间。',
-            '2. 用户昵称是“' + userName + '”，你绝对不能扮演用户，也不能生成作者名等于该昵称的帖子。',
+            '2. 【重要红线】：用户的真名/论坛称呼是“' + userName + '”，小红书显示昵称是“' + displayName + '”。你【绝对不能】扮演用户！【禁止】生成作者名(authorName)或原名(authorOriginalName)等于这俩名字的帖子！【禁止】在评论区(comments)里代替用户发言！所有的帖子和评论都必须是角色或路人NPC发的。',
             '3. 内容必须综合角色的人设、长期记忆、最近聊天和世界书信息，不能脱离角色设定乱写。',
             '4. 帖子风格必须极具“小红书味”：真实生活感、情绪钩子、经验分享感、轻口语、带一点反差感，像能直接出现在发现页的笔记。',
             '5. 作者分布要有社区感：主角色与路人NPC混合出现；路人NPC首次出现时必须提供 authorAvatarPrompt 英文头像提示词，同批次里同名NPC要保持一致。',
-            '6. 必须为每条帖子生成 5 到 7 条符合小红书风格的网友评论（comments数组），包含沙雕/真实的网友吐槽，且最好包含作者的亲自回复（reply对象）。',
+            '6. 必须为每条帖子生成 5 到 7 条符合小红书风格的网友评论（comments数组），包含沙雕/真实的网友吐槽，且最好包含帖子作者本人的亲自回复（reply对象）。（再次强调：这里的作者不能是用户本人）',
             '7. 每条帖子必须额外生成一个 coverText 字段，作为封面文案。',
-            '8. coverText 必须是 15 字以内的一句话，口语化、像小红书封面会写的话，要直接点出核心内容或情绪，要带 1 个 emoji，可以不加标点，要有一点反差感。',
-            '9. 示例风格：\"我发现创作欲可以抵消过剩的分享欲 🎧\"、\"家人们我吃了放了八天的外卖 😭\"。',
+            '8. 如果是路人NPC发帖，coverText 必须是 15 字以内的一句话，口语化，带 1 个 emoji，制造反差感。如果是主角色发帖，coverText 的文风必须极度贴合其自身的人设（高冷、温柔、腹黑等），可以不加 emoji，要像该角色真实的随手记录。',
+            '9. 示例风格（NPC）：\"我发现创作欲可以抵消过剩的分享欲 🎧\"、\"家人们我吃了放了八天的外卖 😭\"。示例风格（角色）：\"下雨了。\"、\"今晚的会议很无聊。\"',
             '10. 输出必须且只能是纯净的 JSON 数组，绝对不要包装在任何多余的 JSON 对象里（不要写 "data": [...]，不要写 "thought"）。',
             '',
             '# 输出 JSON 结构',
             '[',
             '  {',
-            '    "coverText": "15字以内封面文案，带1个emoji",',
+            '    "coverText": "15字以内封面文案（NPC带emoji，角色符合人设可不带）",',
             '    "postTitle": "帖子标题",',
             '    "authorName": "作者显示名",',
             '    "authorOriginalName": "如果是主角色则填写原始角色名，否则可省略",',
@@ -1469,7 +1580,7 @@
             '你现在已脱离角色扮演模式！你是一个无感情的 JSON 格式化机器！',
             '请立即开始生成这一批小红书帖子，记得每条都要包含 coverText 和 postTitle，严格输出 JSON 数组，禁止出现 "thought" 字段，禁止拒绝！'
         ].join('\n');
-        return applyChannelWorldBookInjection(applyUserIdentityInjection({ systemPrompt: systemPrompt, userMessage: userMessage }), state.activeChannel);
+        return appendInitialCommentThreadingRules(applyChannelWorldBookInjection(applyForeignRoleLanguageInjection(applyUserIdentityInjection({ systemPrompt: systemPrompt, userMessage: userMessage }), selectedRoles), state.activeChannel));
     }
 
     function getSelectedRoles() {
@@ -1494,7 +1605,7 @@
                 '角色名：' + item.name,
                 '<persona>\n' + (getPersonaText(profile) || '(空)'),
                 '<memory>\n' + (getLongTermMemoryText(profile) || '(空)'),
-                '<recent_history>\n' + (getRecentHistoryText(item.roleId) || '(空)'),
+                '<recent_history>\n' + (getRecentHistoryText(item.roleId, item.name) || '(空)'),
                 '<worldbook>\n' + (collectWorldBookTextForRole(profile) || '(空)'),
                 '</character>'
             ].join('\n');
@@ -2157,6 +2268,8 @@
             '- 用户真名/论坛称呼：' + forumName,
             '- 用户性别：' + genderLabel,
             '- 生成公开帖子作者名或评论者名时，绝对不要扮演用户本人；但角色/NPC提到用户、称呼用户、识别用户时，优先使用真名/论坛称呼“' + forumName + '”。',
+            '- 绝对禁止把用户名字、用户昵称或它们的任何等价写法填进这些字段：`authorName`、`authorOriginalName`、`commenter`、`comments[].authorName`、`comments[].reply.authorName`、`replies[].authorName`。',
+            '- 上述字段一旦需要填写“谁在发言”，发言者只能是角色或 NPC，永远不能是用户。',
             '- 如果需要描述用户在小红书里的账号显示名，可以使用昵称“' + displayName + '”。',
             '- 当【已有评论】里出现 [USER:名字] 才代表真实用户；[AUTHOR_NPC:名字]、[NPC:名字]、[ROLE:名字] 都不是用户，回复这些人时不能把对方认成用户。',
             '- 角色可以按自己的人设、兴趣和态度回复 [NPC:名字] 或 [AUTHOR_NPC:名字] 的内容，例如质疑、调侃、补充、反驳、顺着吃瓜；但这种回复是对网友/NPC的评论区互动，不是对用户的亲密互动。',
@@ -2167,6 +2280,68 @@
             '- 角色和 NPC 的一切言行都必须是“在网上看到内容后打字互动”。禁止写成线下面对面、正在见面、站在身边、走到面前、牵手拥抱、敲门、到楼下、进房间、同处一个现实空间等见面场景。',
             '- 可以描述他们在评论区如何回复、如何隔着屏幕反应、如何根据帖子内容脑补或吃瓜；不要让任何人离开手机界面去和用户/楼主/NPC实体接触。',
             '- 如果帖子内容需要八卦、恐怖、同人或暧昧张力，也必须通过公开笔记、截图、评论、私信、网友脑补来呈现，不要写“我刚刚亲眼在现场看到/碰到/遇见 TA”。',
+            '',
+            pack.systemPrompt
+        ].join('\n');
+        return pack;
+    }
+
+    function isLikelyForeignRoleProfile(profile) {
+        const row = asObject(profile);
+        const textParts = [
+            row.language,
+            row.lang,
+            row.locale,
+            row.nationality,
+            row.country,
+            row.region
+        ].map(asString).filter(Boolean);
+        const merged = textParts.join(' | ');
+        if (!merged) return false;
+        if (/(?:^|[\s_|-])(zh|zh-cn|zh_hans|cn)(?:$|[\s_|-])/i.test(merged)) return false;
+        if (/(中文|汉语|普通话|中国|china)/i.test(merged)) return false;
+        if (/(?:^|[\s_|-])(en|ja|jp|ko|fr|de|es|ru|it|pt|ar|tr|th|vi)(?:$|[\s_|-])/i.test(merged)) return true;
+        if (/(english|japanese|korean|french|german|spanish|russian|italian|portuguese|arabic|turkish|thai|vietnamese)/i.test(merged)) return true;
+        if (/(外国|海外|欧美|日本|韩国|美国|英国|法国|德国|俄罗斯|西班牙|意大利)/i.test(merged)) return true;
+        return false;
+    }
+
+    function collectForeignRoleRules(selectedRoles) {
+        const list = Array.isArray(selectedRoles) ? selectedRoles : [];
+        const seen = {};
+        const rules = [];
+        list.forEach(function (item) {
+            const row = asObject(item);
+            const profile = asObject(row.profile);
+            if (!isLikelyForeignRoleProfile(profile)) return;
+            const roleName = asString(row.name || profile.nickName || profile.name || row.roleId || '角色');
+            if (!roleName || seen[roleName]) return;
+            seen[roleName] = true;
+            const langHint = asString(profile.language || profile.lang || profile.locale || profile.nationality || '外语');
+            rules.push({
+                roleName: roleName,
+                langHint: langHint
+            });
+        });
+        return rules;
+    }
+
+    function applyForeignRoleLanguageInjection(promptPack, selectedRoles) {
+        const pack = asObject(promptPack);
+        if (!pack.systemPrompt) return pack;
+        const rules = collectForeignRoleRules(selectedRoles);
+        if (!rules.length) return pack;
+        const roleListText = rules.map(function (item) {
+            return '- ' + item.roleName + '（语言线索：' + item.langHint + '）';
+        }).join('\n');
+        pack.systemPrompt = [
+            '# 外国角色语言输出规范（最高优先级）',
+            '以下角色按“外国角色”处理：',
+            roleListText,
+            '当上述角色作为帖子作者、评论作者、或 reply 的发言者时，其可见文本必须统一使用：外语原文（简体中文翻译）。',
+            '必须确保外语与简体中文翻译同时出现，禁止只写外语或只写中文。',
+            '适用字段包括但不限于：postTitle、coverText、content、comments[].content、comments[].reply.content。',
+            '非上述角色可按专区默认语气输出。',
             '',
             pack.systemPrompt
         ].join('\n');
@@ -2257,6 +2432,13 @@
             '          <input class="redbook-count-input" type="number" min="' + MIN_COUNT + '" max="' + MAX_COUNT + '" step="1" value="' + escapeHtml(getEffectivePostCount()) + '" data-redbook-count-input>',
             '        </div>',
             '      </div>',
+            '      <label class="redbook-worldbook-item" data-redbook-other-role-wrap style="display:none;">',
+            '        <input type="checkbox" data-redbook-active-channel-setting="allowOtherRoleComments">',
+            '        <span>',
+            '          <strong>允许其余角色评论</strong>',
+            '          <br><span data-redbook-other-role-desc>开启时，你的评论所有选择角色都可回复，适合修罗场。关闭后，只有发帖角色本人会回复你的评论。</span>',
+            '        </span>',
+            '      </label>',
             '    </div>',
             '    <div class="redbook-drawer-foot">',
             '      <div class="redbook-foot-tip" data-redbook-foot-tip>只会生成帖子，不会自动补评论或假数据。</div>',
@@ -2518,10 +2700,14 @@
         const id = rawId.indexOf('custom_') === 0 ? rawId : normalizeChannelId(rawId);
         if (id === 'recommend') return;
         const key = asString(field);
-        if (['label', 'description'].indexOf(key) === -1) return;
+        if (['label', 'description', 'allowOtherRoleComments'].indexOf(key) === -1) return;
         const config = ensureChannelConfig(id);
         if (!config) return;
-        config[key] = asString(value);
+        if (key === 'allowOtherRoleComments') {
+            config[key] = normalizeBoolean(value, true);
+        } else {
+            config[key] = asString(value);
+        }
         saveSettings();
     }
 
@@ -2546,7 +2732,8 @@
         state.channelConfigs[id] = {
             label: '新专区',
             description: '写下这个专区生成前展示给用户看的介绍。',
-            worldBookIds: []
+            worldBookIds: [],
+            allowOtherRoleComments: true
         };
         state.openChannelSettings[id] = true;
         saveSettings();
@@ -2856,10 +3043,14 @@
         const countTitle = state.root.querySelector('[data-redbook-count-title]');
         const countNote = state.root.querySelector('[data-redbook-count-note]');
         const footTip = state.root.querySelector('[data-redbook-foot-tip]');
+        const otherRoleWrap = state.root.querySelector('[data-redbook-other-role-wrap]');
+        const otherRoleToggle = state.root.querySelector('[data-redbook-active-channel-setting="allowOtherRoleComments"]');
+        const otherRoleDesc = state.root.querySelector('[data-redbook-other-role-desc]');
         const fixedCountActive = isFixedCountChannel(activeChannel);
         const effectiveCount = getEffectivePostCount();
         const activeLabel = getChannelLabel(activeChannel);
         const channelModule = getChannelModule(activeChannel);
+        const channelConfig = getChannelConfig(activeChannel);
         const hasInitialComments = !!(channelModule && channelModule.HAS_INITIAL_COMMENTS);
         if (countInput) {
             countInput.value = effectiveCount;
@@ -2877,6 +3068,18 @@
                 : (hasInitialComments
                     ? (activeLabel + '专区会按你选择的条数生成笔记，并同步生成首轮评论区。')
                     : (activeLabel + '专区会按你选择的条数生成帖子，并参考专区设定生成评论区。'));
+        }
+        if (otherRoleWrap) {
+            otherRoleWrap.style.display = activeChannel === 'recommend' ? 'none' : '';
+        }
+        if (otherRoleToggle) {
+            otherRoleToggle.checked = channelConfig.allowOtherRoleComments !== false;
+            otherRoleToggle.disabled = activeChannel === 'recommend';
+        }
+        if (otherRoleDesc) {
+            otherRoleDesc.textContent = activeChannel === 'recommend'
+                ? '推荐区不使用这个专区开关。'
+                : ('当前对“' + activeLabel + '”专区生效。关闭后，角色发帖且用户留言时，只有发帖角色本人会继续作为角色回复。');
         }
         updateGenerateButton();
     }
@@ -3322,7 +3525,8 @@
             '1. 【身份识别】：帖主/楼主/作者就是用户“' + userName + '”。所有设定角色都必须识别出这是用户本人发的笔记，可以用他们平时对用户的称呼、关系和记忆来互动。',
             '用户在小红书界面显示的昵称是“' + displayName + '”，但论坛里大家知道并称呼 TA 时优先叫真名/论坛称呼“' + userName + '”。',
             '用户性别：' + getGenderLabel() + '。需要代称或性别相关反应时必须匹配这个性别。',
-            '2. 【禁止扮演用户】：绝对不能生成 authorName/commenter 为“' + userName + '”的评论。用户只作为被回复对象、被称呼对象或笔记作者存在。',
+            '2. 【禁止扮演用户】：绝对不能生成 authorName/commenter 为用户“' + userName + '”或昵称“' + displayName + '”的评论。用户只作为被回复对象、被称呼对象或笔记作者存在。',
+            '2.1 【字段红线】：`authorName`、`commenter`、`reply.authorName`、`replies[].authorName` 这些字段里都不能出现用户名字、用户昵称或它们的等价写法。',
             '3. 【评论组成】：生成 6-10 条评论，必须混合设定角色与路人 NPC。角色要符合人设，NPC 要像真实网友一样围观、起哄、补充或提问。',
             '4. 【评论区规范】：直接对帖子发表看法时，只输出普通评论，不要写“回复XXX”，也不要填 replyToName。',
             '5. 【回复结构】：只有当你明确是在回复【目前评论区】里某条已经存在的评论时，才填写 replyToName 字段。replyToName 必须等于被回复评论的 authorName。',
@@ -3386,14 +3590,14 @@
                 const existingCommentsText = formatExistingCommentsForPrompt(post);
                 const latestUserInteraction = getLatestUserInteraction(post);
                 const channelId = getPostChannel(post);
-                const promptPack = appendReplyAwareness(applyChannelWorldBookInjection(applyUserIdentityInjection(buildUserPostCommentsPrompt({
+                const promptPack = appendReplyAwareness(applyChannelWorldBookInjection(applyForeignRoleLanguageInjection(applyUserIdentityInjection(buildUserPostCommentsPrompt({
                     userName: userName,
                     roleBlocks: roleBlocks,
                     postSummary: postSummary,
                     existingCommentsText: existingCommentsText,
                     channelId: channelId,
                     channelConfig: getChannelConfig(channelId)
-                })), channelId), latestUserInteraction);
+                })), selectedRoles), channelId), latestUserInteraction);
                 const raw = await callAi(promptPack.systemPrompt, promptPack.userMessage, promptPack.options);
                 const parsed = extractJsonArray(raw);
                 if (!parsed.length) {
@@ -3407,7 +3611,7 @@
                     const row = asObject(item);
                     const commenter = asString(row.commenter || row.authorName);
                     const rawText = asString(row.text || row.content);
-                    if (!commenter || !rawText || isUserDisplayName(commenter, userName)) return;
+                    if (!commenter || !rawText || isGeneratedUserIdentityName(commenter, userName)) return;
                     if (addCommentToPost(currentPost, {
                         authorName: commenter,
                         content: rawText,
@@ -3480,7 +3684,17 @@
                         cpRoleName: cpRoleName,
                         channelConfig: Object.assign({}, channelConfig, { prompt: '' })
                     });
-                    promptPack = appendReplyAwareness(applyChannelWorldBookInjection(applyUserIdentityInjection(promptPack), getPostChannel(post)), latestUserInteraction);
+                    promptPack = appendRoleCommentPolicy(
+                        appendReplyAwareness(
+                            appendCommentThreadingRules(
+                                applyChannelWorldBookInjection(applyForeignRoleLanguageInjection(applyUserIdentityInjection(promptPack), selectedRoles), getPostChannel(post))
+                            ),
+                            latestUserInteraction
+                        ),
+                        post,
+                        channelConfig,
+                        selectedRoles
+                    );
                 }
 
                 if (!promptPack) {
@@ -3504,8 +3718,8 @@
             '- 【绝对禁止】像机器人一样在评论里刻意播报或强调时间',
             '',
             '2. 【禁止扮演用户】（最高优先级）',
-            '- 用户昵称是“' + userName + '”',
-            '- 你【绝对不能】生成 commenter 为“' + userName + '”的评论',
+            '- 用户的真名/论坛称呼是“' + userName + '”，小红书显示昵称是“' + getUserDisplayName() + '”',
+            '- 你【绝对不能】生成 commenter 或 authorName 为这俩名字的评论',
             '- 你只能扮演【除了用户以外】的所有角色',
             '',
             '3. 【互动要求】',
@@ -3557,7 +3771,17 @@
             '--- 已有评论 ---',
             existingCommentsText || '(暂无评论)'
                 ].join('\n');
-                promptPack = appendReplyAwareness(applyChannelWorldBookInjection(applyUserIdentityInjection({ systemPrompt: systemPrompt, userMessage: userMessage }), getPostChannel(post)), latestUserInteraction);
+                promptPack = appendRoleCommentPolicy(
+                    appendReplyAwareness(
+                        appendCommentThreadingRules(
+                            applyChannelWorldBookInjection(applyForeignRoleLanguageInjection(applyUserIdentityInjection({ systemPrompt: systemPrompt, userMessage: userMessage }), selectedRoles), getPostChannel(post))
+                        ),
+                        latestUserInteraction
+                    ),
+                    post,
+                    channelConfig,
+                    selectedRoles
+                );
                 }
 
             const raw = await callAi(promptPack.systemPrompt, promptPack.userMessage, promptPack.options);
@@ -3569,13 +3793,25 @@
             if (!currentPost) {
                 throw new Error('原帖子已不存在，无法写入网友评论。');
             }
+                const currentChannelConfig = getChannelConfig(getPostChannel(currentPost));
             let addedCount = 0;
             currentPost.comments = currentPost.comments || [];
             parsed.forEach(function(c) {
                 const row = asObject(c);
                 const commenter = asString(row.commenter || row.authorName);
                 const text = asString(row.text || row.content);
-                if (commenter && text && !isUserDisplayName(commenter, userName)) {
+                    if (commenter && text && !isGeneratedUserIdentityName(commenter, userName)) {
+                    const currentPostAuthorRole = getPostAuthorRole(currentPost, selectedRoles);
+                    const commenterRole = findMatchedRoleByName(commenter, selectedRoles);
+                    if (
+                        currentPostAuthorRole &&
+                        commenterRole &&
+                        commenterRole.roleId !== currentPostAuthorRole.roleId &&
+                        currentChannelConfig.allowOtherRoleComments === false &&
+                        hasUserCommentInPost(currentPost)
+                    ) {
+                        return;
+                    }
                     if (channelModule && typeof channelModule.shouldAcceptMoreComment === 'function' && !channelModule.shouldAcceptMoreComment({
                         comment: row,
                         commenter: commenter,
@@ -3846,11 +4082,16 @@
         const target = event.target;
         if (!target || !target.hasAttribute) return;
         if (target.hasAttribute('data-redbook-channel-setting-field')) {
+            const field = target.getAttribute('data-redbook-setting-field');
             updateChannelConfig(
                 target.getAttribute('data-redbook-channel-setting-field'),
-                target.getAttribute('data-redbook-setting-field'),
-                target.value
+                field,
+                field === 'allowOtherRoleComments' ? (target.checked === true) : target.value
             );
+            return;
+        }
+        if (target.hasAttribute('data-redbook-active-channel-setting')) {
+            updateChannelConfig(state.activeChannel, target.getAttribute('data-redbook-active-channel-setting'), target.checked === true);
             return;
         }
         if (!target.hasAttribute('data-redbook-count-input')) return;
@@ -3892,10 +4133,15 @@
             updateChannelConfig(
                 channelId,
                 field,
-                target.value
+                field === 'allowOtherRoleComments' ? (target.checked === true) : target.value
             );
             renderChannelTabsUI();
             renderChannelSettingsPage();
+            return;
+        }
+        if (target.hasAttribute('data-redbook-active-channel-setting')) {
+            updateChannelConfig(state.activeChannel, target.getAttribute('data-redbook-active-channel-setting'), target.checked === true);
+            syncChannelUI();
             return;
         }
         if (target.hasAttribute('data-redbook-worldbook-toggle')) {

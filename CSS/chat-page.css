@@ -3,7 +3,9 @@
 #chat-room-layer {
     --chat-keyboard-offset: 0px;
     --chat-keyboard-padding: 0px;
+    --chat-footer-height: 84px;
     --chat-footer-lift: 0px;
+    --chat-panel-height: 0px;
     position: absolute;
     top: 0;
     left: 0;
@@ -110,19 +112,24 @@
 }
 
 #chat-view {
-    background: #ededed;
+    background: transparent; /* 恢复透明背景，方便自定义形状和美化 */
     overscroll-behavior: none;
 }
 
 /* === 顶部栏 === */
 .chat-room-header {
+    position: absolute; /* 悬浮在内容上方 */
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 10;
     min-height: 50px;
     padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
     padding-bottom: 10px;
-    background: rgba(255, 255, 255, 0.15); /* 提升亮度以适配浅色背景 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05); /* 改变边框颜色适配浅色 */
+    background: rgba(245, 245, 245, 0.85); /* 半透明背景 */
+    backdrop-filter: blur(20px); /* 毛玻璃效果 */
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.08); /* 改变边框颜色适配浅色 */
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -130,9 +137,9 @@
     padding-right: 15px;
     flex-shrink: 0;
     box-sizing: border-box;
-    color: var(--chat-text-color, #000); /* 使用变量以便日后切换深浅色 */
+    color: var(--chat-text-color, #111); /* 使用变量以便日后切换深浅色 */
 }
-.chat-room-title { font-weight: bold; font-size: calc(16px * var(--chat-font-scale, 1)); color: var(--chat-text-color, #000); }
+.chat-room-title { font-weight: 600; font-size: calc(17px * var(--chat-font-scale, 1)); color: var(--chat-text-color, #111); letter-spacing: -0.4px; }
 
 .chat-room-title-wrap {
     display: flex;
@@ -151,9 +158,9 @@
 }
 
 #chat-room-layer .chat-back-btn {
-    width: 28px;
-    height: 28px;
-    padding: 0;
+    height: 36px;
+    padding: 0 8px;
+    border-radius: 8px;
     border: none;
     background: transparent;
     display: inline-flex;
@@ -162,15 +169,18 @@
     cursor: pointer;
     appearance: none;
     margin-bottom: 4px;
+    margin-left: -8px; /* 补偿内边距，使其与边缘对齐 */
+    transition: background-color 0.2s, opacity 0.2s;
 }
 
 #chat-room-layer .chat-back-btn i {
-    font-size: calc(28px * var(--chat-font-scale, 1));
+    font-size: calc(26px * var(--chat-font-scale, 1));
     line-height: 1;
 }
 
 #chat-room-layer .chat-back-btn:active {
-    opacity: 0.55;
+    background-color: rgba(0, 0, 0, 0.05);
+    opacity: 0.7;
 }
 
 #chat-room-layer .chat-room-menu {
@@ -480,16 +490,25 @@
 /* === 中间消息区 === */
 .chat-room-body {
     flex: 1 1 auto; /* 占据剩余所有高度 */
-    min-height: 0;
+    width: 100%;
+    height: 100%;
+    position: absolute; /* 绝对定位占满屏幕 */
+    top: 0;
+    left: 0;
     overflow-y: auto; /* 允许滚动 */
     box-sizing: border-box;
-    height: auto !important;
-    padding: calc(15px * var(--chat-font-scale, 1));
-    padding-bottom: calc(15px * var(--chat-font-scale, 1) + var(--chat-keyboard-padding, 0px));
-    scroll-padding-bottom: calc(120px + var(--chat-keyboard-offset, 0px));
+    /* 让内容能穿透到底部栏和顶部栏下方 */
+    padding-top: calc(50px + env(safe-area-inset-top, 0px) + 20px);
+    /* 由 JS 同步真实底部栏高度，避免更多面板收起后保留旧高度 */
+    padding-bottom: calc(15px * var(--chat-font-scale, 1) + var(--chat-footer-height, 84px));
+    padding-left: calc(15px * var(--chat-font-scale, 1));
+    padding-right: calc(15px * var(--chat-font-scale, 1));
+    scroll-padding-bottom: calc(15px * var(--chat-font-scale, 1) + var(--chat-footer-height, 84px));
+    transition: padding-bottom 0.2s ease-out, scroll-padding-bottom 0.2s ease-out;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     touch-action: pan-y;
+    background-color: transparent;
 }
 
 .chat-room-body .msg-row,
@@ -500,14 +519,18 @@
 }
 
 .chat-footer-shell {
-    position: relative;
-    flex-shrink: 0;
-    background: transparent;
+    position: absolute; /* 改为绝对定位，悬浮在聊天列表上方 */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: transparent; /* 改为透明，防止做圆角美化时漏底色 */
     border-top: none;
-    transform: translateY(calc(var(--chat-keyboard-offset, 0px) * -1));
-    transition: transform 180ms ease-out;
-    will-change: transform;
-    z-index: 2;
+    /* 仅在键盘覆盖视口时抬起底栏；浏览器已压缩视口时保持 0 */
+    padding-bottom: var(--chat-keyboard-offset, 0px);
+    transform: translateY(0);
+    transition: padding-bottom 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    will-change: padding-bottom;
+    z-index: 10;
 }
 
 .chat-footer-shell .chat-room-footer {
@@ -517,9 +540,7 @@
 /* === 底部操作栏 (核心修改) === */
 .chat-room-footer {
     min-height: calc(50px * var(--chat-font-scale, 1));
-    background: rgba(255, 255, 255, 0.15); /* 提升亮度适配浅色 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: #f5f5f5; /* 将背景色移到这里，方便用户自定义形状和颜色 */
     border-top: 1px solid rgba(0, 0, 0, 0.05); /* 改变边框颜色适配浅色 */
     display: flex;
     align-items: center;
@@ -550,24 +571,24 @@
 
 /* AI 魔法按钮样式 */
 .icon-btn-round {
-    width: calc(36px * var(--chat-font-scale, 1));
-    height: calc(36px * var(--chat-font-scale, 1));
-    border-radius: 50%; /* 圆形 */
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    width: calc(32px * var(--chat-font-scale, 1));
+    height: calc(32px * var(--chat-font-scale, 1));
+    border-radius: 0; /* 取消强制圆形 */
+    background: transparent; /* 取消强制背景色 */
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #576b95; /* 微信蓝 */
-    font-size: calc(18px * var(--chat-font-scale, 1));
+    color: var(--chat-text-color, #000); /* 恢复默认图标色 */
+    font-size: calc(22px * var(--chat-font-scale, 1));
     cursor: pointer;
 }
-.icon-btn-round:active { background: rgba(255, 255, 255, 0.6); }
+.icon-btn-round:active { opacity: 0.6; }
 
 /* 新增：快速表情按钮样式 */
 #quick-emoji-btn {
     font-size: calc(22px * var(--chat-font-scale, 1));      /* 图标大小 */
-    color: #576b95;       /* 微信蓝色图标 */
+    color: var(--chat-text-color, #000);  /* 恢复默认颜色，不再强制微信蓝 */
     margin-left: calc(8px * var(--chat-font-scale, 1));     /* 离输入框的距离 */
     margin-right: calc(8px * var(--chat-font-scale, 1));    /* 离魔法棒的距离 */
 }
@@ -594,9 +615,7 @@
     display: flex;
     align-items: center;
     padding: calc(8px * var(--chat-font-scale, 1)) calc(10px * var(--chat-font-scale, 1)) calc(8px * var(--chat-font-scale, 1) + var(--chat-safe-bottom-compact));
-    background: rgba(255, 255, 255, 0.15); /* 提升亮度适配浅色 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: #f5f5f5; /* 确保有默认背景色 */
     gap: calc(8px * var(--chat-font-scale, 1));
     border-top: 1px solid rgba(0, 0, 0, 0.05); /* 改变边框颜色适配浅色 */
 }
@@ -608,8 +627,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: calc(32px * var(--chat-font-scale, 1));
-    height: calc(32px * var(--chat-font-scale, 1));
+    /* 解除死板的宽高限制，允许图片或者其他元素撑开 */
+    width: auto;
+    height: auto;
+    min-width: calc(32px * var(--chat-font-scale, 1));
+    min-height: calc(32px * var(--chat-font-scale, 1));
     flex-shrink: 0;
 }
 
@@ -647,16 +669,20 @@
 #quick-emoji-btn.embedded-emoji-btn {
     margin-left: 0;
     margin-right: 0;
-    color: #555;
+    color: var(--chat-text-color, #555); /* 解除颜色限制 */
 }
 
 .circle-btn.ai-btn {
-    width: calc(30px * var(--chat-font-scale, 1));
-    height: calc(30px * var(--chat-font-scale, 1));
+    /* 解除强制宽高限制，允许内容自适应 */
+    width: auto;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .circle-btn.ai-btn i {
-    font-size: calc(20px * var(--chat-font-scale, 1));
+    font-size: calc(22px * var(--chat-font-scale, 1)); /* 统一图标大小 */
     color: var(--chat-text-color, #000);
 }
 
@@ -670,13 +696,14 @@
 .send-arrow-btn {
     width: calc(32px * var(--chat-font-scale, 1));
     height: calc(32px * var(--chat-font-scale, 1));
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    border-radius: calc(16px * var(--chat-font-scale, 1));
-    color: #fff;
-    font-size: calc(14px * var(--chat-font-scale, 1));
+    /* 解除黑底白字的限制，使其变成普通图标按钮 */
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--chat-text-color, #000); /* 跟随主题颜色 */
+    font-size: calc(22px * var(--chat-font-scale, 1)); /* 调大字体使其与其他图标一致 */
 }
-.send-arrow-btn:active { background: rgba(0, 0, 0, 0.6); }
+.send-arrow-btn:active { opacity: 0.6; }
 /* 通用消息行 */
 .msg-row {
     display: flex;
@@ -3591,19 +3618,24 @@
 }
 
 .chat-more-panel {
-    height: 250px;
+    /* 不写死固定的 250px 高度，而是改用 JS 控制显示隐藏或者高度 */
+    height: 0;
+    opacity: 0;
     background: #f5f5f5;
-    display: none;
-    padding: 20px 18px 24px;
+    display: block; /* 放弃 display:none 动画不平滑，改为 height 控制 */
+    padding: 0 18px;
     box-sizing: border-box;
-    border-top: 1px solid #e5e5e5;
+    border-top: none;
     position: relative;
     overflow: hidden;
+    transition: height 0.2s ease-out, padding 0.2s ease-out, opacity 0.2s ease-out;
 }
 
 .chat-more-panel.show {
-    display: block;
-    animation: panelUp 0.2s ease-out;
+    height: 250px;
+    opacity: 1;
+    padding: 20px 18px 24px;
+    border-top: 1px solid #e5e5e5;
 }
 
 .chat-more-pages {

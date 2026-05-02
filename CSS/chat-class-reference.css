@@ -1,0 +1,1051 @@
+/* ============================================================
+   微信聊天室 - 完整 CSS 类名参考清单
+   用途：聊天室 UI 美化 / 主题定制 / 样式覆盖
+   来源：index.html 聊天室区域 + chat-page.css
+   生成时间：2026-05-02
+   ============================================================ */
+
+/* ==========================================
+   一、聊天室头部 (Top Bar / Header)
+   ========================================== */
+.chat-room-header            /* 聊天室顶部导航栏容器 */
+.custom-top-bar              /* 自定义顶部栏背景/样式 */
+
+/* --- 1a. 返回按钮 --- */
+.back-btn.chat-back-btn      /* 返回按钮容器 */
+.chat-back-btn i             /* 返回按钮图标 (默认 bx bx-chevron-left) */
+
+/* --- 1b. 标题区域 --- */
+.chat-room-title-wrap        /* 标题+爱心按钮的包裹 */
+.chat-room-title             /* 聊天对象名称 (支持 --chat-font-scale) */
+
+/* --- 1c. 状态监控/心跳按钮 --- */
+.status-heart-btn            /* 标题旁边的状态心跳按钮容器 */
+.status-heart-btn i          /* 状态心跳按钮图标 (默认 bx bxs-heart) */
+
+/* --- 1d. 右侧菜单按钮 --- */
+.chat-room-menu              /* 右上角三点菜单按钮容器 */
+.chat-room-menu i            /* 菜单按钮图标 (默认 fas fa-ellipsis-h) */
+
+/* ==========================================
+   二、消息行 & 气泡 (Message Row & Bubble)  ← 最核心
+   ========================================== */
+/* --- 2a. 消息行 --- */
+.msg-row                     /* 通用消息行容器 */
+.msg-row.msg-left            /* 左侧消息 (对方) */
+.msg-row.msg-right           /* 右侧消息 (自己) */
+
+/* --- 2b. 消息内容包裹 --- */
+.msg-content-wrapper         /* 消息内容包裹 (气泡+状态文字的容器) */
+.msg-left .msg-content-wrapper    /* 左侧内容包裹 */
+.msg-right .msg-content-wrapper   /* 右侧内容包裹 */
+
+/* --- 2c. 消息气泡 --- */
+.msg-bubble                  /* 通用消息气泡 */
+.msg-left .msg-bubble        /* 左侧气泡 (对方, 白色/灰色底) */
+.msg-right .msg-bubble       /* 右侧气泡 (自己, 绿色底) */
+.msg-bubble::before          /* 左侧气泡小三角 */
+.msg-bubble::after           /* 右侧气泡小三角 */
+.msg-left .msg-bubble::before     /* 左侧小三角定位 */
+.msg-right .msg-bubble::after     /* 右侧小三角定位 */
+
+/* --- 2d. 连续消息合并 (头像/间距合并) --- */
+.msg-row.msg-left:has(+ .msg-row.msg-left) .msg-bubble
+.msg-row.msg-left + .msg-row.msg-left .msg-bubble   /* 连续左侧消息气泡收窄间距 */
+.msg-row.msg-right:has(+ .msg-row.msg-right) .msg-bubble
+.msg-row.msg-right + .msg-row.msg-right .msg-bubble /* 连续右侧消息气泡收窄间距 */
+
+/* ==========================================
+   三、头像 (Avatar)
+   ========================================== */
+.msg-avatar                  /* 消息头像容器 */
+.msg-avatar img              /* 消息头像图片 */
+.msg-left .msg-avatar        /* 左侧消息显示头像 */
+.msg-right .msg-avatar       /* 右侧消息显示头像 */
+.msg-avatar-wrap             /* 头像+时间组合外框 */
+.msg-avatar-time             /* 头像下方时间 */
+
+/* ==========================================
+   四、消息状态 & 时间 (Status & Time)
+   ========================================== */
+.msg-status-text             /* 已读/未读/发送中状态文字 */
+.msg-bubble-time             /* 气泡内时间戳 */
+.msg-right .msg-bubble-time  /* 右侧气泡内时间 */
+.msg-row.msg-right:has(+ .msg-row.msg-right) .msg-status-text
+.msg-row.msg-right:has(+ .msg-row.msg-right) .msg-bubble-time
+
+/* ==========================================
+   五、消息体中间区域 (Chat Body / 消息列表)
+   ========================================== */
+.chat-room-body              /* 消息列表滚动区 (中间核心区域) */
+.custom-chat-area            /* 自定义消息区样式 */
+.chat-room-layer             /* 聊天室最外层容器 */
+.custom-chat-background      /* 自定义聊天背景图层 */
+
+/* ==========================================
+   六、系统消息 (System Messages)
+   ========================================== */
+.sys-msg-row                 /* 系统消息行 */
+.sys-msg-text                /* 系统消息文字内容 */
+.chat-time-label             /* 时间标签 (如 "上午 10:30") */
+.chat-time-label.chat-time-label-loadmore  /* 加载更多时间标签 */
+
+/* ==========================================
+   七、底部输入栏 (Footer / Input Bar)
+   ========================================== */
+/* --- 7a. 底部外壳 & 操作栏 --- */
+.chat-footer-shell           /* 底部整体外壳 (含引用条) */
+.chat-room-footer            /* 底部操作栏容器 (flex 布局) */
+.custom-bottom-bar           /* 自定义底部栏样式 */
+.custom-bottom-bar.new-layout /* 新版布局底部栏 */
+
+/* --- 7b. 左侧更多按钮 (+) --- */
+.footer-icon-btn#more-btn    /* 更多功能按钮容器 (加号/向上箭头) */
+.footer-icon-btn#more-btn i  /* 更多功能按钮图标 (默认 fas fa-chevron-circle-up) */
+
+/* --- 7c. 输入框区域 --- */
+.input-wrapper               /* 输入框包裹容器 */
+.new-input-field             /* 新版输入框 (input 元素本身) */
+.embedded-emoji-btn          /* 输入框内嵌入的表情按钮容器 */
+.embedded-emoji-btn i        /* 表情按钮图标 (默认 far fa-smile) */
+
+/* --- 7d. 右侧按钮 (AI辅助 / 发送) --- */
+.footer-icon-btn.circle-btn.ai-btn  /* AI触发按钮容器 (爱心) */
+.footer-icon-btn.ai-btn i           /* AI触发按钮图标 (默认 bx bx-heart) */
+.circle-btn.ai-btn.is-ai-busy       /* AI忙碌中的按钮状态 */
+
+.footer-icon-btn.send-arrow-btn     /* 发送箭头按钮容器 */
+.footer-icon-btn.send-arrow-btn i   /* 发送箭头按钮图标 (默认 fas fa-arrow-up) */
+
+/* --- 7e. 旧版底部 (兼容) --- */
+.footer-btns                 /* 旧版底部按钮组 */
+.icon-btn-round              /* 旧版圆形按钮 */
+.send-btn-rect               /* 旧版长方形发送按钮 */
+
+/* ==========================================
+   八、引用消息 (Quote)
+   ========================================== */
+.quote-block                 /* 引用消息块 (气泡内的引用预览) */
+.quote-name                  /* 引用消息发送者名字 */
+.quote-preview               /* 引用消息预览文字 */
+.quote-text                  /* 底部引用条中的文字 */
+.quote-close                 /* 引用条关闭按钮 (×) */
+.msg-right .quote-block      /* 右侧消息中的引用块 */
+.msg-right .quote-name       /* 右侧引用名 */
+.msg-right .quote-preview    /* 右侧引用预览 */
+
+/* ==========================================
+   九、更多功能面板 (Chat More Panel / 加号面板)
+   ========================================== */
+.chat-more-panel             /* 更多面板容器 */
+.chat-more-panel.show        /* 面板展开状态 */
+.chat-more-pages             /* 更多页面容器 (可翻页) */
+.chat-more-dots              /* 更多分页指示圆点 */
+.chat-more-dot               /* 单个分页圆点 */
+.chat-more-dot.active        /* 当前激活圆点 */
+.more-page                   /* 单个更多页面 */
+.more-grid                   /* 更多功能网格 */
+.more-item                   /* 单个更多功能项 */
+.more-icon                   /* 更多功能图标 */
+.icon-btn-plus               /* 加号按钮 */
+
+/* --- 9a. 更多面板拖拽排序 --- */
+.chat-more-panel.more-reorder-active    /* 拖拽排序激活时 */
+.chat-more-panel.more-reorder-active .chat-more-pages
+.chat-more-panel.more-reorder-active .more-grid
+.chat-more-panel.more-reorder-active .more-item
+.chat-more-panel.more-reorder-active .more-item:not(.more-item-dragging)
+.chat-more-panel.more-reorder-active .more-icon
+.chat-more-panel.more-reorder-active .chat-more-dots
+.more-item.more-item-dragging           /* 正在被拖拽的项 */
+.more-item.more-item-dragging .more-icon
+.chat-more-reorder-bar      /* 排序工具栏 */
+.chat-more-reorder-hint     /* 排序提示文字 */
+.chat-more-reorder-done     /* 排序完成按钮 */
+
+/* ==========================================
+   十、表情面板 (Sticker Panel)
+   ========================================== */
+.chat-sticker-panel          /* 表情面板容器 */
+.chat-sticker-panel.show     /* 表情面板展开 */
+.sticker-tabs                /* 表情分类Tab栏 */
+.sticker-tab                 /* 表情Tab (我的/他的/通用) */
+.sticker-tab.active          /* 当前激活Tab */
+.sticker-tab-add             /* 添加表情Tab按钮 */
+.sticker-grid                /* 表情网格 */
+.sticker-item                /* 单个表情 */
+.sticker-thumb               /* 表情缩略图 */
+.sticker-item img            /* 表情图片 */
+.sticker-name                /* 表情名称 */
+.sticker-item.no-name .sticker-name  /* 无名称表情 */
+.sticker-empty               /* 表情空状态 */
+.sticker-manage-bar          /* 表情管理工具栏 */
+.sticker-manage-btn          /* 管理按钮 */
+.sticker-manage-btn.danger   /* 危险管理按钮 (删除) */
+.sticker-category-bar        /* 表情分类栏 */
+.sticker-category-chip       /* 分类标签 */
+.sticker-category-chip.active /* 激活分类 */
+.sticker-category-chip.add   /* 添加分类按钮 */
+
+/* --- 10a. 表情管理模式下 --- */
+.chat-sticker-panel.manage-mode .sticker-grid
+.chat-sticker-panel.manage-mode .sticker-item::after
+.chat-sticker-panel.manage-mode .sticker-item.selected
+.chat-sticker-panel.manage-mode .sticker-item.selected::after
+.chat-sticker-panel.manage-mode .sticker-manage-bar
+.sticker-item::after         /* 表情选中复选框 */
+
+/* ==========================================
+   十一、图片消息 (Image Message)
+   ========================================== */
+.msg-bubble-image            /* 图片消息气泡 */
+.msg-left .msg-bubble-image  /* 左侧图片气泡 */
+.msg-right .msg-bubble-image /* 右侧图片气泡 */
+.msg-bubble-image img        /* 图片内容 */
+.msg-bubble-image::before    /* 左侧图片小三角 */
+.msg-bubble-image::after     /* 右侧图片小三角 */
+
+/* --- 11a. AI生图气泡 --- */
+.ai-photo-bubble             /* AI生图气泡 */
+.ai-photo-bubble img         /* AI生图图片 */
+.ai-photo-fallback           /* AI生图失败占位 */
+.ai-photo-fallback i         /* 占位图标 */
+.ai-photo-bubble.is-photo-fallback .ai-photo-fallback  /* 显示占位 */
+
+/* ==========================================
+   十二、翻译消息 (Translated Messages)
+   ========================================== */
+.translated-message-shell    /* 翻译消息外壳 */
+.translated-message-shell .translated-message-bubble
+.translated-message-foreign  /* 原文 */
+.translated-message-translation  /* 译文 */
+.translated-message-divider  /* 翻译分隔线 */
+.translated-message-bubble.is-collapsed .translated-message-divider
+.translated-message-bubble.is-collapsed .translated-message-translation
+.translated-message-shell.is-collapsed .translated-message-divider
+.translated-message-shell.is-collapsed .translated-message-translation
+
+/* ==========================================
+   十三、位置卡片 (Location Card)
+   ========================================== */
+/* --- 13a. 位置消息气泡 --- */
+.msg-bubble.location-bubble  /* 位置消息气泡 */
+.location-card               /* 位置卡片 */
+.location-map-area           /* 位置地图区域 */
+.location-pin-icon           /* 定位图钉图标 */
+.location-info               /* 位置文字信息区 */
+.location-name               /* 位置名称 */
+.location-address            /* 位置地址 */
+
+/* --- 13b. 位置底部面板 --- */
+.location-sheet-mask         /* 位置面板遮罩 */
+.location-sheet              /* 位置面板 */
+.location-sheet-title        /* 面板标题 */
+.location-sheet-btn          /* 面板按钮 */
+.location-sheet-btn-primary  /* 主要按钮 */
+.location-sheet-btn-cancel   /* 取消按钮 */
+.location-sheet-btn-disabled /* 禁用按钮 */
+
+/* --- 13c. 地图创建器 --- */
+.map-creator-mask            /* 地图创建器遮罩 */
+.map-creator-container       /* 地图创建器容器 */
+.map-creator-map-panel       /* 地图面板 */
+.map-creator-stage           /* 地图舞台 */
+.map-creator-map             /* 地图本体 */
+.map-creator-markers         /* 地图标记层 */
+.map-creator-dot             /* 地图标记点 */
+.map-creator-info-panel      /* 信息面板 */
+.map-creator-hint            /* 提示文字 */
+.map-creator-list-container  /* 列表容器 */
+.map-creator-list-item       /* 列表项 */
+.map-creator-list-text       /* 列表文字 */
+.map-creator-list-delete     /* 列表删除按钮 */
+.map-creator-footer          /* 创建器底部 */
+.map-creator-btn             /* 创建器按钮 */
+.map-creator-footer-float    /* 浮动底部 */
+.map-creator-actions         /* 操作区 */
+.map-creator-action-btn      /* 操作按钮 */
+.map-creator-save-btn        /* 保存按钮 */
+.map-creator-exit-btn        /* 退出按钮 */
+.map-creator-tip             /* 提示 */
+
+/* --- 13d. 位置共享 --- */
+.location-share-loading      /* 位置共享加载中 */
+.location-share-header       /* 位置共享头部 */
+.location-share-header-avatar/* 位置共享头像 */
+.location-share-distance     /* 距离 */
+.location-share-distance-line/* 距离分隔线 */
+.location-share-body         /* 位置共享主体 */
+.location-share-map-panel    /* 地图面板 */
+.location-share-map-stage    /* 地图舞台 */
+.location-share-map          /* 地图 */
+.location-share-map-overlay  /* 地图覆盖 */
+.location-share-marker       /* 位置标记 */
+.location-share-footer       /* 位置底部 */
+.location-share-chat-box     /* 聊天框 */
+.location-share-reroll-btn   /* 重Roll按钮 */
+.location-share-chat-row     /* 聊天行 */
+.location-share-chat-row.me  /* 我的聊天行 */
+.location-share-chat-row.ai  /* AI聊天行 */
+.location-share-chat-bubble  /* 聊天气泡 */
+.location-share-controls     /* 控制区 */
+.location-share-btn-round    /* 圆形按钮 */
+.location-share-btn-round.close-mode  /* 关闭模式 */
+.location-share-avatar-wrap  /* 头像包裹 */
+.location-share-avatar-wrap-ai::before  /* AI头像装饰 */
+.location-share-bg           /* 位置共享背景 */
+.location-share-header-float /* 浮动头部 */
+.ls-avatar-pill              /* 头像胶囊 */
+.ls-info-pill                /* 信息胶囊 */
+.location-share-minimize     /* 最小化按钮 */
+.ls-info-text                /* 信息文字 */
+.ls-status-dot               /* 状态圆点 */
+.location-share-footer-float /* 浮动底部 */
+.ls-control-item             /* 控制项 */
+.ls-btn-label                /* 按钮标签 */
+.location-share-marker .marker-name  /* 标记名称 */
+.location-share-float-window /* 位置共享悬浮窗 */
+.location-share-float-window.is-fast-forwarding  /* 快进中 */
+
+/* --- 13e. 位置共享邀请 --- */
+.sys-msg-text.location-share-invite-text
+.sys-msg-text.location-share-invite-text i
+
+/* ==========================================
+   十四、转账红包消息 (Transfer & Redpacket)
+   ========================================== */
+/* --- 14a. 转账消息 --- */
+.msg-bubble.transfer-bubble  /* 转账消息气泡 */
+.msg-bubble.transfer-bubble.transfer-bubble-accepted  /* 已被领取 */
+.msg-bubble.transfer-bubble::before,
+.msg-bubble.transfer-bubble::after
+.transfer-main               /* 转账主体 */
+.transfer-icon-circle        /* 转账图标圆 */
+.transfer-info               /* 转账信息 */
+.transfer-amount             /* 转账金额 */
+.transfer-note               /* 转账备注 */
+.transfer-split              /* 分割线 */
+.transfer-footer             /* 转账底部 */
+.transfer-status-text        /* 转账状态文字 */
+.transfer-action-row         /* 操作按钮行 */
+.transfer-btn                /* 操作按钮 */
+.transfer-btn-accept         /* 确认收款按钮 */
+.transfer-btn-return         /* 退还按钮 */
+
+/* --- 14b. 转账弹窗 --- */
+.transfer-modal-mask         /* 转账弹窗遮罩 */
+.transfer-modal-container    /* 转账弹窗容器 */
+.transfer-modal-header       /* 弹窗头部 */
+.transfer-modal-body         /* 弹窗主体 */
+.transfer-modal-amount       /* 弹窗金额 */
+.transfer-modal-note         /* 弹窗备注 */
+.transfer-modal-footer       /* 弹窗底部 */
+.transfer-modal-btn          /* 弹窗按钮 */
+.transfer-modal-btn-accept   /* 收款 */
+.transfer-modal-btn-return   /* 退还 */
+.transfer-modal-btn-cancel   /* 取消 */
+
+/* --- 14c. 红包消息 --- */
+.msg-bubble.redpacket-bubble /* 红包消息气泡 */
+.msg-bubble.redpacket-bubble::before,
+.msg-bubble.redpacket-bubble::after
+.redpacket-main              /* 红包主体 */
+.redpacket-icon              /* 红包图标 */
+.redpacket-icon::before      /* 图标内装饰 */
+.redpacket-info              /* 红包信息 */
+.redpacket-note              /* 红包备注 */
+.redpacket-status-text       /* 红包状态 (已领取/已过期) */
+.redpacket-amount            /* 红包金额 */
+.msg-bubble.money-receive-anim .chat-transfer-card-surface
+.msg-bubble.money-receive-anim .chat-redpacket-card-surface
+.chat-transfer-card-surface  /* 转账/红包卡片表面 */
+.msg-bubble.transfer-bubble.transfer-bubble-accepted .chat-transfer-card-surface
+.chat-redpacket-card-surface /* 红包卡片表面 */
+.msg-bubble.redpacket-bubble[data-status="opened"] .chat-redpacket-card-surface
+
+/* --- 14d. 红包弹窗 --- */
+.redpacket-modal-mask        /* 红包弹窗遮罩 */
+.redpacket-modal-panel       /* 红包弹窗面板 */
+.redpacket-modal-panel.active/* 弹窗激活 */
+.redpacket-closed-panel      /* 红包已关闭面板 */
+.redpacket-card              /* 红包卡片 */
+.redpacket-card-top          /* 卡片顶部 */
+.redpacket-card-avatar-wrap  /* 发送者头像包裹 */
+.redpacket-card-avatar       /* 发送者头像 */
+.redpacket-card-title        /* 卡片标题 */
+.redpacket-card-bless        /* 祝福语 */
+.redpacket-card-bottom       /* 卡片底部 */
+.redpacket-open-btn-wrap     /* 开红包按钮包裹 */
+.redpacket-open-btn          /* 开红包按钮 */
+.redpacket-open-btn-spin     /* 开红包旋转动画 */
+.redpacket-close-area        /* 关闭区域 */
+.redpacket-close-icon        /* 关闭图标 (×) */
+.redpacket-open-panel        /* 打开后详情面板 */
+.redpacket-open-header       /* 详情头部 */
+.redpacket-open-header-inner /* 头部内部 */
+.redpacket-open-back         /* 返回按钮 */
+.redpacket-open-avatar-wrap  /* 头像包裹 */
+.redpacket-open-avatar       /* 头像 */
+.redpacket-open-sender-name  /* 发送者名字 */
+.redpacket-open-note         /* 备注 */
+.redpacket-open-content      /* 内容区 */
+.redpacket-open-amount-row   /* 金额行 */
+.redpacket-open-amount       /* 金额 */
+.redpacket-open-unit         /* 单位 (元) */
+.redpacket-open-tip          /* 提示文字 */
+.redpacket-open-list         /* 领取列表 */
+.redpacket-open-list-title   /* 列表标题 */
+.redpacket-open-list-item    /* 列表项 */
+.redpacket-open-list-left    /* 列表项左侧 */
+.redpacket-open-list-avatar-wrap  /* 领取人头像 */
+.redpacket-open-list-avatar  /* 领取人头像 */
+.redpacket-open-list-name    /* 领取人名字 */
+.redpacket-open-list-right   /* 列表项右侧 */
+.redpacket-open-list-amount  /* 领取金额 */
+.redpacket-open-list-time    /* 领取时间 */
+
+/* ==========================================
+   十五、亲属卡消息 (Family Card)
+   ========================================== */
+.msg-bubble.family-card-bubble  /* 亲属卡消息气泡 */
+.msg-bubble.family-card-bubble[data-status="pending"]
+.msg-bubble.family-card-bubble[data-status="accepted"]
+.family-card-main            /* 亲属卡主体 */
+.family-card-icon            /* 亲属卡图标 */
+.family-card-icon::before    /* 图标装饰 */
+.family-card-icon::after     /* 图标装饰 */
+.family-card-text            /* 文字区 */
+.family-card-title           /* 标题 */
+.family-card-subtitle        /* 副标题 */
+.family-card-divider         /* 分割线 */
+.family-card-footer          /* 底部信息 */
+
+/* --- 15a. 亲属卡接受弹窗 --- */
+.family-card-accept-mask     /* 接受弹窗遮罩 */
+.family-card-accept-panel    /* 接受面板 */
+.family-card-accept-icon     /* 图标 */
+.family-card-accept-sender   /* 赠送者 */
+.family-card-accept-amount   /* 额度 */
+.family-card-accept-actions  /* 按钮区 */
+.family-card-accept-btn      /* 按钮 */
+.family-card-accept-btn--decline  /* 拒绝 */
+.family-card-accept-btn--accept   /* 接受 */
+
+/* ==========================================
+   十六、语音消息 (Voice Message)
+   ========================================== */
+.msg-bubble.voice-bubble     /* 语音消息气泡 */
+.voice-main                  /* 语音主体 */
+.voice-icon                  /* 语音图标 (喇叭) */
+.voice-wave                  /* 声波线条 */
+.voice-wave.wave1            /* 声波1 */
+.voice-wave.wave2            /* 声波2 */
+.voice-wave.wave3            /* 声波3 */
+.voice-duration              /* 语音时长 */
+.voice-text                  /* 语音转文字内容 */
+.voice-bubble-open .voice-text  /* 展开语音文字 */
+
+/* ==========================================
+   十七、通话结束消息 (Call End Message)
+   ========================================== */
+.msg-bubble.call-end-bubble  /* 通话结束气泡 */
+.msg-bubble.call-end-bubble::before,
+.msg-bubble.call-end-bubble::after
+.call-end-main               /* 通话结束主体 */
+.call-end-icon               /* 通话图标 */
+.call-end-text               /* 通话文字 (通话时长等) */
+
+/* ==========================================
+   十八、情侣空间邀请消息 (Couple Invite)
+   ========================================== */
+.msg-bubble.couple-invite-bubble  /* 情侣邀请气泡 */
+.msg-bubble.couple-invite-bubble::before,
+.msg-bubble.couple-invite-bubble::after
+.msg-row[data-type="couple_invite"] .msg-content-wrapper
+.msg-row[data-type="couple_unlink"] .msg-content-wrapper
+.msg-row[data-type="couple_invite"],
+.msg-row[data-type="couple_unlink"]
+.couple-invite-card          /* 情侣邀请卡片 */
+.couple-invite-header        /* 卡片头部 */
+.couple-invite-icon          /* 卡片图标 */
+.couple-invite-card.unlink .couple-invite-icon  /* 解除关联图标 */
+.couple-invite-title         /* 标题 */
+.couple-invite-text          /* 文字说明 */
+
+/* ==========================================
+   十九、一起听音乐邀请 (Listen Invite)
+   ========================================== */
+.msg-bubble.listen-invite-bubble  /* 一起听邀请气泡 */
+.msg-bubble.listen-invite-bubble::before,
+.msg-bubble.listen-invite-bubble::after
+.listen-invite-card          /* 邀请卡片 */
+.listen-invite-card.is-disabled   /* 禁用卡片 */
+.listen-invite-body          /* 卡片主体 */
+.listen-invite-avatars       /* 双人头像区 */
+.listen-invite-avatar        /* 单人头像 */
+.listen-invite-avatar img    /* 头像图片 */
+.listen-invite-line          /* 连接线 */
+.listen-invite-line svg      /* 连接线SVG */
+.listen-invite-line i        /* 连接线图标 */
+.listen-invite-title         /* 标题 */
+.listen-invite-subtext       /* 副文字 */
+.listen-invite-state         /* 状态 */
+.listen-invite-actions       /* 按钮区 */
+.listen-invite-btn           /* 按钮 */
+.listen-invite-btn--accept   /* 接受按钮 */
+.listen-invite-btn--decline  /* 拒绝按钮 */
+.msg-row[data-type="listen_invite"] .msg-content-wrapper
+.msg-row[data-type="listen_invite_accepted"] .msg-content-wrapper
+.invite-card-sent .listen-invite-line svg
+.invite-card-accepted .listen-invite-line svg
+
+/* ==========================================
+   二十、外卖消息卡片 (Takeout Message)
+   ========================================== */
+.msg-bubble.takeout-bubble   /* 外卖消息气泡 */
+.takeout-receipt-card        /* 外卖小票卡片 */
+.takeout-receipt-card::before /* 撕边装饰 */
+.takeout-receipt-card::after
+.takeout-receipt-header      /* 小票头部 */
+.takeout-receipt-top         /* 顶部 (订单号+平台) */
+.takeout-order-number        /* 订单编号 */
+.takeout-platform            /* 平台名称 */
+.takeout-receipt-logo        /* 商家Logo */
+.takeout-shop-name           /* 商家名称 */
+.takeout-slogan              /* 商家标语 */
+.takeout-receipt-divider     /* 小票分割线 (虚线) */
+.takeout-items-header        /* 菜品列表头部 */
+.takeout-item-row            /* 菜品行 */
+.takeout-total-row           /* 合计行 */
+.takeout-pay-row             /* 支付行 */
+.takeout-pay-row.is-pending  /* 等待支付中 */
+.takeout-receipt-remark      /* 备注 */
+
+/* ==========================================
+   二十一、礼物消息 (Gift Message)  ← 卡片风格
+   ========================================== */
+.msg-bubble.gift-message-bubble   /* 礼物消息气泡 */
+.gift-bubble                 /* 礼物气泡 */
+.bubble-main                 /* 气泡主体 */
+.bubble-copy                 /* 气泡文字 */
+.bubble-title                /* 气泡标题 */
+.gift-bubble-hint            /* 气泡提示 */
+.bubble-footer               /* 气泡底部 */
+.gift-preview-bow            /* 礼物蝴蝶结预览 */
+.gift-composer-preview       /* 编辑预览 */
+.gift-composer-note          /* 编辑备注 */
+
+/* --- 21a. 礼物弹窗 --- */
+.gift-modal-overlay          /* 礼物弹窗遮罩 */
+.gift-modal-overlay.show     /* 展开 */
+.gift-card-full              /* 完整礼物卡 */
+.card-header                 /* 卡片头 */
+.diagonal-ribbon             /* 斜角丝带 */
+.open-btn-wrapper            /* 打开按钮包裹 */
+.open-bg-layer1              /* 背景动画层1 */
+.open-bg-layer2              /* 背景动画层2 */
+.open-circle                 /* 打开圆圈 */
+.gift-reveal-content         /* 展示内容区 */
+.gift-reveal-tag             /* 标签 */
+.gift-reveal-name            /* 礼物名 */
+.gift-reveal-price           /* 价格 */
+.gift-reveal-note            /* 备注 */
+
+/* --- 21b. 代付礼物 --- */
+.gift-pay-on-behalf-card     /* 代付卡片 */
+.gift-pay-header             /* 代付头部 */
+.gift-pay-name               /* 礼物名 */
+.gift-pay-price              /* 价格 */
+.gift-pay-actions            /* 按钮区 */
+.gift-pay-btn                /* 按钮 */
+.gift-pay-btn.accept         /* 接受 */
+.gift-pay-btn.decline        /* 拒绝 */
+
+/* ==========================================
+   二十二、消息编辑器 (编辑已发送消息)
+   ========================================== */
+.chat-message-editor-mask    /* 编辑器遮罩 */
+.chat-message-editor-mask.show  /* 展开 */
+.chat-message-editor-sheet   /* 编辑器底部面板 */
+.chat-message-editor-handle  /* 拖拽手柄 */
+.chat-message-editor-title   /* 编辑器标题 */
+.chat-message-editor-subtitle/* 编辑器副标题 */
+.chat-message-editor-quick   /* 快捷操作区 */
+.chat-message-editor-chip    /* 快捷操作标签 */
+.chat-message-editor-input   /* 编辑器输入框 */
+.chat-message-editor-tip     /* 编辑器提示 */
+.chat-message-editor-actions /* 编辑器按钮区 */
+.chat-message-editor-btn     /* 编辑器按钮 */
+.chat-message-editor-btn-cancel  /* 取消按钮 */
+.chat-message-editor-btn-save    /* 保存按钮 */
+
+/* ==========================================
+   二十三、状态监控面板 (Status Monitor / 心跳)  ← 韩系风
+   ========================================== */
+.status-monitor-modal        /* 状态监控弹窗 */
+.status-monitor-card         /* 监控卡片 */
+.status-monitor-card.show-history .status-history-view
+.status-monitor-header       /* 监控头部 */
+.status-monitor-avatar       /* 头像 */
+.status-monitor-avatar img   /* 头像图片 */
+.status-monitor-header-right /* 头部右侧 */
+.status-monitor-time         /* 时间 */
+.status-monitor-divider      /* 分隔线 */
+.status-monitor-location     /* 位置 */
+.status-monitor-section      /* 分区块 */
+.status-monitor-stats        /* 数值统计区 */
+.status-monitor-text-row     /* 文字行 */
+.status-monitor-text-label   /* 文字标签 */
+.status-monitor-text-value   /* 文字值 */
+.status-monitor-fantasy      /* 性幻想值 */
+.status-progress-item        /* 进度条项 */
+.status-progress-label       /* 进度标签 */
+.status-progress-bar         /* 进度条轨道 */
+.status-progress-fill        /* 进度条填充 */
+.status-progress-value       /* 进度数值 */
+.status-heart-bar            /* 心率进度条 */
+.status-heart-bar .status-progress-fill
+.status-monitor-inner        /* 内部心声区 */
+.status-inner-title          /* 心声标题 */
+.status-inner-content        /* 心声内容 */
+
+/* --- 23a. 状态历史 --- */
+.status-history-toggle-btn   /* 历史切换按钮 */
+.status-history-view         /* 历史视图 */
+.status-history-header       /* 历史头部 */
+.status-history-back         /* 返回按钮 */
+.status-history-back i       /* 返回图标 */
+.status-history-title        /* 历史标题 */
+.status-history-header-spacer/* 历史头部占位 */
+.status-history-list         /* 历史列表 */
+.status-history-item         /* 历史条目 */
+.status-history-meta         /* 条目标题行 */
+.status-history-time         /* 时间 */
+.status-history-metrics      /* 指标 */
+.status-history-monologue    /* 独白 */
+.status-history-empty        /* 空状态 */
+
+/* ==========================================
+   二十四、语音通话界面 (Voice Call UI) 旧版
+   ========================================== */
+.voice-call-overlay          /* 旧版通话遮罩 */
+.voice-call-header           /* 旧版通话头部 */
+.voice-call-minimize         /* 旧版最小化按钮 */
+.voice-call-main             /* 旧版通话主体 */
+.voice-call-avatar-box       /* 旧版头像框 */
+.voice-call-avatar           /* 旧版头像 */
+.voice-call-chat-wrapper     /* 旧版通话聊天区 */
+.voice-call-footer           /* 旧版底部 */
+.voice-call-status-text      /* 旧版状态文字 */
+.voice-call-input-row        /* 旧版输入行 */
+.voice-call-input            /* 旧版输入框 */
+.voice-call-send-btn         /* 旧版发送按钮 */
+.voice-call-buttons          /* 旧版按钮组 */
+.call-btn-small              /* 旧版小按钮 */
+.call-btn-small.off          /* 关闭状态 */
+.call-btn-hangup             /* 旧版挂断按钮 */
+
+/* --- 24a. 通话中聊天气泡 --- */
+.call-chat-container         /* 通话聊天容器 */
+.call-chat-row               /* 聊天行 */
+.call-chat-row-me            /* 自己的消息 */
+.call-chat-row-ai            /* AI的消息 */
+.call-chat-row-direction     /* 方向行 */
+.call-chat-direction         /* 方向指示 */
+.call-chat-bubble            /* 通话气泡 */
+.call-chat-bubble-translated /* 翻译版气泡 */
+.call-chat-foreign           /* 原文 */
+.call-chat-translation       /* 译文 */
+.call-chat-divider           /* 翻译分隔线 */
+.call-chat-bubble-translated.is-collapsed .call-chat-divider
+.call-chat-bubble-translated.is-collapsed .call-chat-translation
+
+/* ==========================================
+   二十五、韩系沉浸式通话 (Korean Call UI) 新版
+   ========================================== */
+.call-overlay                /* 通话全屏遮罩 */
+.call-overlay.active         /* 激活状态 */
+.call-overlay.closing        /* 关闭动画 */
+.call-overlay::before        /* 渐变遮罩 */
+.call-bg-blur                /* 模糊动态背景 */
+.call-content                /* 通话内容 */
+.call-header                 /* 通话顶部 */
+.call-minimize               /* 最小化按钮 */
+.call-status                 /* 通话状态 */
+.status-dot                  /* 状态圆点 (绿色闪烁) */
+.call-timer                  /* 通话计时 */
+.call-main                   /* 通话主体 */
+.call-user-name              /* 通话用户名 */
+.call-hint                   /* 通话提示 */
+
+/* --- 25a. 头像波纹 --- */
+.avatar-ripple-wrapper       /* 头像波纹容器 */
+.ripple                      /* 波纹 */
+.ripple:nth-child(2)         /* 第二圈波纹 */
+.call-avatar                 /* 通话头像 */
+.call-avatar img             /* 头像图片 */
+
+/* --- 25b. 底部控制 --- */
+.call-footer                 /* 通话底部栏 */
+.call-actions                /* 操作按钮行 */
+.call-btn                    /* 通话按钮 */
+.call-btn i                  /* 按钮图标 */
+.call-btn span               /* 按钮文字 */
+.btn-mute                    /* 静音按钮 */
+.btn-mute:hover, .btn-mute:active
+.btn-mute.muted              /* 已静音状态 */
+.btn-mute.muted i::after     /* 静音叉号 */
+.btn-hangup                  /* 挂断按钮 */
+.btn-hangup i, .btn-hangup:hover, .btn-hangup:active
+.btn-speaker                 /* 免提按钮 */
+.btn-speaker:hover, .btn-speaker:active
+.btn-speaker.speaker-on      /* 免提开启 */
+
+/* --- 25c. 来电接入状态 --- */
+.call-overlay.is-incoming    /* 来电中 */
+.call-overlay.is-connected   /* 接通后 */
+.call-overlay.is-incoming .call-hint
+.call-overlay.is-incoming .call-actions
+.call-overlay.is-incoming .call-accept
+.call-overlay.is-incoming .call-reject
+.call-overlay.is-incoming .call-btn span
+.call-overlay.is-connected .call-main
+.call-overlay.is-connected .avatar-ripple-wrapper
+.call-overlay.is-connected .call-avatar
+.call-overlay.is-connected .call-user-name
+.call-overlay.is-connected .call-hint
+.call-overlay.is-connected .voice-call-chat-wrapper
+.call-overlay.is-connected #call-input-row
+.call-overlay.is-connected .btn-mute.input-open
+
+/* --- 25d. 通话悬浮窗 --- */
+.call-float-window           /* 通话悬浮窗 */
+.k-float-call                /* 韩系悬浮窗 */
+.k-status-dot                /* 悬浮窗状态点 */
+.k-status-dot::after         /* 动画脉冲 */
+.k-icon                      /* 悬浮窗电话图标 */
+.k-timer                     /* 悬浮窗计时 */
+.call-float-window.is-dragging, .k-float-call.is-dragging  /* 拖拽中 */
+
+/* ==========================================
+   二十六、多选模式 (Multi-Select)
+   ========================================== */
+.chat-room-body.select-mode  /* 多选模式激活 */
+.chat-room-body.select-mode .msg-row
+.chat-room-body.select-mode .sys-msg-row
+.chat-room-body.select-mode .chat-time-label:not(.chat-time-label-loadmore)
+.chat-room-body.select-mode .msg-row::before       /* 复选框 */
+.chat-room-body.select-mode .sys-msg-row::before
+.chat-room-body.select-mode .chat-time-label:not(.chat-time-label-loadmore)::before
+.chat-room-body.select-mode .msg-row.selected::before
+.chat-room-body.select-mode .sys-msg-row.selected::before
+.chat-room-body.select-mode .chat-time-label.selected::before
+.chat-room-body.select-mode .sys-msg-row
+.chat-room-body.select-mode .chat-time-label:not(.chat-time-label-loadmore)
+.chat-room-body.select-mode .sys-msg-row .sys-msg-text
+.chat-room-body.select-mode .chat-time-label:not(.chat-time-label-loadmore)
+
+/* --- 26a. 多选底部工具栏 --- */
+.multi-btn                    /* 多选工具栏按钮 */
+.multi-btn i                  /* 按钮图标 */
+.multi-btn.delete-btn i      /* 删除按钮图标 */
+
+/* ==========================================
+   二十七、转发 (Forward)
+   ========================================== */
+.forward-box                 /* 转发弹窗容器 */
+.forward-header              /* 转发弹窗头部 */
+.forward-header .close-btn   /* 关闭按钮 */
+.forward-list                /* 转发联系人列表 */
+.forward-item                /* 联系人项 */
+.forward-item.selected       /* 已选中 */
+.forward-avatar              /* 联系人头像 */
+.forward-name                /* 联系人名字 */
+.forward-check               /* 选中标记 (勾) */
+.forward-footer              /* 转发底部 (发送按钮) */
+
+/* ==========================================
+   二十八、长按上下文菜单 (Context Menu)
+   ========================================== */
+.menu-grid                   /* 菜单网格 */
+.menu-item                   /* 菜单项 */
+.menu-item.is-disabled       /* 禁用项 */
+.menu-item:active            /* 点击态 */
+.menu-icon                   /* 菜单图标 */
+.menu-icon svg               /* 菜单 SVG 图标 */
+
+/* ==========================================
+   二十九、消息跳转高亮 & 撤回动画
+   ========================================== */
+.msg-jump-highlight .msg-bubble   /* 跳转高亮气泡 */
+.msg-jump-highlight .sys-msg-text /* 跳转高亮系统消息 */
+.msg-recall-leave            /* 撤回消息的离开动画 */
+
+/* ==========================================
+   三十、弹窗通用骨架 (聊天室内的弹窗)
+   ========================================== */
+.modal-layer                 /* 弹窗遮罩层 (全局) */
+.modal-header-bar            /* 弹窗头部栏 */
+.modal-close-icon            /* 弹窗关闭/返回 */
+.modal-title                 /* 弹窗标题 */
+.modal-placeholder           /* 弹窗占位 */
+.modal-content               /* 弹窗内容 */
+.creator-body                /* 弹窗滚动内容区 */
+
+/* --- 30a. 设置列表 --- */
+.settings-list-layout        /* 设置列表布局 */
+.settings-group              /* 设置分组 */
+.settings-item               /* 设置项 */
+.settings-item:last-child    /* 最后一项无分割线 */
+.item-label                  /* 设置项标签 */
+.item-value                  /* 设置项值 */
+.item-check                  /* 勾选标记 */
+.text-danger .item-label     /* 危险操作文字 */
+.chevron                     /* 右箭头 */
+.settings-item-right         /* 设置项右侧 */
+.switch                      /* iOS风格开关 */
+.switch input                /* 开关隐藏input */
+.slider                      /* 开关滑块 */
+.slider:before               /* 滑块圆点 */
+.switch input:checked + .slider
+
+/* --- 30b. 角色信息卡片 --- */
+.profile-card                /* 角色信息卡片 */
+.profile-avatar              /* 角色头像 */
+.profile-info                /* 角色信息 */
+.profile-name                /* 角色名 */
+.profile-desc                /* 角色描述 */
+.wechat-text-col             /* 微信号列 */
+.wechat-name-row             /* 微信号行 */
+.wechat-msg-row              /* 微信号消息行 */
+
+/* --- 30c. 弹窗底部按钮 --- */
+.creator-footer-btns         /* 弹窗底部按钮行 */
+.save-btn-large              /* 保存按钮 (大) */
+.cancel-btn-large            /* 取消按钮 (大) */
+.creator-sticky-footer       /* 弹窗底部固定区 */
+
+/* --- 30d. 创建/编辑角色弹窗 --- */
+.creator-header              /* 创建弹窗头部 */
+.avatar-upload-zone          /* 头像上传区 */
+.input-group                 /* 输入组 */
+.input-group label           /* 输入标签 */
+.input-group input           /* 输入框 */
+.input-group textarea        /* 文本域 */
+.input-group select          /* 下拉 */
+
+/* ==========================================
+   三十一、聊天历史气泡 (转发/合并时的预览)
+   ========================================== */
+.history-bubble-container    /* 历史气泡容器 */
+.history-title               /* 历史标题 */
+.history-divider             /* 历史分割线 */
+.history-content             /* 历史内容 */
+.history-row                 /* 历史行 */
+
+/* ==========================================
+   三十二、记忆档案区域 (聊天室内)
+   ========================================== */
+.memory-archive-outer        /* 记忆档案外层 */
+.memory-archive-folder       /* 记忆档案文件夹 */
+.memory-archive-content      /* 记忆内容 */
+.memory-archive-content-title/* 内容标题 */
+.memory-archive-content-text /* 内容文字 */
+.memory-archive-nav          /* 记忆导航栏 */
+.memory-archive-tab          /* 记忆Tab */
+.memory-archive-tab.is-active/* 激活Tab */
+.memory-tab-item.active      /* 记忆Tab激活 */
+.memory-archive-entry-content/* 记忆条目内容 */
+.memory-archive-entry-date   /* 记忆条目日期 */
+
+/* ==========================================
+   三十三、通知提示 (Toast / Notification)
+   ========================================== */
+.top-toast-notification      /* 顶部通知 */
+.top-toast-notification.show /* 展开 */
+.top-toast-icon              /* 通知图标 */
+.top-toast-text              /* 通知文字 */
+.center-toast                /* 居中Toast */
+.center-toast.show           /* 展开 */
+
+/* ==========================================
+   三十四、电商/点餐编辑面板
+   ========================================== */
+.chat-commerce-composer      /* 电商/点餐编辑器 */
+.chat-commerce-composer.show /* 展开 */
+.chat-commerce-backdrop      /* 背景遮罩 */
+.chat-commerce-sheet         /* 底部面板 */
+.chat-commerce-sheet-body    /* 面板内容 */
+.chat-commerce-close         /* 关闭 */
+.chat-commerce-title         /* 标题 */
+.chat-commerce-subtitle      /* 副标题 */
+.chat-commerce-preview       /* 预览区 */
+.chat-commerce-field         /* 字段 */
+.chat-commerce-label         /* 标签 */
+.chat-commerce-input         /* 输入 */
+.chat-commerce-switch        /* 开关 */
+.chat-commerce-actions       /* 按钮区 */
+.chat-commerce-btn           /* 按钮 */
+.chat-commerce-btn.primary   /* 主按钮 */
+.chat-commerce-btn.secondary /* 次按钮 */
+.composer-preview-card       /* 预览卡片 */
+.starry-bg                   /* 星空背景 */
+
+/* ==========================================
+   三十五、作息解析面板 (Schedule Parse)
+   ========================================== */
+.schedule-parse-note         /* 解析提示 */
+.schedule-parse-panel        /* 解析面板 */
+.schedule-parse-panel[hidden]
+.schedule-parse-panel-header /* 解析头部 */
+.schedule-parse-panel-copy   /* 文案区 */
+.schedule-parse-panel-title  /* 标题 */
+.schedule-parse-panel-subtitle/* 副标题 */
+.schedule-parse-panel-actions/* 操作区 */
+.schedule-parse-action-btn   /* 操作按钮 */
+.schedule-parse-action-btn.primary
+.schedule-parse-action-btn-title
+.schedule-parse-action-btn-sub
+.schedule-parse-status       /* 状态 */
+.schedule-parse-empty-hint   /* 空提示 */
+.schedule-parse-summary-top  /* 总结顶部 */
+.schedule-parse-summary-label/* 总结标签 */
+.schedule-parse-summary-score/* 总结分数 */
+.schedule-parse-summary      /* 总结 */
+.schedule-parse-summary-text /* 总结文字 */
+.schedule-parse-grid         /* 解析网格 */
+.schedule-parse-field        /* 字段 */
+.schedule-parse-field label  /* 字段标签 */
+.schedule-parse-field input,
+.schedule-parse-field textarea
+.schedule-parse-section-title/* 分区标题 */
+.schedule-parse-busy-list    /* 忙碌时段列表 */
+.schedule-parse-busy-item    /* 忙碌条目 */
+.schedule-parse-busy-remove  /* 删除按钮 */
+.schedule-parse-add-btn      /* 添加按钮 */
+.schedule-parse-footnote     /* 脚注 */
+.busy-reply-box              /* 忙碌回复框 */
+.busy-reply-hint             /* 提示 */
+.busy-reply-options          /* 选项 */
+.busy-reply-option           /* 单选项 */
+.busy-auto-reply-box         /* 自动回复框 */
+.busy-auto-reply-toolbar     /* 工具栏 */
+.busy-auto-reply-btn,
+.busy-auto-event-btn,
+.busy-auto-entry-remove
+.busy-auto-reply-list        /* 回复列表 */
+.busy-auto-event-card        /* 事件卡片 */
+.busy-auto-event-head        /* 事件头 */
+.busy-auto-event-title       /* 事件标题 */
+.busy-auto-event-meta        /* 事件元 */
+.busy-auto-event-actions     /* 事件操作 */
+.busy-auto-entry-list        /* 条目列表 */
+.busy-auto-entry-row         /* 条目行 */
+.busy-auto-empty-hint        /* 空提示 */
+.busy-auto-reply-loading     /* 加载 */
+
+/* ---- Chat Summary / Memory Summary ---- */
+.chat-summary-config-box
+.chat-summary-frequency-row
+.chat-summary-frequency-input
+.manual-memory-summary-mask
+.manual-memory-summary-card
+.manual-memory-summary-header
+.manual-memory-summary-title
+.manual-memory-summary-subtitle
+.manual-memory-summary-close
+.manual-memory-summary-range
+.manual-memory-summary-field
+.manual-memory-summary-field input
+.manual-memory-summary-status
+.manual-memory-summary-status.is-error
+.manual-memory-summary-actions
+.manual-memory-summary-btn
+.manual-memory-summary-btn.primary
+.manual-memory-summary-btn.secondary
+.manual-memory-summary-btn:disabled
+
+/* ---- Offline Summary ---- */
+.offline-summary-panel
+.offline-summary-setting-row
+.offline-summary-setting-copy
+.offline-summary-setting-title
+.offline-summary-setting-desc
+.offline-summary-frequency-row
+.offline-summary-frequency-input
+.offline-summary-actions
+.offline-summary-range-hint
+.offline-summary-status
+.offline-summary-list
+.offline-summary-empty
+.offline-summary-card
+.offline-summary-card.is-injected
+.offline-summary-card-header
+.offline-summary-card-header-inner
+.offline-summary-card-title
+.offline-summary-card-meta
+.offline-summary-card-toggle
+.offline-summary-card-preview
+.offline-summary-card-body
+.offline-summary-items
+.offline-summary-items li
+.offline-summary-memory
+.offline-summary-memory-title
+.offline-summary-memory-lines
+.offline-summary-card-actions
+.offline-summary-action-btn
+.offline-summary-action-btn.primary
+.offline-summary-action-btn.secondary
+.offline-summary-action-btn:disabled
+
+/* ---- Offline Paragraph Editor ---- */
+.offline-paragraph-editor-modal
+.offline-paragraph-editor-card
+.offline-paragraph-editor-title
+.offline-paragraph-editor-desc
+.offline-paragraph-editor-list
+.offline-paragraph-editor-item
+.offline-paragraph-editor-item-meta
+.offline-paragraph-editor-item-text
+.offline-paragraph-editor-item-actions
+.offline-paragraph-editor-btn
+.offline-paragraph-editor-btn.primary
+.offline-paragraph-editor-btn.secondary
+.offline-paragraph-editor-btn.danger
+.offline-paragraph-editor-footer
+
+
+/* ============================================================
+   快速美化索引
+
+   [顶栏]  .chat-room-header, .chat-room-title, .status-heart-btn
+   [气泡]  .msg-bubble, .msg-left .msg-bubble, .msg-right .msg-bubble
+   [头像]  .msg-avatar img, .msg-avatar
+   [底栏]  .chat-room-footer, .custom-bottom-bar
+   [输入]  .input-wrapper, .new-input-field
+   [发送]  .send-arrow-btn, .circle-btn.ai-btn
+   [更多]  .chat-more-panel, .more-item, .more-grid
+   [表情]  .chat-sticker-panel, .sticker-grid, .sticker-tabs
+   [图片]  .msg-bubble-image, .ai-photo-bubble
+   [时间]  .chat-time-label, .sys-msg-text
+   [系统]  .sys-msg-row, .sys-msg-text
+   [翻译]  .translated-message-shell, .translated-message-foreign
+   [位置]  .location-card, .location-map-area
+   [转账]  .msg-bubble.transfer-bubble, .transfer-amount
+   [红包]  .msg-bubble.redpacket-bubble, .redpacket-card
+   [通话]  .call-overlay, .call-bg-blur, .call-avatar, .btn-hangup
+   [状态]  .status-monitor-card, .status-progress-bar
+   [菜单]  .menu-grid, .menu-item, .menu-icon
+   [多选]  .chat-room-body.select-mode, .multi-btn
+   [转发]  .forward-box, .forward-item
+   [情侣]  .couple-invite-card
+   [一起听].listen-invite-card
+   [外卖]  .takeout-receipt-card
+   [礼物]  .gift-bubble, .gift-card-full
+
+   总计：500+ 聊天室专属 CSS 类名
+   ============================================================ */
+
+
+/* ---- helper for figC ---- */
+{}

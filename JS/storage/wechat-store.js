@@ -531,12 +531,20 @@
         };
     }
 
+    async function clearAll() {
+        const empty = emptySnapshot();
+        snapshotCache = normalizeSnapshot(empty);
+        await writeStoreSnapshot(empty, { allowDataLoss: true });
+        return clone(snapshotCache);
+    }
+
     window.WechatStore = {
         init: init,
         getSnapshot: async function () {
             await init();
             return clone(currentSnapshot());
         },
+        clearAll: clearAll,
         saveSnapshotFromWindow: saveSnapshotFromWindow,
         saveProfile: saveProfile,
         deleteRole: deleteRole,

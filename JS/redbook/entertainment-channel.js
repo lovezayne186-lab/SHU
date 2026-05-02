@@ -16,6 +16,7 @@
         context = context || {};
         const currentTime = asString(context.currentTime);
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const communityContext = asString(context.communityContext);
 
@@ -34,13 +35,13 @@
             '   - 如果角色是总裁，楼主就是公司前台、秘书或对家公司员工。',
             '2. 【吃瓜磕CP属性】：楼主的发帖内容必须是“偷拍”、“偶遇”或“无意中发现了”该角色与用户“' + userName + '”之间极其暧昧、甜度爆表或打破角色平时人设的互动瞬间。',
             '3. 【封面与标题】：',
-            '- coverText：用一句话总结高甜瞬间或反差感，例如“救命！万年冰山铁树开花了🍬”',
+            '- coverText：用一句话总结高甜瞬间或反差感，符合发帖NPC的人设，可以带表情包🍉，不需要强制。',
             '- postTitle：带有一种吃瓜、震惊或磕到了的论坛标题风格。',
             '4. 【首轮评论】：每篇笔记必须同步生成 6 到 8 条评论。',
             '5. 【评论区生态】：',
             '- 【NPC 同僚/吃瓜路人】：疯狂磕CP，表示“kswl”、“这还不结婚很难收场”、“我当时就在旁边，亲眼看到了！”。',
             '- 【设定角色本人】：必须让设定的角色亲自下场评论（或被路人艾特出来）。角色要用符合自己人设的方式回应这个爆料（如：霸道护短、害羞掩饰、暗戳戳宣示主权、或者直接大方承认）。',
-            '6. 【禁止扮演用户】：你绝对不能生成作者名或评论者名为用户昵称“' + userName + '”的发言。用户只是活在 NPC 爆料的传说中。',
+            '6. 【禁止扮演用户】：用户的真名/论坛称呼是“' + userName + '”，显示昵称是“' + displayName + '”。你绝对不能生成作者名或评论者名为这俩名字的发言。用户只是活在 NPC 爆料的传说中，禁止让用户亲自发帖或回复。',
             '7. 当前时间：' + (currentTime || '未知') + '。只作为语境参考。',
             '',
             '# 八卦主题参考',
@@ -51,7 +52,7 @@
             '# 输出 JSON 结构（严格按照此数组格式）',
             '[',
             '  {',
-            '    "coverText": "15字以内封面文案，极具八卦噱头，带表情包🍉",',
+            '    "coverText": "15字以内封面文案，极具八卦噱头，贴合NPC的吃瓜语气，不强制带Emoji",',
             '    "postTitle": "【吃瓜】标题",',
             '    "authorName": "圈内扒皮大叔 / 随机吃瓜网名",',
             '    "sectionName": "娱乐八卦/星闻吃瓜",',
@@ -105,6 +106,7 @@
     function buildEntertainmentMoreCommentsPrompt(context) {
         context = context || {};
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const postSummary = asString(context.postSummary);
         const existingCommentsText = asString(context.existingCommentsText);
@@ -129,7 +131,7 @@
             '',
             '# 互动规则',
             '- 整个评论区必须是一场大型吃瓜现场！大量使用磕CP的用语（kswl、笑死、配一脸）。',
-            '- 不要生成 authorName 为“' + userName + '”的评论。',
+            '- 【禁止扮演用户】：绝对不能生成 authorName 为用户“' + userName + '”或昵称“' + displayName + '”的新评论。',
             '',
             '# 角色列表参考（请严格维持他们的性格底色去评价这个八卦帖子）',
             '<data_reference>',

@@ -25,6 +25,7 @@
         context = context || {};
         const currentTime = asString(context.currentTime);
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const communityContext = asString(context.communityContext);
 
@@ -39,7 +40,7 @@
             '1. 【楼主设定】：发帖人（楼主）必须是一个普通的不知情网友。他可能遇到了奇怪的室友、捡到了诡异的规则纸条、或者发现家里多了一样东西。楼主的语气要极度真实、口语化。',
             '2. 【悬念留白】：正文绝对不要直接出现“鬼”、“怪物”等字眼，也不要直接点明真相。要通过环境描写、诡异的对话或不符合常理的现象来制造“细思极恐”的感觉。',
             '3. 【封面与标题】：',
-            '- coverText：用一句话总结诡异点，例如“家人们，谁家好人半夜在客厅打伞啊？”',
+            '- coverText：用一句话总结诡异点，符合NPC发帖语气，不需要强制加表情包。',
             '- postTitle：带有一种求助或猎奇的论坛标题风格。',
             '4. 【预埋线索】：正文里必须预埋1-2个只有在评论区才会被网友发现的致命漏洞（例如：楼主说室友在做饭，但前文提过室友出差了）。',
             '5. 【首轮评论】：每篇帖子必须同步生成 6 到 8 条评论，不能留空。评论区信息量要大，但不能一次性揭露全部真相。',
@@ -49,7 +50,7 @@
             '- 【特定设定角色】：必须让下方角色列表中的角色参与评论，严格符合人设，绝不能 OOC。',
             '7. 【禁止认错人】（最高优先级）：发帖人（楼主）是一个随机的虚拟NPC，绝对不是真实用户“' + userName + '”！',
             '8. 在生成首轮评论时，所有设定角色必须把楼主当成【陌生的发帖网友】，绝对不能用对真实用户的专属称呼（如主人、宝宝等）去称呼楼主。角色们只是在网上冲浪时偶然刷到了这个恐怖帖子，起到和其他网友一起围观、分析或推动剧情的作用，必须保持自身人设（不OOC）。',
-            '9. 绝对不能生成作者名或评论者名等于用户昵称“' + userName + '”的发言。',
+            '9. 【禁止扮演用户】：用户的真名/论坛称呼是“' + userName + '”，显示昵称是“' + displayName + '”。绝对不能生成作者名或评论者名为这俩名字的发言。用户只是围观者。',
             '10. 当前时间：' + (currentTime || '未知') + '。只作为背景氛围参考，不要在正文里机械播报。',
             '',
             '# 恐怖主题参考（随机应用以下风格）',
@@ -60,7 +61,7 @@
             '# 输出 JSON 结构（严格按照此数组格式）',
             '[',
             '  {',
-            '    "coverText": "15字以内封面文案，制造反差恐怖",',
+            '    "coverText": "15字以内封面文案，制造反差恐怖，不强制带Emoji",',
             '    "postTitle": "【求助】标题",',
             '    "authorName": "楼主的随机网名，如：熬夜掉头发",',
             '    "sectionName": "都市传说/深夜求助",',
@@ -114,6 +115,7 @@
     function buildHorrorMoreCommentsPrompt(context) {
         context = context || {};
         const userName = asString(context.userName) || '用户';
+        const displayName = asString(context.displayName) || userName;
         const roleBlocks = asString(context.roleBlocks);
         const postSummary = asString(context.postSummary);
         const existingCommentsText = asString(context.existingCommentsText);
@@ -136,7 +138,7 @@
             '1. 【楼主绝不是用户】：发帖的楼主是虚拟NPC，绝对不是真实用户“' + userName + '”！角色在回复楼主或其他网友时，必须保持“网上冲浪刷到陌生人求助帖”的吃瓜/围观态度，绝对不能对楼主使用专属用户的亲昵称呼。',
             '2. 【互动触发条件】：只有当【目前的评论区状态】中明确出现了真实用户（昵称：' + userName + '）的留言时，设定的角色们才能“认出”用户，并针对用户的留言进行直接回复或调侃互动。如果用户尚未发言，角色们只能像普通网友一样讨论剧情，不能OOC。',
             '3. 不要一次性把真相全说出来，要有层层递进的毛骨悚然感。',
-            '4. 绝对不能生成 authorName 为“' + userName + '”的评论。',
+            '4. 【禁止扮演用户】：绝对不能生成 authorName 为用户“' + userName + '”或昵称“' + displayName + '”的评论。',
             '',
             '# 角色列表参考（请严格维持他们的性格底色去评价这个恐怖帖子）',
             '<data_reference>',

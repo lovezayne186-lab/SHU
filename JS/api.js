@@ -443,6 +443,34 @@ function getEffectiveApiSettings(roleId) {
 
 window.getEffectiveApiSettings = getEffectiveApiSettings;
 
+function getEffectiveSummaryApiSettings(roleId) {
+    const primary = getEffectiveApiSettings(roleId);
+    const summaryBaseUrl = String(localStorage.getItem('summary_api_base_url') || '').trim();
+    const summaryApiKey = String(localStorage.getItem('summary_user_api_key') || '').trim();
+    const summaryModel = String(localStorage.getItem('summary_selected_model') || '').trim();
+    const hasSummaryApi = !!(summaryBaseUrl && summaryApiKey);
+    if (!hasSummaryApi) {
+        return {
+            baseUrl: primary.baseUrl,
+            apiKey: primary.apiKey,
+            model: primary.model,
+            temperature: primary.temperature,
+            presetId: primary.presetId || '',
+            usingSummaryApi: false
+        };
+    }
+    return {
+        baseUrl: summaryBaseUrl,
+        apiKey: summaryApiKey,
+        model: summaryModel || primary.model || 'deepseek-chat',
+        temperature: primary.temperature,
+        presetId: primary.presetId || '',
+        usingSummaryApi: true
+    };
+}
+
+window.getEffectiveSummaryApiSettings = getEffectiveSummaryApiSettings;
+
 function normalizeScheduleTextForParsing(text) {
     return String(text || '')
         .replace(/\r\n/g, '\n')
@@ -3772,7 +3800,7 @@ window.refreshActiveTokensUI = function (roleId, updateDom) {
 
 async function callAIShortSummary(params, onSuccess, onError) {
     try {
-        const apiSettings = getEffectiveApiSettings(window.currentChatRole || '');
+        const apiSettings = getEffectiveSummaryApiSettings(window.currentChatRole || '');
         let baseUrl = apiSettings.baseUrl;
         const apiKey = apiSettings.apiKey;
         const model = apiSettings.model || "deepseek-chat";
@@ -3934,7 +3962,7 @@ async function callAISummary(params, onSuccess, onError) {
     let model = '';
     let requestId = '';
     try {
-        const apiSettings = getEffectiveApiSettings(targetRoleId);
+        const apiSettings = getEffectiveSummaryApiSettings(targetRoleId);
         let baseUrl = apiSettings.baseUrl;
         const apiKey = apiSettings.apiKey;
         model = apiSettings.model || "deepseek-chat";
@@ -4309,7 +4337,7 @@ ${segmentText}
             logAiTrace('callAISummary:error', {
                 requestId: 'ai_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
                 roleId: targetRoleId,
-                model: (getEffectiveApiSettings(targetRoleId) || {}).model || "deepseek-chat",
+                model: (getEffectiveSummaryApiSettings(targetRoleId) || {}).model || "deepseek-chat",
                 maxTokens: 2048,
                 historyLen: 0,
                 userLen: 0,
